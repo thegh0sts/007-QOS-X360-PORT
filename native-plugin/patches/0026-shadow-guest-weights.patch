@@ -1,0 +1,26 @@
+qos: shadow maps (depth value images, R32_SFLOAT) are left out of textures_resolution_scaled, so their texture
+weights and fetch offsets stay in guest texels. 007's shadow filter kernels are sized in guest texels; on the host
+grid (SDK 0014 + native 0024) the soft edge shrank by the render scale and shadows looked blocky at 3x.
+BOTS_GFX_SCALED_DEPTH_WEIGHTS=1 restores the host grid for them (A/B).
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index e40038a..e822f47 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -1117,7 +1117,15 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+           damage_swizzle_ = swizzle;
+         }
+         draw_reads_.push_back(resolved);
+-        textures_resolution_scaled |= UINT32_C(1) << binding.fetch_constant;
++        // qos: shadow maps (depth value images) keep guest-texel weights and fetch offsets: their filter kernels are
++        // sized in guest texels, and the host grid would shrink the soft edge by the render scale (blocky shadows).
++        static const bool scaled_depth_weights = [] {
++          const char* v = std::getenv("BOTS_GFX_SCALED_DEPTH_WEIGHTS");
++          return v && *v == '1';
++        }();
++        if (resolved->format != VK_FORMAT_R32_SFLOAT || scaled_depth_weights) {
++          textures_resolution_scaled |= UINT32_C(1) << binding.fetch_constant;
++        }
+         texture_swizzles[binding.fetch_constant] = swizzle;
+         texture_signs[binding.fetch_constant] = rg::texture_util::SwizzleSigns(fetch);
+         source = resolved->format == VK_FORMAT_R32_SFLOAT ? "depth" : "rt";

@@ -57,6 +57,7 @@ set_source_files_properties(${K}/src/gfx/prompt_atlas.cpp ${K}/src/gfx/native.cp
 
 add_library(rexgpu-native SHARED
     ${K}/src/gfx/native.cpp
+    ${K}/src/gfx/frame_capture.cpp  # native patch 0025 (BOTS_GFX_CAPTURE)
     ${K}/src/gfx/host_stats.cpp
     ${K}/src/gfx/vk/memory_sync.cpp
     ${K}/src/upk.cpp

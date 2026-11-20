@@ -182,9 +182,83 @@ keep "Resume here" current.
   aliasing (the game's 2x MSAA is drawn as 2 rows per pixel by native 0002, so near-vertical edges get no
   smoothing) and texture minification streaks. Suggested `BOTS_GFX_FXAA=1` (2 = strong) and
   `BOTS_GFX_FORCE_ANISO=16`; not tried yet. Possible later: real host MSAA / horizontal supersampling.
+- **FXAA + aniso test (20 Nov, 23:16, qos_098.log):** all on ("FXAA", "anisotropic filtering at least 16x",
+  "plain upscale done ... reads 2 of one image"), user saw no difference. Row analysis of the 22:24 screenshot: a
+  strong 3.55-row period (2160/608) -> the 3D is still only 608 rows: the game's 608 -> 720 rows pass (draw sampling
+  1F148000 into 1E978000, surface pitch 1040) also reads whole guest texels. **0023 v4 (23:25):** a candidate is
+  any opaque single-image draw into an area >= the source both ways and larger one way (so the 608 -> 720 pass too);
+  a side within 1/32 of the source's keeps the source's size (pitch padding); 12 log lines. Needs build_native +
+  game build. Check: "done" lines for both 3072x1824 -> ...x2160 and 3072x2160 -> 3840x2160.
+- **DX12 version of the native renderer? (20 Nov, 23:40, plan only, nothing written):** possible but a real
+  port. The renderer is Skullburglar's `src\gfx\vk` (in `C:\rexglue-src\skullburglar`): ~5,800 Vulkan-touching
+  lines (draw.cpp 2177, renderer.cpp/.h 2417, texture 784, present 754, transfer 364, occlusion 178; ~70 distinct
+  vk calls). hybrid_fill.cpp (UE3 research spike) dropped; native.cpp, pm4, manifest are API-neutral. Shaders: use
+  the SDK's DXBC translator (as the Xenos D3D12 backend; alternative SPIR-V -> DXIL at runtime). 4 GLSL built-in
+  shaders need HLSL; vkCmdBlitImage (0023) becomes a draw; SDK 0014's render-scale texture weights need the same
+  change in the DXBC translator. Plan agreed so far (step-by-step in chat, 20 Nov 23:40):
+  - Phase 0: pick a frozen baseline (Vulkan renderer still changing daily); own folder/repo for the renderer, one
+    DLL for all three games (007's patch set as the superset, each game-specific patch off unless triggered);
+    offline test harness: Skullburglar's frame capture (`capture.cpp`, hooks at Skullburglar's D3D addresses in
+    `d3d_entries.inc`, so per-game addresses or a PM4-level capture needed) + `bots-replay` (renders a capture,
+    PSNR vs reference, `image_diff.h`) extended to DX12; golden frames and saves per game; Bourne's state needed.
+  - Test order: Bourne (UE3, the renderer's home, fewest patches), Eat Lead (deferred, 4 MRT, tiled resolves,
+    render-scale vPos; Xenos is blank there), 007 last (nested draws, points, shader rewrites, most patches).
+  - Port steps: skeleton+present, resources, shaders/pipelines, draws, textures, resolves/transfers, occlusion,
+    patches; debug layer/GBV/DRED switch from the start; PIX or RenderDoc for wrong frames.
+- **0023 v4 works (20 Nov, 23:21, qos_099.log):** "much better". Both stretches replaced ("done 3072x1824 ->
+  3072x2160" and "3072x2160 -> 3840x2160"). Left: aliasing on the jaw/nose and a hard, stair-stepped shadow line
+  down the nose (screenshot 23:21). The log also lists skipped candidates: passes on the MSAA scene surface that read
+  the scene depth 1EC58000 (formats 100 -> 37, blend 00010706 / 010B0706: lighting/shadow passes).
+- **Root cause found (23:30):** the SDK's SPIR-V translator only puts texture weights (getWeights, used by shaders
+  that filter by hand) and fetch offsets on the host texel grid for Xenia's integer draw_resolution_scale, and only
+  for textures flagged in the textures_resolution_scaled system constant, which the native renderer never set. So
+  every hand-filtered read of a resolve destination (007's 3D stretches, and probably its depth-reading shadow/light
+  passes) worked on whole guest texels. **Written, not built:** SDK patch `0014-render-scale-texture-weights.patch`
+  (scale = Features::render_scale when draw_resolution_scale is 1) + `OWN_PATCHES=own14` in build_sdk.bat, and
+  native patch `0024-textures-resolution-scaled.patch` (sets sc.textures_resolution_scaled for fetch constants bound
+  to resolve destinations at scale != 1). Needs build_native, the game build, and deleting
+  `%USERPROFILE%\Documents\qos\cache\native` (translated shaders are cached). A/B: `BOTS_GFX_PLAIN_UPSCALE=0`
+  turns 0023 off; if the picture stays sharp then, 0014/0024 fixed the stretches properly (0023 could go).
+- **SDK 0014 + native 0024 test (20 Nov, 23:31-23:35, qos_100/101.log):** built (renderer DLL 6,497,280, 23:30),
+  shader cache cleared. Run 100 with 0023 on, run 101 with `BOTS_GFX_PLAIN_UPSCALE=0` (no upscale lines): the user
+  sees no difference between them, i.e. with 0014/0024 the game's own stretches now keep the scaled resolution, so
+  0023 is no longer needed (could be dropped or defaulted off; screenshot of a =0 run would confirm). The face is
+  unchanged: the hard line down the nose / jaw is not a resolution problem. Next: compare the same spot with Xenos
+  (`--gpu_plugin xenos`, 1x) to see whether the original game draws that shadow line too.
+- **Xenos comparison (20 Nov, 23:37, user screenshot, same checkpoint):** the native renderer lights the scene
+  very differently. Xenos: darker, hazier (more fog), pillars and Bond's face mostly in shadow, soft shading, no
+  line down the nose. Native (23:21 shot): pillars and face brightly lit from the side, hard self-shadow on the face.
+  Looks like native misses shadowing from the world (pillar) and/or fog: suspect the shadow-map path (the game
+  resolves its shadow-map depth into 8888 textures, fmt 6 "depth src 4 -> fmt 6", and decodes depth in the shader;
+  the renderer's raw 8888 depth encoding or the scaled shadow maps may not match). Next: native at render scale 1
+  at the same spot, to split "scale bug" from "native renderer bug".
+- **Native at 1x (20 Nov, 23:39, user screenshot):** same over-bright lighting as at 3x -> not a scale bug; the
+  native renderer lights 007 wrongly at any scale. The shadow maps themselves render (1.5x resdump: 1DCE0000
+  512x512, 1D8E0000 512x2048, 1DAE0000 512x1024 hold perspective depth from spot lights, values 0..0.38;
+  1D9E0000 empty). So suspect the lighting passes' shadow test (how the depth resolves are sampled: depth value
+  image via depth_texture_at_ for k_24_8 fetches, or the raw 8888 materialized from it). Asked for a draw trace at
+  1x filtered on "resolve ", "(depth " -> shadow-trace.txt.
+- **Shadow trace (20 Nov, 23:47, shadow-trace.txt, 1x, 120 MB):** cause found. The lighting draws sample the
+  shadow atlas `1D8E0000` as k_24_8 512x2048 (t0..t5, ~300k reads) and `1DCE0000` 512x512. Each frame the game
+  resolves four 512x512 shadow maps into that atlas at 1D8E/1D9E/1DAE/1DBE0000 (1 MB apart = 512 rows), each copy's
+  destination height set to the rest of the atlas (2048, 1536, 1024, 512). TiledResolveBase (native 0012) only
+  matched same-size textures, so copies 2-4 went into separate textures and the atlas held only the first map: the
+  other lights read empty shadow maps and lit everything (bright pillars and faces, only odd self-shadow edges).
+  Matches the 1.5x dump (1D8E0000 content only in its top quarter). **Native patch
+  `0025-shadow-atlas-resolve.patch` (23:55), not built:** a copy also lands inside a taller texture of the same width
+  and format when it fits (lowest base wins), and the depth and colour resolve paths use the enclosing texture's
+  size. Needs build_native + game build (no SDK or shader-cache change). Check: same checkpoint vs Xenos.
+- **0025 works (20 Nov, 23:54, two 4K screenshots at 3x):** "a vast improvement": pillars, faces and walls now in
+  shadow, close to Xenos. Left: shadow edges very blocky (stair steps on the walls and Bond's cheek). Likely cause:
+  0024 also flags the shadow atlas (a depth value image) as resolution-scaled, so SDK 0014 shrinks the game's
+  shadow-filter fetch offsets and weights to host texels: the soft edge (a kernel sized in guest texels) becomes 3x
+  narrower at 3x. **Native patch `0026-shadow-guest-weights.patch` (23:58), not built:** depth value images
+  (R32_SFLOAT) keep guest-texel weights and offsets; `BOTS_GFX_SCALED_DEPTH_WEIGHTS=1` brings back the old way (A/B).
+  Needs build_native + game build (no translator change, so no need to clear the shader cache). If still
+  blocky: compare with native at 1x and with Xenos at the same spot.
 - **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
   BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
-- **Shared SDK folder:** last built by 007 (SDK own13 + native 0001-0022; 0023 written 20 Nov). Eat Lead has the same SDK set (own13,
+- **Shared SDK folder:** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 works 23:54; 0026 written, not built). Eat Lead has the same SDK set (own13,
   native 0001-0015); Bourne's is tbc12. Each project's `build_native` resets it to its own set.
 - **Check the renderer before testing:** 007's build copies whatever renderer the shared SDK folder last built. On
   20 Nov another project's build_native (16:53) replaced it: text gone and "unsupported draw (primitive): prim 1"

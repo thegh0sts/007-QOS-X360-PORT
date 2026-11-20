@@ -1,0 +1,503 @@
+tbc (dx12-renderer): frame capture for offline replay, at the renderer's own interface, so it works in any game
+(Skullburglar's capture.cpp hooks its game's D3D functions by address). Records, from one swap: the register file
+and the non-zero pages of guest physical memory, then every draw (changed registers, shaders, draw), occlusion
+query, end of frame and present, with the guest memory the renderer uploads at the moment it does and the ranges it
+is told were written; and each frame's front buffer as the live renderer resolved it (ref_<n>.ppm).
+BOTS_GFX_CAPTURE="<sec>[,<sec>...]" (from the first swap), BOTS_GFX_CAPTURE_FRAMES (default 3),
+BOTS_GFX_CAPTURE_DIR (default gfxcap; <dir>/capture.now captures the next frame). Off unless one is set.
+Needs native-plugin\CMakeLists.txt to list src/gfx/frame_capture.cpp. Format: src/gfx/frame_capture.h.
+
+diff --git a/src/gfx/frame_capture.cpp b/src/gfx/frame_capture.cpp
+new file mode 100644
+index 0000000..76c0a68
+--- /dev/null
++++ b/src/gfx/frame_capture.cpp
+@@ -0,0 +1,277 @@
++// Frame capture for offline replay: see frame_capture.h.
++#include "../path_utf8.h"
++#include "frame_capture.h"
++
++#include <algorithm>
++#include <chrono>
++#include <cstdlib>
++#include <cstring>
++#include <ctime>
++#include <system_error>
++
++#include <rex/logging.h>
++
++#include "image_diff.h"
++
++namespace bots::gfx {
++namespace {
++
++namespace rg = rex::graphics;
++
++constexpr uint32_t kPageSize = 4096;
++constexpr uint64_t kPhysicalSize = 0x20000000;  // 512 MB
++
++double SecondsNow() {
++  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
++}
++
++std::vector<double> ParseTimes(const char* v) {
++  std::vector<double> times;
++  for (const char* p = v; p && *p;) {
++    char* end = nullptr;
++    const double t = std::strtod(p, &end);
++    if (end == p) break;
++    if (t >= 0) times.push_back(t);
++    p = *end == ',' ? end + 1 : end;
++  }
++  std::sort(times.begin(), times.end());
++  return times;
++}
++
++}  // namespace
++
++// Forwards to the live tracker. While a capture runs, an upload's bytes are recorded as the renderer received them
++// (the request is page-rounded, as the SDK uploads whole pages), and every invalidation range in the order the
++// renderer took it.
++class FrameCapture::Tracker final : public vk::GuestMemoryTracker {
++ public:
++  Tracker(FrameCapture& capture, vk::GuestMemoryTracker* inner, std::function<uint64_t()> uploads)
++      : capture_(capture), inner_(inner), uploads_(std::move(uploads)) {}
++
++  bool Request(uint32_t start, uint32_t length) override {
++    if (!capture_.active()) return inner_->Request(start, length);
++    const uint64_t before = uploads_();
++    const bool ok = inner_->Request(start, length);
++    if (ok && length && uploads_() != before && uint64_t(start) + length <= kPhysicalSize) {
++      const uint32_t first = start & ~(kPageSize - 1);
++      const uint64_t last = (uint64_t(start) + length + kPageSize - 1) & ~uint64_t(kPageSize - 1);
++      const uint32_t bytes = uint32_t(std::min<uint64_t>(last, kPhysicalSize) - first);
++      capture_.Record(CaptureRecord::kUpload, {first, bytes}, capture_.memory_ + first, bytes);
++    }
++    return ok;
++  }
++
++  void TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ranges) override {
++    inner_->TakeInvalidated(ranges);
++    if (!capture_.active()) return;
++    for (const auto& [first, last] : ranges) capture_.Record(CaptureRecord::kInvalidate, {first, last});
++  }
++
++ private:
++  FrameCapture& capture_;
++  vk::GuestMemoryTracker* inner_;
++  std::function<uint64_t()> uploads_;
++};
++
++std::unique_ptr<FrameCapture> FrameCapture::Create(const uint8_t* memory, vk::GuestMemoryTracker* inner,
++                                                   std::function<uint64_t()> uploads, ReadBack read_back) {
++  const char* times = std::getenv("BOTS_GFX_CAPTURE");
++  const char* dir = std::getenv("BOTS_GFX_CAPTURE_DIR");
++  if (!(times && *times) && !(dir && *dir)) return nullptr;
++  if (!memory || !inner) {
++    REXLOG_ERROR("gfx capture: no guest memory or memory tracker; capture off");
++    return nullptr;
++  }
++  std::unique_ptr<FrameCapture> capture(new FrameCapture());
++  capture->memory_ = memory;
++  capture->read_back_ = std::move(read_back);
++  capture->tracker_ = std::make_unique<Tracker>(*capture, inner, std::move(uploads));
++  capture->times_ = ParseTimes(times);
++  capture->dir_ = dir && *dir ? bots::PathFromUtf8(dir) : std::filesystem::path("gfxcap");
++  if (const char* n = std::getenv("BOTS_GFX_CAPTURE_FRAMES")) {
++    capture->frames_per_capture_ = uint32_t(std::clamp(std::atoi(n), 1, 60));
++  }
++  std::error_code ec;
++  std::filesystem::create_directories(capture->dir_, ec);
++  std::string when;
++  for (double t : capture->times_) when += fmt::format("{}{:.1f} s", when.empty() ? "" : ", ", t);
++  REXLOG_INFO("gfx capture: on, {} frame(s) per capture into {}; at {}; or create {}", capture->frames_per_capture_,
++              bots::PathUtf8(std::filesystem::absolute(capture->dir_, ec)), when.empty() ? "no set times" : when,
++              bots::PathUtf8(capture->dir_ / "capture.now"));
++  return capture;
++}
++
++FrameCapture::~FrameCapture() {
++  if (file_) End();
++}
++
++vk::GuestMemoryTracker* FrameCapture::tracker() { return tracker_.get(); }
++
++void FrameCapture::Record(CaptureRecord type, const void* payload, size_t bytes) {
++  if (!file_) return;
++  const uint32_t header[2] = {uint32_t(type), uint32_t(bytes)};
++  std::fwrite(header, 4, 2, file_);
++  if (bytes) std::fwrite(payload, 1, bytes, file_);
++  bytes_ += 8 + bytes;
++}
++
++void FrameCapture::Record(CaptureRecord type, std::initializer_list<uint32_t> words, const void* tail,
++                          size_t tail_bytes) {
++  if (!file_) return;
++  const uint32_t header[2] = {uint32_t(type), uint32_t(words.size() * 4 + tail_bytes)};
++  std::fwrite(header, 4, 2, file_);
++  std::fwrite(words.begin(), 4, words.size(), file_);
++  if (tail_bytes) std::fwrite(tail, 1, tail_bytes, file_);
++  bytes_ += 8 + words.size() * 4 + tail_bytes;
++}
++
++void FrameCapture::RecordShader(uint32_t stage, const ShaderLoad& load) {
++  // The microcode as the renderer will read it: the copy taken at load, else guest memory now.
++  const uint32_t* ucode = load.inline_ucode;
++  if (!ucode && load.address && uint64_t(load.address) + uint64_t(load.dwords) * 4 <= kPhysicalSize) {
++    ucode = reinterpret_cast<const uint32_t*>(memory_ + load.address);
++  }
++  std::vector<uint32_t>& last = shader_[stage];
++  const uint32_t has = ucode ? 1 : 0;
++  const bool same = last.size() == 3 + (has ? load.dwords : 0) && last[0] == load.address && last[1] == load.dwords &&
++                    last[2] == has && (!has || std::memcmp(last.data() + 3, ucode, size_t(load.dwords) * 4) == 0);
++  if (same) return;
++  last.assign({load.address, load.dwords, has});
++  if (has) last.insert(last.end(), ucode, ucode + load.dwords);
++  Record(CaptureRecord::kShader, {stage, load.address, load.dwords, has}, ucode, has ? size_t(load.dwords) * 4 : 0);
++}
++
++void FrameCapture::OnDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, const ShaderLoad& ps, const Draw& draw) {
++  if (!file_) return;
++  changed_.clear();
++  for (uint32_t i = 0; i < rg::RegisterFile::kRegisterCount; ++i) {
++    if (regs.values[i] != regs_[i]) {
++      regs_[i] = regs.values[i];
++      changed_.push_back(i);
++      changed_.push_back(regs.values[i]);
++    }
++  }
++  if (!changed_.empty()) Record(CaptureRecord::kRegisters, changed_.data(), changed_.size() * 4);
++  RecordShader(0, vs);
++  RecordShader(1, ps);
++  Record(CaptureRecord::kDraw,
++         {draw.initiator.value, draw.index_base, draw.index_words, uint32_t(draw.index_endian)});
++}
++
++void FrameCapture::OnOcclusionBegin() { Record(CaptureRecord::kOcclusionBegin, nullptr, 0); }
++
++void FrameCapture::OnOcclusionEnd(uint32_t address) { Record(CaptureRecord::kOcclusionEnd, {address}); }
++
++void FrameCapture::OnEndFrame() { Record(CaptureRecord::kEndFrame, nullptr, 0); }
++
++void FrameCapture::OnPresent(uint32_t address, uint32_t width, uint32_t height, const uint32_t* gamma_ramp) {
++  if (!file_) return;
++  present_address_ = address;
++  uint32_t ramp[256] = {};
++  if (gamma_ramp) std::memcpy(ramp, gamma_ramp, sizeof(ramp));
++  Record(CaptureRecord::kPresent, {address, width, height}, ramp, sizeof(ramp));
++}
++
++void FrameCapture::OnSwapDone(const rg::RegisterFile& regs, uint32_t title_id, float render_scale) {
++  const double now = SecondsNow();
++  if (!started_) started_ = true, start_seconds_ = now;
++  if (file_) {
++    // The frame just presented: its reference image, then the next frame or the end of the capture.
++    std::vector<uint8_t> rgb;
++    uint32_t w = 0, h = 0;
++    if (read_back_ && read_back_(present_address_, rgb, w, h)) {
++      WritePpm(current_ / fmt::format("ref_{}.ppm", frame_), rgb.data(), w, h, size_t(w) * 3, 3);
++    } else {
++      REXLOG_WARN("gfx capture: frame {}: front buffer {:08X} could not be read back", frame_, present_address_);
++    }
++    Record(CaptureRecord::kFrameDone, {frame_});
++    if (++frame_ >= frames_per_capture_) End();
++    return;
++  }
++  bool due = false;
++  if (!times_.empty() && now - start_seconds_ >= times_.front()) {
++    times_.erase(times_.begin());
++    due = true;
++  }
++  // The trigger file, checked about once a second.
++  const auto second = uint64_t(now);
++  if (!due && second != last_trigger_check_) {
++    last_trigger_check_ = second;
++    std::error_code ec;
++    const auto trigger = dir_ / "capture.now";
++    if (std::filesystem::exists(trigger, ec)) {
++      std::filesystem::remove(trigger, ec);
++      due = true;
++    }
++  }
++  if (due) Begin(regs, title_id, render_scale);
++}
++
++void FrameCapture::Begin(const rg::RegisterFile& regs, uint32_t title_id, float render_scale) {
++  const auto start = std::chrono::steady_clock::now();
++  const std::time_t t = std::time(nullptr);
++  char stamp[32] = {};
++  std::strftime(stamp, sizeof(stamp), "%Y%m%d_%H%M%S", std::localtime(&t));
++  current_ = dir_ / fmt::format("cap_{}_{}", stamp, ++captures_);
++  std::error_code ec;
++  std::filesystem::create_directories(current_, ec);
++  if (ec) {
++    REXLOG_ERROR("gfx capture: can't create {}: {}", bots::PathUtf8(current_), ec.message());
++    return;
++  }
++  // Registers.
++  if (std::FILE* f = bots::OpenFile(current_ / "regs.bin", "wb")) {
++    std::fwrite(regs.values, 4, rg::RegisterFile::kRegisterCount, f);
++    std::fclose(f);
++  }
++  regs_.assign(regs.values, regs.values + rg::RegisterFile::kRegisterCount);
++  shader_[0].clear(), shader_[1].clear();
++  // Guest physical memory: the non-zero pages.
++  static const uint8_t zero[kPageSize] = {};
++  std::vector<uint32_t> pages;
++  uint64_t mem_bytes = 0;
++  std::FILE* idx = bots::OpenFile(current_ / "mem.idx", "wb");
++  std::FILE* bin = bots::OpenFile(current_ / "mem.bin", "wb");
++  if (!idx || !bin) {
++    if (idx) std::fclose(idx);
++    if (bin) std::fclose(bin);
++    REXLOG_ERROR("gfx capture: can't write the memory snapshot in {}", bots::PathUtf8(current_));
++    return;
++  }
++  for (uint32_t page = 0; page < kPhysicalSize / kPageSize; ++page) {
++    const uint8_t* p = memory_ + uint64_t(page) * kPageSize;
++    if (std::memcmp(p, zero, kPageSize) == 0) continue;
++    pages.push_back(page);
++    std::fwrite(p, 1, kPageSize, bin);
++    mem_bytes += kPageSize;
++  }
++  const auto count = uint32_t(pages.size());
++  std::fwrite(&count, 4, 1, idx);
++  std::fwrite(pages.data(), 4, pages.size(), idx);
++  std::fclose(idx);
++  std::fclose(bin);
++  // Metadata.
++  if (std::FILE* f = bots::OpenFile(current_ / "meta.txt", "w")) {
++    std::fprintf(f, "format=1\nframes=%u\ntitle_id=%08X\nrender_scale=%.3f\n", frames_per_capture_, title_id,
++                 render_scale);
++    for (const char* name : {"BOTS_GFX_RENDER_SCALE", "BOTS_GFX_NESTED_DRAWS", "BOTS_GFX_FXAA", "BOTS_GFX_FORCE_ANISO",
++                             "BOTS_GFX_OCCLUSION", "BOTS_GFX_SHADER_AT_DRAW", "BOTS_GFX_PLAIN_UPSCALE"}) {
++      if (const char* v = std::getenv(name)) std::fprintf(f, "%s=%s\n", name, v);
++    }
++    std::fclose(f);
++  }
++  file_ = bots::OpenFile(current_ / "calls.bin", "wb");
++  frame_ = 0, present_address_ = 0, bytes_ = 0;
++  REXLOG_INFO("gfx capture: started {} ({} pages, {:.0f} MB of memory, {:.0f} ms)", bots::PathUtf8(current_), count,
++              mem_bytes / 1048576.0,
++              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
++}
++
++void FrameCapture::End() {
++  std::fclose(file_);
++  file_ = nullptr;
++  REXLOG_INFO("gfx capture: finished {} ({} frame(s), {:.1f} MB of calls)", bots::PathUtf8(current_), frame_,
++              bytes_ / 1048576.0);
++}
++
++}  // namespace bots::gfx
+diff --git a/src/gfx/frame_capture.h b/src/gfx/frame_capture.h
+new file mode 100644
+index 0000000..af3de5f
+--- /dev/null
++++ b/src/gfx/frame_capture.h
+@@ -0,0 +1,108 @@
++// Frame capture for offline replay (native renderer): records what the command processor hands the renderer, at the
++// renderer's own interface, so any renderer with that interface (the Vulkan one, the DX12 port) can be fed the same
++// frames and compared. Game-independent: nothing here knows the game's D3D runtime (Skullburglar's capture.cpp hooks
++// its D3D functions by address instead).
++//
++// BOTS_GFX_CAPTURE="<sec>[,<sec>...]"  capture at these times, in seconds from the first swap
++// BOTS_GFX_CAPTURE_FRAMES=N            consecutive frames per capture (default 3: the first ones rebuild the render
++//                                      targets and resolved textures earlier frames left behind; compare the last)
++// BOTS_GFX_CAPTURE_DIR=<dir>           where captures go (default gfxcap, in the working folder)
++// Either variable on also turns on the trigger file: create <dir>/capture.now and the next frame is captured (the
++// file is deleted). Each capture is a folder <dir>/cap_<YYYYMMDD_HHMMSS>_<n>/:
++//   regs.bin     the register file when the capture starts (RegisterFile::kRegisterCount little-endian u32)
++//   mem.idx      u32 page count, then the 4 KB page numbers of mem.bin's pages (non-zero pages only)
++//   mem.bin      guest physical memory (512 MB space) at the start, those pages
++//   calls.bin    records in order: u32 type, u32 payload bytes, payload (CaptureRecord below)
++//   ref_<n>.ppm  frame n's front buffer as the live renderer resolved it (before the gamma ramp)
++//   meta.txt     key=value: frames, render scale, title id, environment switches that change rendering
++// Guest memory the renderer uploads during the capture is recorded at the moment it is uploaded (kUpload), so a
++// replay sees what the live GPU saw even when the CPU rewrote it mid-frame. Each call's record is written before the
++// renderer runs it; kUpload and kInvalidate records that follow a kDraw, kEndFrame, kPresent or kOcclusion* record
++// happened during that call, so a replayer applies them before making it. Debug tool: it stalls the frames it records.
++#pragma once
++
++#include <cstdint>
++#include <cstdio>
++#include <filesystem>
++#include <functional>
++#include <initializer_list>
++#include <memory>
++#include <string>
++#include <utility>
++#include <vector>
++
++#include <rex/graphics/register_file.h>
++
++#include "pm4.h"
++#include "vk/renderer.h"
++
++namespace bots::gfx {
++
++enum class CaptureRecord : uint32_t {
++  kRegisters = 1,       // (u32 index, u32 value) pairs: registers changed since the last kRegisters (or regs.bin)
++  kShader = 2,          // u32 stage (0 vertex, 1 pixel), u32 address, u32 dwords, u32 has_ucode, [ucode, big-endian]
++  kDraw = 3,            // u32 initiator, u32 index_base, u32 index_words, u32 index_endian
++  kUpload = 4,          // u32 start, u32 length, bytes: guest memory as the renderer uploaded it
++  kInvalidate = 5,      // u32 first, u32 last: a range the renderer was told the CPU wrote
++  kOcclusionBegin = 6,  // nothing
++  kOcclusionEnd = 7,    // u32 sample-count address
++  kEndFrame = 8,        // nothing: Renderer::EndFrame
++  kPresent = 9,         // u32 address, u32 width, u32 height, u32 gamma_ramp[256]
++  kFrameDone = 10,      // u32 frame number within the capture (ref_<n>.ppm)
++};
++
++class FrameCapture {
++ public:
++  // Reads the host image resolved to a guest address back as 8-bit RGB (the live front buffer, for ref_<n>.ppm).
++  using ReadBack = std::function<bool(uint32_t address, std::vector<uint8_t>& rgb, uint32_t& w, uint32_t& h)>;
++
++  // Null when neither BOTS_GFX_CAPTURE nor BOTS_GFX_CAPTURE_DIR is set. `memory`: host address of guest physical 0
++  // (512 MB, contiguous). `inner`: the live memory tracker; `uploads`: its count of requests that uploaded.
++  static std::unique_ptr<FrameCapture> Create(const uint8_t* memory, vk::GuestMemoryTracker* inner,
++                                              std::function<uint64_t()> uploads, ReadBack read_back);
++  ~FrameCapture();
++
++  // The tracker to give the renderer: forwards to `inner`, recording uploads and invalidations while capturing.
++  vk::GuestMemoryTracker* tracker();
++
++  bool active() const { return file_ != nullptr; }
++  // Hooks, all on the command processor thread, each called just before the renderer call it records.
++  void OnDraw(const rex::graphics::RegisterFile& regs, const ShaderLoad& vs, const ShaderLoad& ps, const Draw& draw);
++  void OnOcclusionBegin();
++  void OnOcclusionEnd(uint32_t address);
++  void OnEndFrame();
++  void OnPresent(uint32_t address, uint32_t width, uint32_t height, const uint32_t* gamma_ramp);
++  // At the end of every swap, after the present: finishes a captured frame, starts a capture when one is due.
++  void OnSwapDone(const rex::graphics::RegisterFile& regs, uint32_t title_id, float render_scale);
++
++ private:
++  class Tracker;
++  FrameCapture() = default;
++  void Begin(const rex::graphics::RegisterFile& regs, uint32_t title_id, float render_scale);
++  void End();
++  void Record(CaptureRecord type, const void* payload, size_t bytes);
++  void Record(CaptureRecord type, std::initializer_list<uint32_t> words, const void* tail = nullptr,
++              size_t tail_bytes = 0);
++  void RecordShader(uint32_t stage, const ShaderLoad& load);
++
++  const uint8_t* memory_ = nullptr;
++  ReadBack read_back_;
++  std::unique_ptr<Tracker> tracker_;
++  std::filesystem::path dir_, current_;
++  std::vector<double> times_;  // seconds from the first swap, ascending
++  uint32_t frames_per_capture_ = 3;
++  bool started_ = false;
++  double start_seconds_ = 0;
++  uint64_t last_trigger_check_ = 0;
++  uint32_t captures_ = 0;
++  // While capturing:
++  std::FILE* file_ = nullptr;
++  uint32_t frame_ = 0;            // frame within the capture
++  uint32_t present_address_ = 0;  // this frame's front buffer
++  std::vector<uint32_t> regs_;    // as last recorded
++  std::vector<uint32_t> changed_;
++  std::vector<uint32_t> shader_[2];  // last recorded: address, dwords, has_ucode, ucode...
++  uint64_t bytes_ = 0;
++};
++
++}  // namespace bots::gfx
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 66a6272..54a2833 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -51,6 +51,7 @@
+ #include <rex/ui/vulkan/provider.h>
+ 
+ #include "../hybrid_state.h"
++#include "frame_capture.h"
+ #include "host_stats.h"
+ #include "start_failure.h"
+ #include "pm4.h"
+@@ -129,6 +130,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+   void IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontbuffer_width, uint32_t frontbuffer_height) override {
+     if (!renderer_) return;
+     TrackFrame();
++    if (capture_) capture_->OnEndFrame();
+     renderer_->EndFrame();
+     PublishWarmup();
+     HoldForWarmup();
+@@ -166,6 +168,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+       uint32_t aspect_h = std::max(1u, uint32_t(video_mode.display_height));
+       if (uint64_t(width) * aspect_h > uint64_t(aspect_w) * height) aspect_w = width, aspect_h = height;
+       const auto* ramp = reinterpret_cast<const uint32_t*>(gamma_ramp_256_entry_table());
++      if (capture_) capture_->OnPresent(frontbuffer_ptr & 0x1FFFFFFF, out_width, out_height, ramp);
+       presenter->RefreshGuestOutput(
+           out_width, out_height, aspect_w, aspect_h,
+           [&](rex::ui::Presenter::GuestOutputRefreshContext& context) -> bool {
+@@ -180,6 +183,8 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     // hidden or minimised, display asleep) - submit here, or the next frames pile into one command buffer and the
+     // GPU work arrives in bursts.
+     if (renderer_->stats().presents == presents) renderer_->Flush();
++    // tbc: frame capture (frame_capture.h): the frame's reference image, and starting a capture when one is due.
++    if (capture_) capture_->OnSwapDone(*register_file_, title_id_, renderer_->output_scale());
+     if (frames_ % 600 == 1) {
+       const auto& st = renderer_->stats();
+       // Per-frame averages over the last interval (P5 profiling): wall time on this thread, and how much of it
+@@ -284,6 +289,14 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     }
+     sync_ = std::make_unique<vk::MemorySync>(*memory_, *renderer_);
+     renderer_->SetMemoryTracker(sync_.get());
++    // tbc: frame capture (BOTS_GFX_CAPTURE / BOTS_GFX_CAPTURE_DIR): its tracker records what the renderer uploads.
++    capture_ = FrameCapture::Create(
++        memory_->TranslatePhysical<const uint8_t*>(0), sync_.get(), [sync = sync_.get()] { return sync->uploaded(); },
++        [this](uint32_t address, std::vector<uint8_t>& rgb, uint32_t& w, uint32_t& h) {
++          renderer_->Flush();
++          return renderer_->ReadTexture(address ? address : renderer_->last_resolve_address(), rgb, w, h);
++        });
++    if (capture_) renderer_->SetMemoryTracker(capture_->tracker());
+     // Shipped shader refs (B-098): next to the executable in pipelines/ (Contents/Resources/pipelines in the macOS
+     // app bundle), read from the player's disc and XEX image.
+     auto package = std::make_shared<std::pair<std::string, std::unique_ptr<upk::Package>>>();
+@@ -325,6 +338,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+ 
+   // Runs on the command processor thread, or before the context is set up while the processor is paused.
+   void InitializeShaderStorage(const std::filesystem::path& cache_root, uint32_t title_id, bool blocking) override {
++    title_id_ = title_id;
+     pipeline_cache_path_ = cache_root / "native" / fmt::format("{:08X}.pipelines.bin", title_id);
+     n1_cache_dir_ = bots::PathUtf8(cache_root / "n1");
+     if (renderer_) {
+@@ -337,6 +351,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+   void ShutdownContext() override {
+     StopHostReports();
+     if (renderer_) renderer_->SetMemoryTracker(nullptr);
++    capture_.reset();
+     sync_.reset();
+     renderer_.reset();
+   }
+@@ -401,6 +416,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+                                   (index_buffer_info->format == xe::IndexFormat::kInt16 ? 2 : 4));
+       draw.index_endian = index_buffer_info->endianness;
+     }
++    if (capture_) capture_->OnDraw(*register_file_, vs_, ps_, draw);
+     renderer_->OnDraw(*register_file_, vs_, ps_, draw);
+     return true;
+   }
+@@ -1000,9 +1016,11 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     const bool end = counts->ZPass_A == marker || counts->ZPass_B == marker || counts->ZFail_A == marker ||
+                      counts->ZFail_B == marker;
+     if (end) {
++      if (capture_) capture_->OnOcclusionEnd(address);
+       renderer_->EndOcclusionQuery(address);
+     } else {
+       std::memset(counts, 0, sizeof(*counts));
++      if (capture_) capture_->OnOcclusionBegin();
+       renderer_->BeginOcclusionQuery();
+     }
+     return true;
+@@ -1030,6 +1048,8 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+  private:
+   std::unique_ptr<vk::Renderer> renderer_;
+   std::unique_ptr<vk::MemorySync> sync_;
++  std::unique_ptr<FrameCapture> capture_;  // tbc: BOTS_GFX_CAPTURE (frame_capture.h); null when off
++  uint32_t title_id_ = 0;
+   std::filesystem::path pipeline_cache_path_;
+   std::string n1_cache_dir_;  // <cache root>/n1: the new renderer's asset cache (hybrid_fill.cpp)
+   std::string n1_cooked_dir() const {

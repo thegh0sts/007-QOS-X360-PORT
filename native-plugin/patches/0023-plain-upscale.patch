@@ -1,20 +1,22 @@
-qos: 007 draws its 3D view at 1024x608 and stretches it to the 1280x720 front buffer with a filter that reads
-whole guest texels, so above render scale 1 the scaled view still reached the screen with 1024 columns (blocky
-at 4K; every resolve before it was scaled). After that draw - opaque, reading one resolve destination (bound twice),
-no depth, writing an area wider than the source - a linear blit of the host image replaces its result (the area:
-scissor, bounded by the viewport). BOTS_GFX_PLAIN_UPSCALE=0 turns it off. The log says "gfx native: plain upscale
-done|skipped ..." for the first 8 candidates, with the values that decided it.
+qos: 007 draws its 3D view at 1024x608, stretches it to 1024x720, then to the 1280x720 front buffer, both with a
+filter that reads whole guest texels, so above render scale 1 the scaled view still reached the screen with 1024
+columns and 608 rows (blocky at 4K; every resolve before was scaled). After such a draw - opaque, reading one
+resolve destination (bound twice), no depth, writing an area at least the source's size and larger one way - a
+linear blit of the host image replaces its result (the area: scissor, bounded by the viewport; a side within 1/32
+of the source's is kept at the source's size). BOTS_GFX_PLAIN_UPSCALE=0 turns it off. The log says "gfx native:
+plain upscale done|skipped ..." for the first 12 candidates, with the values that decided it.
 
 diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
-index 85619dc..7e4cdd3 100644
+index 85619dc..8f270d2 100644
 --- a/src/gfx/vk/draw.cpp
 +++ b/src/gfx/vk/draw.cpp
-@@ -1971,6 +1971,59 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+@@ -1971,6 +1971,67 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
      if (attachments.color[i] && key.write_mask[i]) attachments.color[i]->written = ++write_clock_;
    }
    if (attachments.depth && (key.depth_write || key.stencil)) attachments.depth->written = ++write_clock_;
-+  // qos: 007 draws its 3D view at 1024x608 (2x MSAA), then stretches it to the 1280x720 front buffer with a filter
-+  // that reads whole guest texels, so above render scale 1 the scaled view still reached the screen at 1024 columns
++  // qos: 007 draws its 3D view at 1024x608 (2x MSAA), stretches it to 1024x720, then to the 1280x720 front buffer,
++  // both with a filter that reads whole guest texels, so above render scale 1 the scaled view still reached the
++  // screen at 1024 columns and 608 rows
 +  // (blocky at 4K). That stretch - one opaque draw reading only one resolve destination (>= 640 guest wide; its
 +  // shader binds it twice, signed and unsigned) into a
 +  // wider area of one colour target, no depth - is followed by a linear blit of the host image over the area it can
@@ -35,14 +37,21 @@ index 85619dc..7e4cdd3 100644
 +    uint32_t x1 = sx + scissor_rect.extent.width, y1 = sy + scissor_rect.extent.height;
 +    if (viewport.xy_extent[0] && viewport.xy_extent[1]) x1 = std::min(x1, viewport_x1), y1 = std::min(y1, viewport_y1);
 +    x1 = std::min(x1, dest->width), y1 = std::min(y1, dest->height);
-+    const bool wider = x1 > x0 && y1 > y0 && x1 - x0 > source->width && source->width >= Host(640u) &&
++    // A side within 1/32 of the source's is the source's size (surface pitch padding, 1040 for a 1024 view): that
++    // side is not stretched.
++    if (x1 > x0 && x1 - x0 > source->width && x1 - x0 - source->width <= source->width / 32) x1 = x0 + source->width;
++    if (y1 > y0 && y1 - y0 > source->height && y1 - y0 - source->height <= source->height / 32) y1 = y0 + source->height;
++    // Larger: at least the source's size both ways and more one way (the 3D view's 608 -> 720 rows pass reads whole
++    // guest texels too, so it is replaced as well; the 1024 -> 1280 front buffer pass is the other).
++    const bool wider = x1 > x0 && y1 > y0 && x1 - x0 >= source->width && y1 - y0 >= source->height &&
++                       (x1 - x0 > source->width || y1 - y0 > source->height) && source->width >= Host(640u) &&
 +                       source->aspect == VK_IMAGE_ASPECT_COLOR_BIT;
 +    if (wider) {
 +      const bool one_image = std::ranges::all_of(draw_reads_, [&](const Image* read) { return read == source; });
 +      const bool ok = one_image && !attachments.color[1] && !attachments.depth && key.write_mask[0] == 0xF &&
 +                      key.blend[0] == 0x00010001 && source->format == dest->format;
 +      static int logged = 0;
-+      if (logged < 8) {
++      if (logged < 12) {
 +        ++logged;
 +        REXLOG_INFO("gfx native: plain upscale {}: {}x{} -> {},{}-{},{} of {}x{} (count {}, reads {}{}, textures {}+{}, rt1 {}, "
 +                    "depth {}, mask {:X}, blend {:08X}, formats {} -> {})",

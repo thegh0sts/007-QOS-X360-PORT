@@ -1,0 +1,36 @@
+qos: marks the fetch constants a draw binds to resolve destinations (host images at the render scale) in the
+translator's textures_resolution_scaled system constant, at render scales other than 1. With SDK patch 0014 the
+translator then puts texture weights (getWeights) and fetch offsets on the host texel grid for those textures, as
+Xenia does at its own resolution scales. 007 filters by hand with weights in its 3D view's stretches and in its
+depth-reading passes, which otherwise read whole guest texels (blocky shadow edges, a 608-row picture).
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 8f270d2..e40038a 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -1078,6 +1078,9 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   static const bool trace_signs = std::getenv("BOTS_TRACE_SIGNS") != nullptr;  // fetch swizzle/signs/exp_adjust
+   std::string trace_textures;
+   uint32_t texture_swizzles[32], texture_signs[32];
++  // qos: fetch constants bound to resolve destinations (host images at the render scale), for the translator's
++  // textures_resolution_scaled (texture weights and fetch offsets on the host texel grid; SDK patch 0014).
++  uint32_t textures_resolution_scaled = 0;
+   for (uint32_t i = 0; i < 32; ++i) texture_swizzles[i] = xe::XE_GPU_TEXTURE_SWIZZLE_RGBA, texture_signs[i] = 0;
+   draw_reads_.clear();
+   // At most 32 fetch constants, two bindings each (3D-or-stacked fetches); fixed arrays, no allocation per draw.
+@@ -1114,6 +1117,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+           damage_swizzle_ = swizzle;
+         }
+         draw_reads_.push_back(resolved);
++        textures_resolution_scaled |= UINT32_C(1) << binding.fetch_constant;
+         texture_swizzles[binding.fetch_constant] = swizzle;
+         texture_signs[binding.fetch_constant] = rg::texture_util::SwizzleSigns(fetch);
+         source = resolved->format == VK_FORMAT_R32_SFLOAT ? "depth" : "rt";
+@@ -1321,6 +1325,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+                           depth_control, false, false, pshader && pshader->writes_depth(), viewport);
+   Translator::SystemConstants sc;
+   std::memset(&sc, 0, sizeof(sc));
++  if (scale_ != 1.0f) sc.textures_resolution_scaled = textures_resolution_scaled;
+   uint32_t flags = 0;
+   if (expanded && dma) {
+     flags |= Translator::kSysFlag_ComputeOrPrimitiveVertexIndexLoad;

@@ -1,0 +1,55 @@
+qos: the SPIR-V translator reverts the resolution scale of resolution-scaled textures (textures_resolution_scaled)
+only for Xenia's integer draw resolution scale. A renderer drawing at a scale of its own (Features::render_scale,
+from Skullburglar's patch 0003: the native renderer's BOTS_GFX_RENDER_SCALE, fractional too) now gets the same:
+texture weights (getWeights) and fetch offsets on the host texel grid for the textures it marks (native patch 0024).
+Without it, shaders that filter by hand (007's stretches of its 3D view, its depth-reading passes) read whole guest
+texels, so their output stayed at the guest resolution at any render scale.
+
+diff --git a/src/graphics/pipeline/shader/spirv_translator_fetch.cpp b/src/graphics/pipeline/shader/spirv_translator_fetch.cpp
+index 052420d..ce91e11 100644
+--- a/src/graphics/pipeline/shader/spirv_translator_fetch.cpp
++++ b/src/graphics/pipeline/shader/spirv_translator_fetch.cpp
+@@ -974,8 +974,21 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
+       coordinates[coordinate_component_index] = coordinates_operand;
+     }
+     spv::Id texture_resolution_scaled = spv::NoResult;
++    // qos: a renderer drawing at a scale of its own (Features::render_scale, the native renderer's
++    // BOTS_GFX_RENDER_SCALE, fractional too) has resolution-scaled textures as well: its resolve destinations, which
++    // it marks in textures_resolution_scaled. Without this, texture weights (getWeights: games filtering by hand,
++    // 007's stretches of its 3D view) and fetch offsets stayed on the guest texel grid, so those passes read whole
++    // guest texels and the picture stayed at the guest resolution.
++    const float resolution_scale_x =
++        draw_resolution_scale_x_ > 1 ? float(draw_resolution_scale_x_)
++        : features_.render_scale > 0.0f && features_.render_scale != 1.0f ? features_.render_scale
++                                                                           : 1.0f;
++    const float resolution_scale_y =
++        draw_resolution_scale_y_ > 1 ? float(draw_resolution_scale_y_)
++        : features_.render_scale > 0.0f && features_.render_scale != 1.0f ? features_.render_scale
++                                                                           : 1.0f;
+     uint32_t revert_resolution_scale_axes =
+-        uint32_t(draw_resolution_scale_x_ > 1) | (uint32_t(draw_resolution_scale_y_ > 1) << 1);
++        uint32_t(resolution_scale_x != 1.0f) | (uint32_t(resolution_scale_y != 1.0f) << 1);
+     spv::Id const_texture_resolution_scale[] = {spv::NoResult, spv::NoResult};
+     spv::Id const_texture_resolution_scale_reciprocal[] = {spv::NoResult, spv::NoResult};
+     if (revert_resolution_scale_axes) {
+@@ -991,16 +1004,14 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
+                                 builder_->makeUintConstant(UINT32_C(1) << fetch_constant_index)),
+           const_uint_0_);
+       if (revert_resolution_scale_axes & 0b001) {
+-        const_texture_resolution_scale[0] =
+-            builder_->makeFloatConstant(float(draw_resolution_scale_x_));
++        const_texture_resolution_scale[0] = builder_->makeFloatConstant(resolution_scale_x);
+         const_texture_resolution_scale_reciprocal[0] =
+-            builder_->makeFloatConstant(1.0f / float(draw_resolution_scale_x_));
++            builder_->makeFloatConstant(1.0f / resolution_scale_x);
+       }
+       if (revert_resolution_scale_axes & 0b010) {
+-        const_texture_resolution_scale[1] =
+-            builder_->makeFloatConstant(float(draw_resolution_scale_y_));
++        const_texture_resolution_scale[1] = builder_->makeFloatConstant(resolution_scale_y);
+         const_texture_resolution_scale_reciprocal[1] =
+-            builder_->makeFloatConstant(1.0f / float(draw_resolution_scale_y_));
++            builder_->makeFloatConstant(1.0f / resolution_scale_y);
+       }
+     }
+ 
