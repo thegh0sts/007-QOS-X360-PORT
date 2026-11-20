@@ -1,0 +1,57 @@
+Subject: [PATCH] qos: BOTS_GFX_DUMP_TEXTURES debug switch
+
+---
+ src/gfx/vk/texture.cpp | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/src/gfx/vk/texture.cpp b/src/gfx/vk/texture.cpp
+index 6c90c58..8995504 100644
+--- a/src/gfx/vk/texture.cpp
++++ b/src/gfx/vk/texture.cpp
+@@ -7,7 +7,11 @@
+ #include <algorithm>
+ #include <chrono>
+ #include <cstdio>
++#include <cstdlib>
+ #include <cstring>
++#include <mutex>
++#include <string>
++#include <unordered_set>
+ #include <vector>
+ 
+ #include <fmt/format.h>
+@@ -426,6 +430,34 @@ void Renderer::LoadTexture(const rg::xenos::xe_gpu_texture_fetch_t& fetch, Guest
+                  mip_max, uint32_t(fetch.pitch),
+                  (unsigned long long)bots::prompts::Hash(memory_(base_page << 12), bots::prompts::kButtonAtlasBytes));
+   }
++  // qos: BOTS_GFX_DUMP_TEXTURES=<folder> saves the base level of every 2D texture up to BOTS_GFX_DUMP_MAX (default
++  // 512) wide and high, as the guest has it (tiled, big-endian), once per content hash (tiled textures only: the
++  // untiled ones are video frames, thousands of them):
++  // <folder>/<hash>_<w>x<h>_f<format>_t<tiled>_e<endian>_p<pitch>.bin. For finding the game's button textures.
++  static const char* dump_dir = std::getenv("BOTS_GFX_DUMP_TEXTURES");
++  if (dump_dir && *dump_dir && base_page && fetch.tiled && depth == 1 && !cube && !is_3d) {
++    static const uint32_t dump_max = [] {
++      const char* v = std::getenv("BOTS_GFX_DUMP_MAX");
++      return v ? uint32_t(std::strtoul(v, nullptr, 10)) : 512u;
++    }();
++    static std::mutex dump_mutex;
++    static std::unordered_set<uint64_t> dumped;
++    const uint32_t bytes = layout.base.level_data_extent_bytes;
++    if (width <= dump_max && height <= dump_max && bytes && dumped.size() < 4000) {
++      const uint8_t* data = memory_(base_page << 12);
++      const uint64_t hash = bots::prompts::Hash(data, bytes);
++      std::lock_guard<std::mutex> lock(dump_mutex);
++      if (dumped.insert(hash).second) {
++        const std::string name =
++            fmt::format("{}/{:016X}_{}x{}_f{}_t{}_e{}_p{}.bin", dump_dir, hash, width, height, uint32_t(fetch.format),
++                        uint32_t(fetch.tiled), uint32_t(fetch.endianness), uint32_t(fetch.pitch));
++        if (std::FILE* f = std::fopen(name.c_str(), "wb")) {
++          std::fwrite(data, 1, bytes, f);
++          std::fclose(f);
++        }
++      }
++    }
++  }
+   // B-105/B-160: the controller-button atlas, swapped for keyboard/mouse or PlayStation glyphs while that is the last
+   // device used.
+   if (width == bots::prompts::kButtonAtlasWidth && height == bots::prompts::kButtonAtlasHeight && depth == 1 &&

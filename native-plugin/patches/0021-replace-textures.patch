@@ -1,0 +1,206 @@
+diff --git a/src/gfx/prompt_atlas.cpp b/src/gfx/prompt_atlas.cpp
+index f5efdfd..07dac4f 100644
+--- a/src/gfx/prompt_atlas.cpp
++++ b/src/gfx/prompt_atlas.cpp
+@@ -19,6 +19,16 @@
+ 
+ #include <rex/cvar.h>
+ 
++#ifdef _WIN32
++#ifndef NOMINMAX
++#define NOMINMAX
++#endif
++#ifndef WIN32_LEAN_AND_MEAN
++#define WIN32_LEAN_AND_MEAN
++#endif
++#include <windows.h>
++#endif
++
+ #define STB_IMAGE_STATIC
+ #define STB_IMAGE_IMPLEMENTATION
+ #define STBI_ONLY_PNG
+@@ -259,16 +269,53 @@ struct PadImage {
+   std::vector<uint8_t> rgba;
+ };
+ 
++// qos: a whole texture replaced by a picture (any format): replace <name> <width> <height> <hash> <image> [bgr]
++struct Replacement {
++  std::string name;
++  uint32_t width = 0, height = 0;
++  uint64_t hash = 0;
++  bool bgr = false;
++  std::vector<uint8_t> rgba;  // width x height, the image stretched to it
++};
++
+ struct PadConfig {
+   std::vector<PadSheet> sheets;
+   std::unordered_map<std::string, PadImage> images;
++  std::vector<Replacement> replacements;
+ };
+ 
++// qos: the PNG at dir/name.png as RGBA8, or empty.
++PadImage LoadPng(const std::filesystem::path& dir, const std::string& name) {
++  std::ifstream png(dir / (name + ".png"), std::ios::binary);
++  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(png)), std::istreambuf_iterator<char>());
++  PadImage image;
++  int n = 0;
++  if (stbi_uc* rgba = bytes.empty() ? nullptr
++                                    : stbi_load_from_memory(bytes.data(), int(bytes.size()), &image.width,
++                                                            &image.height, &n, 4)) {
++    image.rgba.assign(rgba, rgba + size_t(image.width) * image.height * 4);
++    stbi_image_free(rgba);
++  }
++  return image;
++}
++
++// qos: the folders playstation.txt is looked for in: prompts and assets/prompts in the working folder, then
++// prompts next to the executable.
++std::vector<std::filesystem::path> PromptDirs() {
++  std::vector<std::filesystem::path> dirs{"prompts", "assets/prompts"};
++#ifdef _WIN32
++  wchar_t exe[MAX_PATH] = {};
++  const DWORD n = GetModuleFileNameW(nullptr, exe, MAX_PATH);
++  if (n && n < MAX_PATH) dirs.push_back(std::filesystem::path(exe).parent_path() / "prompts");
++#endif
++  return dirs;
++}
++
+ const PadConfig& Config() {
+   static const PadConfig config = [] {
+     PadConfig c;
+-    for (const char* dir : {"prompts", "assets/prompts"}) {
+-      std::ifstream file(std::filesystem::path(dir) / "playstation.txt");
++    for (const std::filesystem::path& dir : PromptDirs()) {
++      std::ifstream file(dir / "playstation.txt");
+       if (!file) continue;
+       std::string line;
+       while (std::getline(file, line)) {
+@@ -282,6 +329,24 @@ const PadConfig& Config() {
+             sheet.hash = std::strtoull(hash.c_str(), nullptr, 16);
+             c.sheets.push_back(std::move(sheet));
+           }
++        } else if (word == "replace") {
++          Replacement r;
++          std::string hash, image, extra;
++          if (!(in >> r.name >> r.width >> r.height >> hash >> image) || !r.width || !r.height) continue;
++          r.hash = std::strtoull(hash.c_str(), nullptr, 16);
++          while (in >> extra) r.bgr |= extra == "bgr";
++          const PadImage png = LoadPng(dir, image);
++          if (png.rgba.empty()) {
++            REXLOG_WARN("pad prompts: {}/{}.png didn't load", dir.string(), image);
++            continue;
++          }
++          // Stretched to the texture's size (nearest texel; the pictures are drawn at the texture's size).
++          r.rgba.resize(size_t(r.width) * r.height * 4);
++          for (uint32_t y = 0; y < r.height; ++y)
++            for (uint32_t x = 0; x < r.width; ++x)
++              std::memcpy(&r.rgba[(size_t(y) * r.width + x) * 4],
++                          &png.rgba[(size_t(y * png.height / r.height) * png.width + x * png.width / r.width) * 4], 4);
++          c.replacements.push_back(std::move(r));
+         } else if (word == "draw" && !c.sheets.empty()) {
+           PadDraw draw;
+           std::string mode, extra;
+@@ -292,7 +357,7 @@ const PadConfig& Config() {
+           if (draw.image == "-") {
+             c.images.emplace(draw.image, PadImage{});  // clear only
+           } else if (!c.images.count(draw.image)) {
+-            std::ifstream png(std::filesystem::path(dir) / (draw.image + ".png"), std::ios::binary);
++            std::ifstream png(dir / (draw.image + ".png"), std::ios::binary);
+             const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(png)), std::istreambuf_iterator<char>());
+             PadImage image;
+             int n = 0;
+@@ -315,13 +380,14 @@ const PadConfig& Config() {
+               }
+               stbi_image_free(rgba);
+             } else {
+-              REXLOG_WARN("pad prompts: {}/{}.png didn't load", dir, draw.image);
++              REXLOG_WARN("pad prompts: {}/{}.png didn't load", dir.string(), draw.image);
+             }
+             c.images.emplace(draw.image, std::move(image));
+           }
+         }
+       }
+-      REXLOG_INFO("pad prompts: {}/playstation.txt: {} textures, {} images", dir, c.sheets.size(), c.images.size());
++      REXLOG_INFO("pad prompts: {}/playstation.txt: {} textures, {} images, {} replaced textures", dir.string(),
++                  c.sheets.size(), c.images.size(), c.replacements.size());
+       break;
+     }
+     return c;
+@@ -427,4 +493,30 @@ std::vector<uint8_t> BuildPadSheet(int sheet, const uint8_t* guest) {
+   return out;
+ }
+ 
++bool ReplaceSize(uint32_t width, uint32_t height) {
++  for (const Replacement& r : Config().replacements)
++    if (r.width == width && r.height == height) return true;
++  return false;
++}
++
++int FindReplacement(uint64_t hash, uint32_t width, uint32_t height) {
++  const auto& list = Config().replacements;
++  for (size_t i = 0; i < list.size(); ++i)
++    if (list[i].width == width && list[i].height == height && list[i].hash == hash) return int(i);
++  return -1;
++}
++
++const std::vector<uint8_t>& ReplacementPixels(int index, bool& bgr) {
++  static const std::vector<uint8_t> none;
++  const auto& list = Config().replacements;
++  if (index < 0 || size_t(index) >= list.size()) return none;
++  bgr = list[index].bgr;
++  static std::unordered_map<int, bool> logged;
++  if (!logged[index]) {
++    logged[index] = true;
++    REXLOG_INFO("pad prompts: {} replaced", list[index].name);
++  }
++  return list[index].rgba;
++}
++
+ }  // namespace bots::prompts
+diff --git a/src/gfx/prompt_atlas.h b/src/gfx/prompt_atlas.h
+index 0d1ae55..d83164a 100644
+--- a/src/gfx/prompt_atlas.h
++++ b/src/gfx/prompt_atlas.h
+@@ -41,4 +41,13 @@ int FindPadSheet(const uint8_t* guest, uint32_t width, uint32_t height);
+ // Its base level as RGBA8 rows with the PlayStation buttons painted on; empty on failure.
+ std::vector<uint8_t> BuildPadSheet(int sheet, const uint8_t* guest);
+ 
++// qos: whole textures (any format; 007's buttons are DXT5) shown as a picture instead while pad_prompts_active is 1:
++//   replace <name> <width> <height> <FNV-1a 64 of the base level as the guest has it, hex> <image> [bgr]
++// prompts/<image>.png, stretched to the texture's size; bgr swaps red and blue (for textures whose fetch swizzle
++// swaps them). Hashes come from a BOTS_GFX_DUMP_TEXTURES run (the dump file names start with them).
++bool ReplaceSize(uint32_t width, uint32_t height);  // some replaced texture has this size
++int FindReplacement(uint64_t hash, uint32_t width, uint32_t height);  // or -1
++// Its picture as RGBA8 rows, width x height; empty for a bad index.
++const std::vector<uint8_t>& ReplacementPixels(int index, bool& bgr);
++
+ }  // namespace bots::prompts
+diff --git a/src/gfx/vk/texture.cpp b/src/gfx/vk/texture.cpp
+index a8579ab..d2945c0 100644
+--- a/src/gfx/vk/texture.cpp
++++ b/src/gfx/vk/texture.cpp
+@@ -490,6 +490,24 @@ void Renderer::LoadTexture(const rg::xenos::xe_gpu_texture_fetch_t& fetch, Guest
+       }
+     }
+   }
++  // qos: a texture replaced whole by a picture (prompts/playstation.txt "replace") while pad_prompt_mode_ is 1.
++  if (depth == 1 && base_page && !cube && !is_3d && bots::prompts::ReplaceSize(width, height) &&
++      layout.base.level_data_extent_bytes) {
++    const uint32_t address = base_page << 12, bytes = layout.base.level_data_extent_bytes;
++    const int index =
++        bots::prompts::FindReplacement(bots::prompts::Hash(memory_(address), bytes), width, height);
++    if (index >= 0) {
++      texture.pad_sheet = true;  // reloaded when the mode changes
++      texture.prompt_generation = pad_prompt_mode_;
++      if (pad_prompt_mode_ == 1) {
++        bool bgr = false;
++        std::vector<uint8_t> pixels = bots::prompts::ReplacementPixels(index, bgr);
++        if (bgr)
++          for (size_t i = 0; i + 3 < pixels.size(); i += 4) std::swap(pixels[i], pixels[i + 2]);
++        if (!pixels.empty() && LoadRgbaTexture(texture, address, bytes, pixels, width, height)) return;
++      }
++    }
++  }
+   const BcDecode decode = bc_textures_ ? BcDecode::kNone : BcDecodeFor(host.format);
+   const VkFormat image_format = decode == BcDecode::kNone ? host.format : BcDecodedFormat(decode, pack_bc1_);
+   const uint32_t decoded_bpp = BcDecodedBytesPerTexel(decode, pack_bc1_);

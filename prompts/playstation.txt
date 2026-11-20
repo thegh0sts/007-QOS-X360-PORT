@@ -1,0 +1,49 @@
+# PlayStation button pictures for 007: Quantum of Solace, read by the native renderer
+# (native-plugin/patches/0021-replace-textures.patch) while --pad_prompts_active is 1 (src/pad_prompts.cpp).
+#   replace <name> <width> <height> <FNV-1a 64 of the game's texture, hex> <picture in prompts/, no .png> [bgr]
+# The hashes are the first part of the file names a BOTS_GFX_DUMP_TEXTURES run writes (patch 0020).
+# The pictures are our own art: tools/make_ps_buttons.py.
+
+# Menus (Scaleform, 64x64 DXT5)
+replace btn_accept 64 64 FFC0169EA80A8F57 ps_cross
+replace btn_back   64 64 09784A4CD20751E1 ps_circle
+
+# In game: tutorial boxes and takedowns (64x64 DXT5 pictures; dumps texdump3-5, 20 Nov). Not seen yet: START.
+replace qte_x         64 64 82C5D2A286CB4ABC t_square
+replace qte_x_big     64 64 CE0004494F1602F5 t_square_big
+replace tutorial_lb   64 64 FFE4445869FD3106 t_l1
+replace tutorial_lt   64 64 DC83034FD7B78B60 t_l2
+replace tutorial_rt   64 64 30044CB9F07E3F81 t_r2
+replace tutorial_rb   64 64 FE735E11E62340EA t_r1
+replace tutorial_back 64 64 92F008A6E5D310A6 t_touchpad
+replace qte_a_big     64 64 DD0679586F9D6F4A t_cross_big
+replace qte_b_big     64 64 EB0894A556ADBDD3 t_circle_big
+replace qte_y_big     64 64 99FAE00AC5BB2840 t_triangle_big
+
+# In game: the HUD font (512x1024 DXT5) holds the button glyphs, 28 px (A B X Y LB RB LT RT; LS RS kept) and 14 px.
+# Xbox -> PlayStation: A cross, B circle, X square, Y triangle, LB/RB L1/R1, LT/RT L2/R2.
+# LS/RS (stick glyphs) stay as the game draws them (user, 20 Nov).
+# Rects are the glyphs' cells (x0 y0 x1 y1, 1 px margin), cleared, then our picture fitted in. START -> OPTIONS, BACK -> touch pad; D-pad stays.
+texture hud_font 512 1024 C1DB20162D971011 dxt5
+# 28 px
+draw 102 191 132 221 g_cross fit clear
+draw 136 191 166 221 g_circle fit clear
+draw 170 191 200 221 g_square fit clear
+draw 204 191 234 221 g_triangle fit clear
+draw 236 193 270 219 g_l1 fit clear
+draw 270 193 304 219 g_r1 fit clear
+draw 308 190 334 214 g_options fit clear
+draw 342 190 368 214 g_touchpad fit clear
+draw 444 189 470 223 g_l2 fit clear
+draw 4 210 30 244 g_r2 fit clear
+# 14 px
+draw 261 410 277 426 g_cross fit clear
+draw 341 423 357 439 g_circle fit clear
+draw 359 423 375 439 g_square fit clear
+draw 377 423 393 439 g_triangle fit clear
+draw 394 424 412 438 g_l1 fit clear
+draw 412 424 430 438 g_r1 fit clear
+draw 432 424 446 438 g_options fit clear
+draw 450 424 464 438 g_touchpad fit clear
+draw 20 426 34 441 g_l2 fit clear
+draw 38 426 52 441 g_r2 fit clear

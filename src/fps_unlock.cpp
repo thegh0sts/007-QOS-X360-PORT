@@ -26,6 +26,10 @@ REXCVAR_DEFINE_INT32(frame_rate, 30, "Game",
 
 REX_EXTERN(__imp__sub_822E4188);  // Dvar_RegisterInt
 
+namespace qos::menu_quit {
+void OnDvarRegistered(const char* name, uint32_t dvar);  // menu_quit.cpp: finds ui_reachedIIS
+}  // namespace qos::menu_quit
+
 extern "C" REX_FUNC(sub_822E4188) {
   const char* name = reinterpret_cast<const char*>(base + ctx.r3.u32);
   if (std::strcmp(name, "com_maxfps") == 0) {
@@ -36,4 +40,5 @@ extern "C" REX_FUNC(sub_822E4188) {
     }
   }
   __imp__sub_822E4188(ctx, base);
+  qos::menu_quit::OnDvarRegistered(name, ctx.r3.u32);  // r3: the dvar
 }

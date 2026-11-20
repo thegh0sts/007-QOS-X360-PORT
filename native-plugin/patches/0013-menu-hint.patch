@@ -58,7 +58,7 @@ index 07f6e3e..d8fc080 100644
 +      int w = 0, h = 0, n = 0;
 +      stbi_uc* rgba = stbi_load_from_memory(bytes.data(), int(bytes.size()), &w, &h, &n, 4);
 +      if (!rgba) continue;
-+      const bool fits = w > 0 && h > 0 && w <= 160 && h <= 48;
++      const bool fits = w > 0 && h > 0 && w <= 256 && h <= 48 && w * h <= 7680;
 +      if (fits) {
 +        hint_width_ = uint32_t(w);
 +        hint_height_ = uint32_t(h);
@@ -67,7 +67,7 @@ index 07f6e3e..d8fc080 100644
 +      }
 +      stbi_image_free(rgba);
 +      std::fprintf(stderr, "gfx native: menu hint %s/%s.png %dx%d%s\n", dir, name.c_str(), w, h,
-+                   fits ? "" : " (too big: at most 160x48)");
++                   fits ? "" : " (too big: at most 256x48 and 7680 pixels)");
 +      if (fits) return true;
 +    }
 +    return false;
@@ -92,7 +92,7 @@ index 07cd388..a6adb27 100644
    uvec4 toast_icon[484]; // 44x44 RGBA8
 +  uvec4 hint;            // x: opacity (float bits, 0 = none), y: width, z: height (image pixels = 1080p pixels)
 +  vec4 hint_at;          // xy: top-left in pixels of a 1920x1080 picture
-+  uvec4 hint_image[1920]; // up to 160x48 RGBA8, row by row, width hint.y
++  uvec4 hint_image[1920]; // up to 7680 RGBA8 texels (256 wide, 48 high at most), row by row, width hint.y
  };
  layout(location = 0) out vec4 result;
  
@@ -190,8 +190,8 @@ index 83049a2..dcf9d97 100644
    uint32_t toast_name_length_ = 0, toast_suffix_length_ = 0;
    bool toast_has_icon_ = false;
    uint32_t toast_icon_[44 * 44] = {};
-+  // SetHint (eatlead): the menu hint image, up to 160x48 (7680 texels)
-+  static constexpr uint32_t kHintMaxWidth = 160, kHintMaxHeight = 48, kHintTexels = 7680;
++  // SetHint (eatlead): the menu hint image, up to 7680 texels (256 wide, 48 high at most; qos: 172x31)
++  static constexpr uint32_t kHintMaxWidth = 256, kHintMaxHeight = 48, kHintTexels = 7680;
 +  float hint_alpha_ = 0.0f, hint_x_ = 0.0f, hint_y_ = 0.0f;
 +  uint32_t hint_width_ = 0, hint_height_ = 0;
 +  uint32_t hint_image_[kHintTexels] = {};

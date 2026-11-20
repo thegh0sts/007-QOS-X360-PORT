@@ -1,7 +1,7 @@
 # 007: Quantum of Solace (Xbox 360) - handoff
 
 ReXGlue recompilation of *007: Quantum of Solace* (Treyarch, 2008, Call of Duty 4 engine). Project name `qos`.
-Local only: `%USERPROFILE%\source\repos\007qol` (no GitHub repository yet). Started 2026-11-11, paused 13-14 Nov,
+Folder `%USERPROFILE%\source\repos\007qol`, repository thegh0sts/007-QOS-X360-PORT (first push 2026-11-20). Started 2026-11-11, paused 13-14 Nov,
 resumed 2026-11-19. **This file is how work resumes after a context reset:** update it (here and the project
 copy `007/HANDOFF.md`) whenever something is found, decided or changed, not only at the end of a session, and
 keep "Resume here" current.
@@ -17,6 +17,11 @@ keep "Resume here" current.
 - Fixes found while porting QoS went into the shared SDK patches (Bourne's `tools\sdk-patches`): jump tables (0001,
   0002), XMA decoder input checks (0003), input system thread safety (0005, a 0xC0000374 heap crash).
 - `src\fps_unlock.cpp`: `--frame_rate` sets com_maxfps's default (Dvar_RegisterInt, sub_822E4188). Untested above 30.
+- **Holding B (1 s) quits from the Press Start screen** (`src/menu_quit.cpp`, written 2026-11-20, hold added the same
+  day at the user's request, **not yet tested**): a "B QUIT (HOLD)"
+  hint (our own art, `hints/`, made by `tools/make_quit_hint.py` to match the game's "A SELECT" prompt; PS circle
+  version with a PlayStation pad) at 1080p (354,922), where the main menu has "A SELECT". Drawn by the native
+  renderer only (patch 0013); B quits on Xenos too. `--menu_b_quit=false` turns it off.
 - Code: `default_functions.toml` (asset-type switch cases called through vtables; setjmp/longjmp),
   `default_functions_scan.toml`.
 
@@ -39,12 +44,44 @@ keep "Resume here" current.
   `li r11,N` at 0x820F2280 in sub_820F2188 (the D3D presentation interval: 1 = 60 FPS, 0 = unlimited). Byte
   patches can't apply to recompiled code; the same effect needs hooks (as Eat Lead's `frame_pacing.cpp`), with
   `src\fps_unlock.cpp`. Its warning: above 30 FPS some missions can softlock.
+- **Title screen detection:** dvar `ui_reachedIIS` ("Has the player reached the PRESS START IIS? 0 not yet, 1-2 there
+  now (normal=1/brightness=2), 3 past it"; on the PC the Press Start screen showed with 2, so 1 and 2 both count), registered by Dvar_RegisterInt (pointer also stored at 0x83725B30),
+  value = big-endian int at dvar+12. Attract-mode demo (com_attractmode on, 90 s idle): byte 0x827CDD8C is 1 while
+  it plays (set in sub_821AF8C8, cleared in sub_821AF7B8). ui_reachedIIS is already 2 during the intro logo videos,
+  so videos are ruled out too: cinematicGlob at 0x841E56A0, +256 current video name (cleared by StopPlayback
+  sub_825667C8), +777 finished (sub_82566BA8). Name set and not finished = playing, except the menus' looping
+  background videos (bink_bkg_loop_0/1, bink_ig_bkg_loop_1): the title screen plays bink_bkg_loop_1 behind it
+  (log, 20 Nov), so those don't count. Intro logo video: atvi_treyarch. XInputGetState is sub_82425198 (r3 user, r4 state); the
+  engine polls all four pads every frame (sub_82304048), so polling patterns can't tell screens apart. Decrypt the
+  XEX with Eat Lead's `tools/xexdump.py` to search its strings.
+- **PlayStation prompts (20 Nov):** every button picture is a texture. Menus: Scaleform's platform
+  library `scaleform/CmSharedPlatform.gfx` (and `cm_ig_textures.gfx` in game) uses external images btn_accept (A),
+  btn_back (B), btn_y, btn_refresh, btn_left/right, bumper_left/right, trigger_left/right, stick_left/right,
+  button_back, btn_nav_up/down/navigate_*, and `controller` (the controls screen's picture), loaded from ui.ff.
+  In game: trigger_use hint icons HINT_BUTTON_A/B/X/Y/GREY (materials). Text: @PLATFORM_PRESS_START, the controls
+  screen's "A BUTTON"... labels (localized strings in the fastfiles). The .gfx files are zlib SWF ("CFX": 8-byte
+  header, then zlib). The engine also has PS3 code (ui_circleBtnIsEnter).
+  - **Found by texture dump** (patch 0020, `BOTS_GFX_DUMP_TEXTURES=<dir>`; decoder `texdec.py` in the cloud
+    workspace, not kept): menu A = `FFC0169EA80A8F57`, menu B = `09784A4CD20751E1`, both 64x64 DXT5 (format 20),
+    a 40 px disc centred in the texture (texels 12..52). The dump runs so far only reached the title and main menu:
+    no X/Y/bumper/trigger/stick textures seen yet. To find more: run with the dump on, visit the controls screen,
+    pause menu and an in-game hint, then send the new files.
+  - **Implemented (20 Nov), not built or tested yet:** native patch `0021-replace-textures.patch` adds
+    `replace <name> <w> <h> <hash> <image> [bgr]` to prompts/playstation.txt: a texture of any format whose base
+    level hashes to that (same hash as the dump names) is shown as prompts/<image>.png while pad_prompts_active
+    is 1, reloaded when it changes. playstation.txt is also looked for in prompts/ beside the exe. `src/
+    pad_prompts.cpp` (as Eat Lead's, no text swaps yet) sets pad_prompts_active from ConnectedPadStyle
+    (--pad_prompts auto/xbox/playstation); called from menu_quit.cpp's XInputGetState hook. Art: `tools/
+    make_ps_buttons.py` -> `prompts/ps_cross|circle|square|triangle.png` (cross = A's look turned blue, circle =
+    B's maroon). CMake copies `prompts/` beside the exe. If the colours come out with red/blue swapped, add `bgr`
+    to the line in playstation.txt.
 - Debugging leftovers you can delete: the `spirv` folder and *-trace.txt / *-dump.txt / texture-*.bin files in the
   build folder.
 
 ## Native renderer work
 
-- `native-plugin\patches`: the Eat Lead set, plus 0016 point lists, 0017 copy shaders at load, and two debug
+- `native-plugin\patches`: the Eat Lead set (0013 changed: hint images up to 7680 pixels and 256 wide, not 160x48, for
+  the 172x31 "QUIT (HOLD)" hint), plus 0016 point lists, 0017 copy shaders at load, and two debug
   patches: 0018 (`BOTS_GFX_VFETCH_TRACE=1`, `BOTS_GFX_VFETCH_ANY_TYPE=1`, not needed) and 0019
   (`BOTS_GFX_NO_BLEND=1`, `BOTS_GFX_BASE_LEVEL_ONLY=1`).
 - Build with `tools\build_native.bat` from this folder, then rebuild qos (its build copies the plugin). After an SDK
@@ -56,9 +93,102 @@ keep "Resume here" current.
 
 ## Resume here
 
-- **Last thing done (20 Nov):** text fix confirmed; setjmp/longjmp fix written but not built or tested.
-- **Shared SDK folder:** last built by 007 (SDK own13 + native 0001-0019). Eat Lead has the same SDK set (own13,
+- **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/
+  pad_prompts.cpp, prompts/ (see Findings). Needs `tools\build_native.bat` then the game build; check the log for
+  "pad prompts: ... 2 replaced textures" and "btn_accept replaced". Still untested: the setjmp/longjmp fix, B QUIT
+  (HOLD) with the menu-background fix, render scales 1.5x/2x/3x.
+- **PS prompts, test 1 (20 Nov, 19:14):** menu A/B swap works (user confirmed). In-game prompts still Xbox.
+- **In-game prompts found (20 Nov, 19:35):** a dump with `BOTS_GFX_DUMP_MAX=2048` (texdump2; delete the video frames
+  `*_f2_t0_*` first, they number thousands) showed the in-game button glyphs live in the HUD font atlas
+  `C1DB20162D971011`, 512x1024 DXT5: 28 px A B X Y at (103,192) (137,192) (171,192) (205,192), LB RB LS RS LT at
+  y 190-222, RT at (5,211); 14 px set around y 411-440 (exact cells in prompts/playstation.txt). New native patch
+  **0022-dxt5-pad-sheets** (`texture ... dxt5` in playstation.txt: decodes the tiled DXT5 base level, verified
+  against texdec.py, then paints like the ARGB sheets). Art `prompts/g_*.png` (make_ps_buttons.py): cross blue,
+  circle red, square pink, triangle green, L1/R1/L2/R2/L3/R3 grey pills. START/BACK/D-pad left as they are.
+  **Not built/tested yet.**
+- **PS prompts, test 2 (20 Nov, 19:40):** 0022 works: HUD glyphs (Dash - Hold, Cover...) show the PS buttons.
+  Still Xbox: the tutorial box ("Press [LB] to switch weapons", "Hold [LT] to aim", "Press [BACK] to access your
+  phone": dark rounded glyphs, a different texture, probably Scaleform cm_ig_textures images bumper_left,
+  trigger_left, button_back...) and the takedown QTE (a big X disc with grey dots in a diamond). Patch 0020 changed to
+  dump tiled textures only (no video frames). Asked for a dump run (texdump3, BOTS_GFX_DUMP_MAX=2048) showing a
+  tutorial hint and a takedown.
+- **Tutorial/takedown pictures found (20 Nov, 19:50, texdump3):** 64x64 DXT5, swapped whole with `replace`:
+  X disc 82C5D2A286CB4ABC (40 px) -> t_square, takedown X CE0004494F1602F5 (50 px) -> t_square_big, LB
+  FFE4445869FD3106 -> t_l1, LT DC83034FD7B78B60 -> t_l2, LS 748B7606A1F93C3C -> t_l3, RS 9849DBEDAA951D82 -> t_r3
+  (dark-grey pills, make_ps_buttons.py). The grey QTE dots (32F578B188679B72) stay. Not seen yet: these pictures'
+  A/B/Y/RB/RT/START/BACK versions. Only playstation.txt and PNGs changed: a rebuild of the game copies them, no
+  build_native needed. **Not tested yet.**
+- **Test 3 (20 Nov, 19:54):** user wants LS/RS kept as the game's stick glyphs: the L3/R3 draws (HUD font) and
+  replaces (tutorial) removed from playstation.txt (the g_l3/g_r3/t_l3/t_r3 PNGs are unused leftovers). Tutorial/
+  takedown swaps hadn't shown because the build folder still had the old playstation.txt: the copy was a POST_BUILD
+  step, which runs only when qos.exe relinks. CMakeLists now has a `qos_assets` target (ALL) copying hints/ and
+  prompts/ on every build. **Check after a build:** `out\build\...\prompts\playstation.txt` matches the source.
+- **Test 4 (20 Nov, 20:02):** takedown left (X -> square) works. The diamond's other three are the plain grey
+  QTE dot (32F578B188679B72), not Xbox-specific: left as is (coloured A/B/Y takedown discs not captured yet). The
+  phone hint's BACK is the HUD-font glyph: added START -> OPTIONS (three lines) and BACK -> touch pad (rounded bar)
+  grey discs, g_options/g_touchpad, at font cells (308,190)-(334,214), (342,190)-(368,214) and small (432,424),
+  (450,424). The START/BACK labels under the big glyphs are left. **Not tested yet.**
+- **texdump4 (20 Nov, 20:24, user got all takedown/tutorial cases):** found A DD0679586F9D6F4A, B
+  EB0894A556ADBDD3, Y 99FAE00AC5BB2840 (50 px discs, as the large X) -> t_cross_big/t_circle_big/t_triangle_big;
+  RT 30044CB9F07E3F81 -> t_r2; the tutorial's dark BACK disc 92F008A6E5D310A6 -> t_touchpad (dark). D-pad picture
+  23A5DEDB971F4898 left. RB and START pictures still not seen. **Not tested yet.** To find new pictures: list the
+  dump, take the 64x64 f19/f20 files not seen before (cloud texdec.py, or ask Claude).
+- **Grenade tutorial RB (20 Nov, 20:45, texdump5):** found RB FE735E11E62340EA (dark pill, as LB/LT/RT) ->
+  `t_r1` (`replace tutorial_rb` in playstation.txt, written to the PC). texdump5 had no other new 64x64 picture:
+  START tutorial picture still not seen. **Not tested yet** (game rebuild only; no build_native).
+- **Render scale 1.5 (20 Nov, 20:53, qos_091.log):** applied (log "gfx native: render scale 1.5", frontbuffer
+  1920x1080), but the user's display is 3840x2160, so the presenter stretches 1080p to 4K (bilinear): looks soft.
+  The 3D view is also probably below 720p, as COD4 on the 360 (1024x600, 2xAA; same engine), so 1.5x would give
+  about 1536x900 before the game's own upscale. Not confirmed from a trace yet. Next: try 3x (720p x3 = 3840x2160,
+  the display's size).
+- **Render scale 3 (20 Nov, 20:57, qos_092.log):** "render scale 3", frontbuffer 3840x2160, but the 3D still looks
+  blocky. Measured on the user's 4K screenshots (1.5x and 3x): geometry edges step every ~3.75 screen px, i.e. the 3D
+  scene is ~1024 px wide (guest size, unscaled), while the HUD text is sharp (scaled). So the scene is drawn or
+  sampled at 1x somewhere: suspect the scene's resolve texture is read back from guest memory ("tex", ~1 texture
+  reload after CPU writes per frame in the log) instead of the scaled host image ("rt"). Asked for a filtered
+  BOTS_DRAW_TRACE at scale 2 (resolves, transfers, draws sampling "rt" or 720/600/576-high textures) ->
+  scale-trace.txt.
+- **Resolve dump at 1.5x (20 Nov, 21:00, resdump/, 17 resolves a frame):** the resolves ARE scaled: shadow maps
+  768x768/768x3072/2304/1536, scene 1F148000 and 1EC58000 1536x912 (guest 1024x608), 1E978000 1536x1080 (guest
+  1024x720: the 3D view after the game's own passes), 1F3A8000 and 1D4A8000 1920x1080 (frontbuffer, with HUD).
+  But the 1920x1080 frontbuffer has a strong 15-pixel column period (1920/1024 x 8): the final pass reads the
+  3D view as a 1024-wide image, not the 1536-wide host one. So the scaled host image is lost when the frontbuffer
+  pass samples it (probably read from guest memory as "tex" instead of "rt"). Next: filtered draw trace to see the
+  final pass's texture source.
+- **Draw trace at 2x (20 Nov, 21:06, scale-trace.txt):** every scene pass is scaled and samples host images ("rt"):
+  scene 2080x2432 (1024x608 2x MSAA), 1F148000 -> 1E978000 (draw: 608 -> 720 rows), then ONE final draw into the
+  1280x720 front buffer (rt0 base 0x260) samples 1E978000 (rt 1024x720, host 2048x1440), opaque (blend
+  00010001), no depth, 6 vertices; the HUD follows. Checked against the 1.5x dump: the front buffer matches
+  "1E978000 shrunk to 1024 then stretched" (column periods 3/6/15), not "stretched directly" (period 5), and its
+  colours equal the source's (no colour change). So the game's stretch shader reads whole guest texels (a custom
+  filter), which caps the 3D at 1024 columns whatever the scale.
+- **Fix written (20 Nov, 21:15), not built/tested:** native patch `0023-plain-upscale.patch`: at render scale != 1,
+  a draw with one colour target, no depth, opaque full write, one pixel texture that is a resolve destination
+  (>= 640 guest wide), <= 6 vertices, and a viewport wider than the source is followed by a linear vkCmdBlitImage of
+  the source host image over the viewport (same format only). Log: "gfx native: plain upscale AxB -> CxD ..." (first
+  4). `BOTS_GFX_PLAIN_UPSCALE=0` turns it off. Needs `tools\build_native.bat` + game build.
+- **0023 test 1 (20 Nov, 21:20, qos_095.log):** built (renderer DLL 6,496,256 bytes, 21:17) but no "plain upscale"
+  line: the check never matched (likely the viewport: a screen-space draw has none, or the texture-binding count).
+  **0023 v2 written (21:25):** area = scissor (bounded by the viewport if any), the widest resolve read taken, and
+  every candidate logged (first 8) with count, reads, textures, rt1, depth, mask, blend, formats and "done|skipped".
+  Needs build_native + game build again.
+- **0023 v2 test (20 Nov, 21:29, qos_096.log):** the check found the final stretch at 3x: "skipped: 3072x2160 ->
+  0,0-3840,2160 of 3840x4320 (count 6, reads 2, textures 0+2, rt1 0, depth 0, mask F, blend 00010001, formats 37 ->
+  37)". Only "reads 2" stopped it: the pixel shader binds the source twice (two texture bindings, probably the
+  signed/unsigned pair of one fetch). **0023 v3 (21:33):** accepts several reads when all are the same image
+  (log says "of one image" / "of different images"). Needs build_native + game build again.
+- **0023 v3 works (20 Nov, 22:25, user's 4K screenshot at 3x):** "better but still looks pixelated". The 15-px
+  column period is gone (3D now at full scaled resolution); geometry edges step per screen pixel. What is left is
+  aliasing (the game's 2x MSAA is drawn as 2 rows per pixel by native 0002, so near-vertical edges get no
+  smoothing) and texture minification streaks. Suggested `BOTS_GFX_FXAA=1` (2 = strong) and
+  `BOTS_GFX_FORCE_ANISO=16`; not tried yet. Possible later: real host MSAA / horizontal supersampling.
+- **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
+  BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
+- **Shared SDK folder:** last built by 007 (SDK own13 + native 0001-0022; 0023 written 20 Nov). Eat Lead has the same SDK set (own13,
   native 0001-0015); Bourne's is tbc12. Each project's `build_native` resets it to its own set.
+- **Check the renderer before testing:** 007's build copies whatever renderer the shared SDK folder last built. On
+  20 Nov another project's build_native (16:53) replaced it: text gone and "unsupported draw (primitive): prim 1"
+  in the log. Fix: run 007's `tools\build_native.bat` first. 007's renderer DLL was 6,473,728 bytes (19 Nov).
 - **Patch overview for all games:** project doc `claude/patches.md`.
 - **Patch sources:** the PC copies in `tools\sdk-patches` and `native-plugin\patches` are the masters. Claude's
   scratch copies in the cloud workspace don't survive between sessions: to change a patch, read it from the PC,
@@ -81,6 +211,7 @@ qos.exe --game_data_root=%USERPROFILE%\source\repos\007qol\game --gpu_plugin nat
 
 ## Next
 
-1. Rebuild (codegen reruns for the toml change) and test leaving a level for the main menu.
+1. Rebuild (codegen reruns for the toml change); test leaving a level for the main menu, and B on Press Start
+   (hint shows after 0.4 s; B quits; B on the main menu still goes back; idle 90 s for the demo: B ends it, no quit).
 2. Play further on native; compare with Xenos.
-3. Then: frame rate above 30, launcher (from Eat Lead's), repository.
+3. Then: frame rate above 30 (see the Xenia patch note), launcher (from Eat Lead's), leak-scan git hooks.

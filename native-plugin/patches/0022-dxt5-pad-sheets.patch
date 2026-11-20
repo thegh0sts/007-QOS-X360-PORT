@@ -1,0 +1,161 @@
+diff --git a/src/gfx/prompt_atlas.cpp b/src/gfx/prompt_atlas.cpp
+index 07dac4f..e9edecb 100644
+--- a/src/gfx/prompt_atlas.cpp
++++ b/src/gfx/prompt_atlas.cpp
+@@ -261,6 +261,7 @@ struct PadSheet {
+   std::string name;
+   uint32_t width = 0, height = 0;
+   uint64_t hash = 0;
++  bool dxt5 = false;  // qos: a DXT5 texture ("texture ... dxt5"), hashed over its base level as the guest has it
+   std::vector<PadDraw> draws;
+ };
+ 
+@@ -327,6 +328,8 @@ const PadConfig& Config() {
+           std::string hash;
+           if (in >> sheet.name >> sheet.width >> sheet.height >> hash) {
+             sheet.hash = std::strtoull(hash.c_str(), nullptr, 16);
++            std::string extra;
++            while (in >> extra) sheet.dxt5 |= extra == "dxt5";
+             c.sheets.push_back(std::move(sheet));
+           }
+         } else if (word == "replace") {
+@@ -458,11 +461,54 @@ void Paint(const PadImage& image, const PadDraw& d, uint32_t width, uint32_t hei
+   }
+ }
+ 
++// qos: a tiled DXT5 base level as the guest has it (8-in-16 endian), pitch in texels, to RGBA8 rows.
++std::vector<uint8_t> UntileDxt5(const uint8_t* guest, uint32_t width, uint32_t height, uint32_t pitch) {
++  std::vector<uint8_t> rgba(size_t(width) * height * 4);
++  const uint32_t pitch_blocks = ((std::max(pitch, width) / 4) + 31) & ~31u;
++  for (uint32_t by = 0; by < height / 4; ++by) {
++    for (uint32_t bx = 0; bx < width / 4; ++bx) {
++      const uint8_t* p = guest + TiledOffset(bx, by, pitch_blocks, 4);
++      uint8_t b[16];
++      for (int i = 0; i < 16; i += 2) b[i] = p[i + 1], b[i + 1] = p[i];  // 8-in-16 swap
++      const uint32_t a0 = b[0], a1 = b[1];
++      uint64_t ai = 0;
++      for (int i = 0; i < 6; ++i) ai |= uint64_t(b[2 + i]) << (8 * i);
++      uint32_t ap[8] = {a0, a1};
++      if (a0 > a1) {
++        for (int i = 0; i < 6; ++i) ap[2 + i] = ((6 - i) * a0 + (i + 1) * a1) / 7;
++      } else {
++        for (int i = 0; i < 4; ++i) ap[2 + i] = ((4 - i) * a0 + (i + 1) * a1) / 5;
++        ap[6] = 0, ap[7] = 255;
++      }
++      const uint32_t c0 = b[8] | b[9] << 8, c1 = b[10] | b[11] << 8;
++      const uint32_t ci = b[12] | b[13] << 8 | b[14] << 16 | uint32_t(b[15]) << 24;
++      auto rgb = [](uint32_t c, uint32_t* o) {
++        o[0] = ((c >> 11) & 31) * 255 / 31, o[1] = ((c >> 5) & 63) * 255 / 63, o[2] = (c & 31) * 255 / 31;
++      };
++      uint32_t pal[4][3];
++      rgb(c0, pal[0]);
++      rgb(c1, pal[1]);
++      for (int k = 0; k < 3; ++k) {
++        pal[2][k] = (2 * pal[0][k] + pal[1][k]) / 3;
++        pal[3][k] = (pal[0][k] + 2 * pal[1][k]) / 3;
++      }
++      for (uint32_t i = 0; i < 16; ++i) {
++        const uint32_t x = bx * 4 + (i & 3), y = by * 4 + (i >> 2);
++        uint8_t* q = &rgba[(size_t(y) * width + x) * 4];
++        const uint32_t* c = pal[(ci >> (2 * i)) & 3];
++        q[0] = uint8_t(c[0]), q[1] = uint8_t(c[1]), q[2] = uint8_t(c[2]);
++        q[3] = uint8_t(ap[(ai >> (3 * i)) & 7]);
++      }
++    }
++  }
++  return rgba;
++}
++
+ }  // namespace
+ 
+ bool PadSheetSize(uint32_t width, uint32_t height) {
+   for (const PadSheet& s : Config().sheets)
+-    if (s.width == width && s.height == height) return true;
++    if (!s.dxt5 && s.width == width && s.height == height) return true;
+   return false;
+ }
+ 
+@@ -470,7 +516,8 @@ int FindPadSheet(const uint8_t* guest, uint32_t width, uint32_t height) {
+   const auto& sheets = Config().sheets;
+   const uint64_t hash = Hash(guest, size_t(width) * height * 4);
+   for (size_t i = 0; i < sheets.size(); ++i)
+-    if (sheets[i].width == width && sheets[i].height == height && sheets[i].hash == hash) return int(i);
++    if (!sheets[i].dxt5 && sheets[i].width == width && sheets[i].height == height && sheets[i].hash == hash)
++      return int(i);
+   static int logged = 0;  // what didn't match, for a new sheet or another release of the game
+   if (logged < 16) {
+     ++logged;
+@@ -519,4 +566,32 @@ const std::vector<uint8_t>& ReplacementPixels(int index, bool& bgr) {
+   return list[index].rgba;
+ }
+ 
++bool DxtSheetSize(uint32_t width, uint32_t height) {
++  for (const PadSheet& s : Config().sheets)
++    if (s.dxt5 && s.width == width && s.height == height) return true;
++  return false;
++}
++
++int FindDxtSheet(uint64_t hash, uint32_t width, uint32_t height) {
++  const auto& sheets = Config().sheets;
++  for (size_t i = 0; i < sheets.size(); ++i)
++    if (sheets[i].dxt5 && sheets[i].width == width && sheets[i].height == height && sheets[i].hash == hash)
++      return int(i);
++  return -1;
++}
++
++std::vector<uint8_t> BuildDxtSheet(int sheet, const uint8_t* guest, uint32_t pitch) {
++  const auto& config = Config();
++  if (sheet < 0 || size_t(sheet) >= config.sheets.size()) return {};
++  const PadSheet& s = config.sheets[sheet];
++  std::vector<uint8_t> out = UntileDxt5(guest, s.width, s.height, pitch);
++  for (const PadDraw& d : s.draws) Paint(config.images.at(d.image), d, s.width, s.height, out);
++  static std::unordered_map<int, bool> logged;
++  if (!logged[sheet]) {
++    logged[sheet] = true;
++    REXLOG_INFO("pad prompts: {} shows PlayStation buttons ({} drawn)", s.name, s.draws.size());
++  }
++  return out;
++}
++
+ }  // namespace bots::prompts
+diff --git a/src/gfx/prompt_atlas.h b/src/gfx/prompt_atlas.h
+index d83164a..2a0614e 100644
+--- a/src/gfx/prompt_atlas.h
++++ b/src/gfx/prompt_atlas.h
+@@ -50,4 +50,11 @@ int FindReplacement(uint64_t hash, uint32_t width, uint32_t height);  // or -1
+ // Its picture as RGBA8 rows, width x height; empty for a bad index.
+ const std::vector<uint8_t>& ReplacementPixels(int index, bool& bgr);
+ 
++// qos: "texture <name> <w> <h> <hash> dxt5": a tiled DXT5 texture (007's font, whose atlas holds the button glyphs),
++// hashed like "replace" (its base level as the guest has it), decoded and painted on like the ARGB sheets.
++bool DxtSheetSize(uint32_t width, uint32_t height);
++int FindDxtSheet(uint64_t hash, uint32_t width, uint32_t height);  // or -1
++// pitch in texels (the fetch constant's pitch x 32). RGBA8 rows; empty on failure.
++std::vector<uint8_t> BuildDxtSheet(int sheet, const uint8_t* guest, uint32_t pitch);
++
+ }  // namespace bots::prompts
+diff --git a/src/gfx/vk/texture.cpp b/src/gfx/vk/texture.cpp
+index d2945c0..8192b7a 100644
+--- a/src/gfx/vk/texture.cpp
++++ b/src/gfx/vk/texture.cpp
+@@ -490,6 +490,20 @@ void Renderer::LoadTexture(const rg::xenos::xe_gpu_texture_fetch_t& fetch, Guest
+       }
+     }
+   }
++  // qos: a DXT5 texture with PlayStation buttons painted on (prompts/playstation.txt "texture ... dxt5").
++  if (depth == 1 && base_page && !cube && !is_3d && fetch.tiled && fetch.format == xe::TextureFormat::k_DXT4_5 &&
++      bots::prompts::DxtSheetSize(width, height) && layout.base.level_data_extent_bytes) {
++    const uint32_t address = base_page << 12, bytes = layout.base.level_data_extent_bytes;
++    const int sheet = bots::prompts::FindDxtSheet(bots::prompts::Hash(memory_(address), bytes), width, height);
++    if (sheet >= 0) {
++      texture.pad_sheet = true;  // reloaded when the mode changes
++      texture.prompt_generation = pad_prompt_mode_;
++      if (pad_prompt_mode_ == 1) {
++        std::vector<uint8_t> pixels = bots::prompts::BuildDxtSheet(sheet, memory_(address), uint32_t(fetch.pitch) * 32);
++        if (!pixels.empty() && LoadRgbaTexture(texture, address, bytes, pixels, width, height)) return;
++      }
++    }
++  }
+   // qos: a texture replaced whole by a picture (prompts/playstation.txt "replace") while pad_prompt_mode_ is 1.
+   if (depth == 1 && base_page && !cube && !is_3d && bots::prompts::ReplaceSize(width, height) &&
+       layout.base.level_data_extent_bytes) {

@@ -15,6 +15,8 @@ set(QOS_SOURCES
     src/main.cpp
     src/crash_win.cpp
     src/fps_unlock.cpp
+    src/menu_quit.cpp
+    src/pad_prompts.cpp
 )
 
 if(WIN32)
@@ -24,6 +26,16 @@ else()
 endif()
 
 rexglue_setup_target(qos GPU_PLUGINS xenos)
+
+# The "B QUIT" title-screen hint images (hints/, tools/make_quit_hint.py) and the PlayStation button pictures with
+# the list of the game's textures they replace (prompts/, tools/make_ps_buttons.py), our own art, read by the native
+# renderer from beside the exe. Copied on every build (a target of their own, not a POST_BUILD step, which only runs
+# when qos.exe is relinked: on 20 Nov a changed playstation.txt didn't reach the build folder).
+add_custom_target(qos_assets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/hints $<TARGET_FILE_DIR:qos>/hints
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/prompts $<TARGET_FILE_DIR:qos>/prompts
+    COMMENT "Copying menu hints and PlayStation button pictures")
+add_dependencies(qos_assets qos)
 
 # AMD FidelityFX runtime (FSR / CAS output filters). Present when the SDK was built with
 # REXGLUE_ENABLE_FIDELITYFX (the patched SDK from the Bourne project's tools/build_sdk.bat);
