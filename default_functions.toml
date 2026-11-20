@@ -1,0 +1,25 @@
+# Manual function starts for default.xex: addresses the analyzer didn't detect as functions on
+# its own. Add more here from codegen "Unresolved" messages and from runtime crashes that point
+# at code reached through a function pointer.
+
+# MSVC CRT setjmp/longjmp (setjmp: mflr/mfcr, then f14-f31, r13-r31 and v64-v127 stored into the
+# jmp_buf at r3; longjmp: the same loads from it, then r1 and lr). Codegen replaces calls to them
+# with host ppc_setjmp/ppc_longjmp. Without this, the game's error recovery (Com_Error's longjmp
+# back to the frame loop, e.g. leaving a level for the main menu) restored the guest registers but
+# returned into the caller anyway, with the frame loop's r31: a crash in sub_82299400 reading
+# 0x70172634 (Xenos and native alike).
+setjmp_address = 0x825ABAE0
+longjmp_address = 0x825AB7C0
+
+[functions]
+# First codegen run: "Unresolved b target 0x821C1BF8 from 0x824A287C" (a tail-call branch).
+0x821C1BF8 = { name = "sub_821C1BF8" }
+
+# Cases of the asset-type size switch in sub_821C1B90 ("li r3,N; blr") that the linker also
+# shares as standalone "return N" functions: their addresses are stored in data (vtables), and
+# the game calls them through those ("Call to invalid or unregistered function at 0x821C1C20").
+# As known functions, the switch reaches them as tail calls (like 0x821C1BF8 above).
+0x821C1C08 = { name = "sub_821C1C08" }
+0x821C1C20 = { name = "sub_821C1C20" }
+0x821C1C28 = { name = "sub_821C1C28" }
+0x821C1C38 = { name = "sub_821C1C38" }

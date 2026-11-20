@@ -1,0 +1,94 @@
+From 6f482a0ae9f39c93c9223b0efd6f49d0f837cb8e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 19 Nov 2026 23:39:03 +1100
+Subject: [PATCH] qos: vertex fetch trace and BOTS_GFX_VFETCH_ANY_TYPE
+
+---
+ src/gfx/vk/draw.cpp | 64 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 64 insertions(+)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 55b8581..b1b3530 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -983,6 +983,53 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   }
+ 
+   profile.Mark(kPhaseTracker);
++  // qos: BOTS_GFX_VFETCH_TRACE=1 prints, for the first 400 auto-indexed draws with vertex streams (not point lists) after 600 presents (menu text), the
++  // vertex shader's microcode as loaded and as now in guest memory, and each vertex binding's fetch constant (index,
++  // raw words, type, address, endian) and first data words - which constant the text's vertices really come from.
++  static const bool vfetch_trace = [] {
++    const char* v = std::getenv("BOTS_GFX_VFETCH_TRACE");
++    return v && *v == '1';
++  }();
++  static uint32_t vfetch_traced = 0;
++  if (vfetch_trace && source == xe::SourceSelect::kAutoIndex && !point && !vshader->vertex_bindings().empty() &&
++      stats_.presents >= 600 && vfetch_traced < 400) {
++    ++vfetch_traced;
++    std::string line = fmt::format("vfetch draw {} prim {} count {} vs {:08X} {} dwords {}", stats_.draws + 1,
++                                   uint32_t(prim), count, vs.address, vs.inline_ucode ? "copy" : "guest", vs.dwords);
++    const uint32_t* loaded = ucode(vs);
++    const uint32_t* now = reinterpret_cast<const uint32_t*>(memory_(vs.address));
++    uint32_t differ = 0;
++    if (loaded && now) {
++      for (uint32_t i = 0; i < vs.dwords; ++i) differ += loaded[i] != now[i];
++    }
++    line += fmt::format(" ucode differs now in {} dwords\n", differ);
++    for (const auto& binding : vshader->vertex_bindings()) {
++      const auto fetch = regs.GetVertexFetch(binding.fetch_constant);
++      const uint32_t* w = &regs.values[rg::XE_GPU_REG_SHADER_CONSTANT_FETCH_00_0 + 2 * binding.fetch_constant];
++      const uint32_t start = (uint32_t(fetch.address) << 2) & 0x1FFFFFFCu;
++      line += fmt::format("  vf{} stride {} words {:08X} {:08X} type {} address {:08X} size {} endian {}:",
++                          binding.fetch_constant, binding.stride_words, w[0], w[1], uint32_t(fetch.type), start,
++                          uint32_t(fetch.size), uint32_t(fetch.endian));
++      if (const uint8_t* data = memory_(start)) {
++        for (uint32_t i = 0; i < std::min<uint32_t>(binding.stride_words * 2, 16); ++i) {
++          uint32_t v;
++          std::memcpy(&v, data + 4 * i, 4);
++          line += fmt::format(" {:08X}", v);
++        }
++      }
++      line += "\n";
++    }
++    // Every vertex-type fetch constant that is set, for comparison.
++    line += "  vertex constants:";
++    for (uint32_t i = 0; i < 96; ++i) {
++      const auto fetch = regs.GetVertexFetch(i);
++      if (fetch.type == xe::FetchConstantType::kVertex && fetch.address) {
++        line += fmt::format(" vf{}={:08X}/{}e{}", i, uint32_t(fetch.address) << 2, uint32_t(fetch.size),
++                            uint32_t(fetch.endian));
++      }
++    }
++    std::fprintf(stderr, "%s\n", line.c_str());
++  }
+   // Tracked memory: what the shaders read from shared memory - vertex buffers, and the DMA indices rectangle-list
+   // vertex shaders load themselves. (Other indices are read on the CPU below.)
+   if (tracker_) {
+@@ -993,6 +1040,23 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+         if (fetch.type == xe::FetchConstantType::kVertex) tracker_->Request(fetch.address << 2, fetch.size << 2);
+       }
+     }
++    // qos: BOTS_GFX_VFETCH_ANY_TYPE=1 also syncs the memory a vertex fetch reads through a fetch constant that isn't
++    // marked as a vertex one (Quantum of Solace's menu text: its vertex shader fetches from a constant holding a
++    // texture's words). The shader reads it regardless (address = dword 0, physical); only what the draw can reach.
++    static const bool any_type = [] {
++      const char* v = std::getenv("BOTS_GFX_VFETCH_ANY_TYPE");
++      return v && *v == '1';
++    }();
++    if (any_type) {
++      for (const auto& binding : vshader->vertex_bindings()) {
++        const auto fetch = regs.GetVertexFetch(binding.fetch_constant);
++        if (fetch.type == xe::FetchConstantType::kVertex || !binding.stride_words) continue;
++        const uint32_t start = (uint32_t(fetch.address) << 2) & 0x1FFFFFFCu;
++        const uint32_t vertices = source == xe::SourceSelect::kAutoIndex ? count : 65536;
++        const uint64_t bytes = std::min<uint64_t>(uint64_t(vertices) * binding.stride_words * 4, 4u << 20);
++        if (start + bytes <= 0x20000000u) tracker_->Request(start, uint32_t(bytes));
++      }
++    }
+     if (expanded && source == xe::SourceSelect::kDMA) {
+       tracker_->Request(draw.index_base, draw.index_words * (index32 ? 4 : 2));
+     }
+-- 
+2.43.0
+

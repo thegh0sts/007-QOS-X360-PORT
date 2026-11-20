@@ -1,0 +1,156 @@
+# Function starts found by scanning default.xex: code right after an unconditional blr/bctr/b
+# inside an analyzed function that no branch or jump table in that function reaches (no loc_
+# label), excluding padding and inline jump tables. The analyzer had folded these into the
+# function before them; the game reaches them through pointers (vtables, callbacks) instead,
+# e.g. 0x8211E798, an audio callback that crashed the first boot ("Call to invalid or
+# unregistered function"). Entries marked "data ref" are referenced from the data sections
+# (vtables, tables of callbacks); the rest are reached some other way, or not at all.
+# To disable this whole batch, remove "default_functions_scan.toml" from includes in
+# qos_manifest.toml.
+
+# Left out: the import stubs at 0x825CE62C-0x825CF21C (kernel/XAM trampolines the SDK handles
+# itself; listing them broke the link), the few addresses just before them, and 0x825BC560 (data
+# ref, but its code branches back into the function before it, which the codegen can't express).
+
+[functions]
+0x820FFB3C = { name = "sub_820FFB3C" }
+0x82103578 = { name = "sub_82103578" }  # data ref
+0x821035A0 = { name = "sub_821035A0" }  # data ref
+0x82108818 = { name = "sub_82108818" }  # data ref
+0x8210C9C0 = { name = "sub_8210C9C0" }  # data ref
+0x8210C9C8 = { name = "sub_8210C9C8" }  # data ref
+0x8211DBC8 = { name = "sub_8211DBC8" }  # data ref
+0x8211E798 = { name = "sub_8211E798" }  # data ref
+0x8211E7E0 = { name = "sub_8211E7E0" }  # data ref
+0x82120C00 = { name = "sub_82120C00" }  # data ref
+0x82120C18 = { name = "sub_82120C18" }  # data ref
+0x82120C38 = { name = "sub_82120C38" }  # data ref
+0x82120C48 = { name = "sub_82120C48" }  # data ref
+0x82120C58 = { name = "sub_82120C58" }  # data ref
+0x82120C60 = { name = "sub_82120C60" }  # data ref
+0x82120C68 = { name = "sub_82120C68" }  # data ref
+0x82120C78 = { name = "sub_82120C78" }  # data ref
+0x821D44BC = { name = "sub_821D44BC" }
+0x82202538 = { name = "sub_82202538" }  # data ref
+0x82277384 = { name = "sub_82277384" }
+0x82308FEC = { name = "sub_82308FEC" }
+0x82309038 = { name = "sub_82309038" }
+0x82329728 = { name = "sub_82329728" }
+0x8232B98C = { name = "sub_8232B98C" }
+0x8232B9A4 = { name = "sub_8232B9A4" }
+0x8232B9D8 = { name = "sub_8232B9D8" }
+0x8232BA10 = { name = "sub_8232BA10" }
+0x8232D560 = { name = "sub_8232D560" }
+0x823308F8 = { name = "sub_823308F8" }
+0x82331220 = { name = "sub_82331220" }
+0x8233A678 = { name = "sub_8233A678" }  # data ref
+0x8233A688 = { name = "sub_8233A688" }  # data ref
+0x8233ADD0 = { name = "sub_8233ADD0" }  # data ref
+0x8233AE30 = { name = "sub_8233AE30" }
+0x8233AE8C = { name = "sub_8233AE8C" }
+0x8233AE9C = { name = "sub_8233AE9C" }
+0x8235EE94 = { name = "sub_8235EE94" }
+0x8235FA74 = { name = "sub_8235FA74" }
+0x8235FAC8 = { name = "sub_8235FAC8" }
+0x8235FB28 = { name = "sub_8235FB28" }
+0x82383C1C = { name = "sub_82383C1C" }
+0x823B8370 = { name = "sub_823B8370" }  # data ref
+0x823BAAD4 = { name = "sub_823BAAD4" }
+0x823D68D8 = { name = "sub_823D68D8" }
+0x823FCB0C = { name = "sub_823FCB0C" }
+0x823FFD50 = { name = "sub_823FFD50" }
+0x82425F10 = { name = "sub_82425F10" }
+0x82427B90 = { name = "sub_82427B90" }
+0x82427C30 = { name = "sub_82427C30" }  # data ref
+0x82428138 = { name = "sub_82428138" }
+0x82428A08 = { name = "sub_82428A08" }
+0x82428CF8 = { name = "sub_82428CF8" }
+0x824293AC = { name = "sub_824293AC" }  # data ref
+0x82429524 = { name = "sub_82429524" }  # data ref
+0x8242B308 = { name = "sub_8242B308" }
+0x8242DFB8 = { name = "sub_8242DFB8" }
+0x8244D204 = { name = "sub_8244D204" }
+0x82453338 = { name = "sub_82453338" }  # data ref
+0x82453350 = { name = "sub_82453350" }  # data ref
+0x82454C44 = { name = "sub_82454C44" }
+0x82454F5C = { name = "sub_82454F5C" }
+0x8245DD30 = { name = "sub_8245DD30" }
+0x82462590 = { name = "sub_82462590" }  # data ref
+0x82462650 = { name = "sub_82462650" }  # data ref
+0x82462668 = { name = "sub_82462668" }  # data ref
+0x8246F540 = { name = "sub_8246F540" }  # data ref
+0x8247CD28 = { name = "sub_8247CD28" }
+0x8247CD50 = { name = "sub_8247CD50" }
+0x8247CD90 = { name = "sub_8247CD90" }
+0x82485D08 = { name = "sub_82485D08" }  # data ref
+0x8248CBF0 = { name = "sub_8248CBF0" }
+0x824985D0 = { name = "sub_824985D0" }
+0x82498608 = { name = "sub_82498608" }  # data ref
+0x824991A8 = { name = "sub_824991A8" }  # data ref
+0x824991BC = { name = "sub_824991BC" }
+0x824A2868 = { name = "sub_824A2868" }  # data ref
+0x824AF5F0 = { name = "sub_824AF5F0" }  # data ref
+0x824BFCE8 = { name = "sub_824BFCE8" }  # data ref
+0x824BFD00 = { name = "sub_824BFD00" }  # data ref
+0x824BFD18 = { name = "sub_824BFD18" }  # data ref
+0x824BFD30 = { name = "sub_824BFD30" }  # data ref
+0x824BFD48 = { name = "sub_824BFD48" }  # data ref
+0x824BFD60 = { name = "sub_824BFD60" }  # data ref
+0x824BFD78 = { name = "sub_824BFD78" }  # data ref
+0x824BFD90 = { name = "sub_824BFD90" }  # data ref
+0x824CECA8 = { name = "sub_824CECA8" }  # data ref
+0x824E16C0 = { name = "sub_824E16C0" }  # data ref
+0x824E16E8 = { name = "sub_824E16E8" }  # data ref
+0x824E1710 = { name = "sub_824E1710" }  # data ref
+0x824E85DC = { name = "sub_824E85DC" }
+0x82552C58 = { name = "sub_82552C58" }
+0x825A8608 = { name = "sub_825A8608" }
+0x825A8688 = { name = "sub_825A8688" }
+0x825A8740 = { name = "sub_825A8740" }
+0x825A97A0 = { name = "sub_825A97A0" }
+0x825AAAF0 = { name = "sub_825AAAF0" }
+0x825ABE68 = { name = "sub_825ABE68" }
+0x825AC060 = { name = "sub_825AC060" }
+0x825ACA58 = { name = "sub_825ACA58" }
+0x825AD9B0 = { name = "sub_825AD9B0" }
+0x825ADBC0 = { name = "sub_825ADBC0" }
+0x825ADD80 = { name = "sub_825ADD80" }
+0x825ADF58 = { name = "sub_825ADF58" }
+0x825AF170 = { name = "sub_825AF170" }
+0x825AF3A0 = { name = "sub_825AF3A0" }
+0x825AFE90 = { name = "sub_825AFE90" }
+0x825B00A0 = { name = "sub_825B00A0" }
+0x825B0280 = { name = "sub_825B0280" }
+0x825B0388 = { name = "sub_825B0388" }
+0x825B0EB0 = { name = "sub_825B0EB0" }
+0x825B1450 = { name = "sub_825B1450" }
+0x825B6BE8 = { name = "sub_825B6BE8" }
+0x825B6D90 = { name = "sub_825B6D90" }
+0x825B6DF0 = { name = "sub_825B6DF0" }
+0x825B7098 = { name = "sub_825B7098" }
+0x825B70F8 = { name = "sub_825B70F8" }  # data ref
+0x825B7328 = { name = "sub_825B7328" }
+0x825B7668 = { name = "sub_825B7668" }
+0x825B7800 = { name = "sub_825B7800" }
+0x825B7EF8 = { name = "sub_825B7EF8" }
+0x825B7F98 = { name = "sub_825B7F98" }
+0x825B84B0 = { name = "sub_825B84B0" }
+0x825B99C0 = { name = "sub_825B99C0" }
+0x825B9C40 = { name = "sub_825B9C40" }
+0x825B9EB0 = { name = "sub_825B9EB0" }
+0x825BA098 = { name = "sub_825BA098" }
+0x825BA7D0 = { name = "sub_825BA7D0" }
+0x825BA9A0 = { name = "sub_825BA9A0" }
+0x825BBF58 = { name = "sub_825BBF58" }
+0x825BC118 = { name = "sub_825BC118" }
+0x825BC438 = { name = "sub_825BC438" }
+0x825BC660 = { name = "sub_825BC660" }
+0x825BC6D8 = { name = "sub_825BC6D8" }  # data ref
+0x825BC7E0 = { name = "sub_825BC7E0" }
+0x825BCA4C = { name = "sub_825BCA4C" }  # data ref
+0x825BCA70 = { name = "sub_825BCA70" }
+0x825BCB8C = { name = "sub_825BCB8C" }  # data ref
+0x825BD26C = { name = "sub_825BD26C" }  # data ref
+0x825BD860 = { name = "sub_825BD860" }
+0x825BF070 = { name = "sub_825BF070" }
+0x825BF198 = { name = "sub_825BF198" }
