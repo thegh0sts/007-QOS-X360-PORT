@@ -86,8 +86,9 @@ keep "Resume here" current.
   (`BOTS_GFX_NO_BLEND=1`, `BOTS_GFX_BASE_LEVEL_ONLY=1`).
 - Build with `tools\build_native.bat` from this folder, then rebuild qos (its build copies the plugin). After an SDK
   translator change, delete `%USERPROFILE%\Documents\qos\cache\native` (cached pipelines keep old shaders).
-- The SDK folder `C:\rexglue-src` is shared: whichever project's build ran last decides the patches. Run that
-  project's `build_native` before rebuilding it.
+- **007 has its own SDK folder `C:\rexglue-src-007` (since 22 Nov 16:30)**: build_sdk/build_native and
+  build_installer default to it; Bourne and Eat Lead keep `C:\rexglue-src`. Before that the folder was shared and
+  whichever project's build ran last decided the renderer (the 14 MB DLL mix-ups of 22 Nov).
 - Existing renderer switches worth knowing: `BOTS_DRAW_TRACE=1`, `BOTS_DUMP_SPIRV=<dir>`, `BOTS_NULL_TEXTURE_WHITE=1`,
   `BOTS_GFX_DECODE_BC=1`.
 
@@ -435,9 +436,17 @@ keep "Resume here" current.
   0028 applies after 007's 0017 (copy shader at load, harmless elsewhere); 0029 conflicts in draw.cpp (hand
   merge); 0091-0095 not tried. Check first whether Bourne is draw-CPU bound (a BOTS_DRAW_PROFILE run). The refs
   set-cover idea fits Bourne's own refs tool; ff_shader_refs.py itself is 007-only (fastfile format).
+- **Own SDK folder (22 Nov, 16:30):** to stop Bourne's renderer builds replacing 007's, `tools\build_sdk.bat` (and so
+  `build_native.bat`) now default to `C:\rexglue-src-007`, and `installer\build_installer.bat` packs the SDK from
+  there. Needed once: `tools\build_native.bat` (fresh clone and full SDK build into the new folder), then reconfigure
+  the game against it: `cmake --preset win-amd64-relwithdebinfo
+  -DCMAKE_PREFIX_PATH=C:/rexglue-src-007/rexglue-sdk/out/install/win-amd64` (if CMake keeps the old rexglue_DIR,
+  add `-Drexglue_DIR=C:/rexglue-src-007/rexglue-sdk/out/install/win-amd64/lib/cmake/rexglue` or delete
+  out\build\win-amd64-relwithdebinfo\CMakeCache.txt first), then `cmake --build`. Check: the build folder's
+  rexgpu-nativerd.dll is 6,598,144 bytes. Launcher builds bundle the SDK as qos2 (renderer 0001-0095).
 - **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
   BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
-- **Shared SDK folder:** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 + 0026 work; 0027 written 21 Nov, not built). Eat Lead has the same SDK set (own13,
+- **Shared SDK folder (history; 007 moved to `C:\rexglue-src-007` on 22 Nov):** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 + 0026 work; 0027 written 21 Nov, not built). Eat Lead has the same SDK set (own13,
   native 0001-0015); Bourne's is tbc12. Each project's `build_native` resets it to its own set.
 - **Check the renderer before testing:** 007's build copies whatever renderer the shared SDK folder last built. On
   20 Nov another project's build_native (16:53) replaced it: text gone and "unsupported draw (primitive): prim 1"

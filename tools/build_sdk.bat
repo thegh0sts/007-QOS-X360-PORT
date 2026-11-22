@@ -5,7 +5,10 @@ rem
 rem Run from an "x64 Native Tools Command Prompt for VS" (it provides clang, cmake and ninja).
 rem Needs git and an internet connection. Takes a while: the SDK is a large build.
 rem
-rem   tools\build_sdk.bat [work folder]      (default C:\rexglue-src)
+rem   tools\build_sdk.bat [work folder]      (default C:\rexglue-src-007)
+rem
+rem 007 has its own work folder: the Bourne and Eat Lead ports build their own patch sets in
+rem C:\rexglue-src, and a shared folder made each project's build replace the others' renderer.
 rem
 rem With TBC_NATIVE=1 set (tools\build_native.bat does it), the SDK is also built with Vulkan
 rem and with Skullburglar's native renderer as a second GPU plugin (native-plugin\).
@@ -27,7 +30,7 @@ set "OWN_PATCHES=own14"
 set "PATCH_SET=%PATCHES% %OWN_PATCHES%"
 
 set "WORK=%~1"
-if "%WORK%"=="" set "WORK=C:\rexglue-src"
+if "%WORK%"=="" set "WORK=C:\rexglue-src-007"
 set "SDK=%WORK%\rexglue-sdk"
 set "SKULL=%WORK%\skullburglar"
 

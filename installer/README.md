@@ -35,8 +35,8 @@ live in `%LOCALAPPDATA%\QuantumOfSolacePC\settings.json`, the install location i
 
 ## Building
 
-Needs Python 3 on PATH, and the SDK built with `..\tools\build_native.bat` (run 007's last if you also build the
-Bourne or Eat Lead ports: they share `C:\rexglue-src`). From this folder:
+Needs Python 3 on PATH, and the SDK built with `..\tools\build_native.bat` (into 007's own `C:\rexglue-src-007`,
+so the Bourne and Eat Lead builds in `C:\rexglue-src` don't change it). From this folder:
 
 ```
 build_installer.bat

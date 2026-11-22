@@ -5,7 +5,7 @@ rem which copies the plugin next to the game exe, and start the game with --gpu_
 rem
 rem Run from an "x64 Native Tools Command Prompt for VS", like build_sdk.bat.
 rem
-rem   tools\build_native.bat [work folder]      (default C:\rexglue-src)
+rem   tools\build_native.bat [work folder]      (default C:\rexglue-src-007, 007's own)
 rem
 rem tools\build_sdk.bat on its own builds the SDK without the plugin again.
 setlocal

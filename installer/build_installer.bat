@@ -7,13 +7,13 @@ rem
 rem The SDK folder is a ReXGlue SDK install made by ..\tools\build_native.bat (our SDK patches and
 rem Skullburglar's native Vulkan renderer with this project's patches, native-plugin\patches). It's
 rem zipped into the exe, so the installer needs no SDK download. Default:
-rem C:\rexglue-src\rexglue-sdk\out\install\win-amd64 if it exists. The Bourne and Eat Lead ports share
-rem that folder and put their own renderer patches in: run 007's tools\build_native.bat last.
+rem C:\rexglue-src-007\rexglue-sdk\out\install\win-amd64 if it exists (007's own SDK folder; the Bourne
+rem and Eat Lead ports build theirs in C:\rexglue-src).
 setlocal
 cd /d "%~dp0"
 
 set "SDK_FOLDER=%~1"
-if "%SDK_FOLDER%"=="" if exist "C:\rexglue-src\rexglue-sdk\out\install\win-amd64\lib\cmake\rexglue" set "SDK_FOLDER=C:\rexglue-src\rexglue-sdk\out\install\win-amd64"
+if "%SDK_FOLDER%"=="" if exist "C:\rexglue-src-007\rexglue-sdk\out\install\win-amd64\lib\cmake\rexglue" set "SDK_FOLDER=C:\rexglue-src-007\rexglue-sdk\out\install\win-amd64"
 rem Name of the bundled SDK: bump the suffix whenever the SDK or the native renderer's patches change,
 rem so existing installs replace their SDK on the next install.
 set "SDK_BUNDLE=rexglue-sdk-0.10.1-qos2-win-amd64.zip"
