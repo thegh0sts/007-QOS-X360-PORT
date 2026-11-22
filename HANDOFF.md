@@ -444,6 +444,12 @@ keep "Resume here" current.
   add `-Drexglue_DIR=C:/rexglue-src-007/rexglue-sdk/out/install/win-amd64/lib/cmake/rexglue` or delete
   out\build\win-amd64-relwithdebinfo\CMakeCache.txt first), then `cmake --build`. Check: the build folder's
   rexgpu-nativerd.dll is 6,598,144 bytes. Launcher builds bundle the SDK as qos2 (renderer 0001-0095).
+- **FSR 1 (22 Nov, 16:45, launcher only, not tested in game yet):** the runtime's presenter (Vulkan too) has
+  `--present_effect` bilinear / cas / fsr / fsr2 / fsr3 (FidelityFX EASU + RCAS, CAS; fsr2/3 are temporal and need
+  motion vectors the native renderer doesn't make). Launcher Display tab: "Upscaling" (Bilinear, AMD FSR 1, AMD CAS)
+  -> `--present_effect=fsr|cas`. Only upscales when the render resolution is below the window (e.g. render 2x =
+  2560x1440 on a 4K screen); at equal sizes FSR may do nothing or sharpen only. Test: qos.exe ... --present_effect=fsr
+  with BOTS_GFX_RENDER_SCALE=2 on the 4K screen, compare with bilinear.
 - **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
   BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
 - **Shared SDK folder (history; 007 moved to `C:\rexglue-src-007` on 22 Nov):** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 + 0026 work; 0027 written 21 Nov, not built). Eat Lead has the same SDK set (own13,
