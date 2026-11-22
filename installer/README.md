@@ -17,6 +17,7 @@ Nothing from the game ships with it. Running the installer again resumes where i
 | Display | Fullscreen, output resolution | `--fullscreen`, `--resolution` (or `--video_mode_*` and `--window_*` windowed) |
 | Display | Render resolution | `BOTS_GFX_RENDER_SCALE` 1 / 2 / 3 (the game draws 1280×720) |
 | Display | Anti-aliasing | `BOTS_GFX_FXAA` 1 / 2 (native renderer patch 0010) |
+| Display | Upscaling: bilinear, AMD FSR 1, AMD CAS | `--present_effect=fsr` / `cas` (the runtime presenter's FidelityFX EASU + RCAS, or CAS) |
 | Display | Frame rate 30 / 40 / 50 / 60 | `--frame_rate` (`src/fps_unlock.cpp`) |
 | Display | V-sync | `--vsync` |
 | Display | Field of view 65-110 | `--fov` (`src/fov.cpp`) |

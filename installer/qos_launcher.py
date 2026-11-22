@@ -53,6 +53,11 @@ RES_SIZE = {"Original (720p)": (1280, 720), "1080p": (1920, 1080), "1440p": (256
 SCALES = ["1280×720 (original)", "2560×1440", "3840×2160 (demanding)"]  # 1.5x not tested in this game yet
 SCALE_FACTOR = {SCALES[0]: 1, SCALES[1]: 2, SCALES[2]: 3}
 AA = ["Off", "FXAA", "FXAA (strong)"]
+# How the picture is scaled to the window (the runtime presenter's --present_effect, Vulkan and D3D12 alike): AMD
+# FidelityFX FSR 1 (EASU upscaling + RCAS sharpening) or CAS (sharpening). Spatial only: FSR 2/3 need motion vectors,
+# which the native renderer doesn't make.
+UPSCALING = ["Bilinear (original)", "AMD FSR 1", "AMD CAS (sharpen only)"]
+UPSCALING_EFFECT = {UPSCALING[1]: "fsr", UPSCALING[2]: "cas"}
 FXAA_MODE = {"FXAA": "1", "FXAA (strong)": "2"}
 TEXTURE_FILTERING = ["Game's own", "Anisotropic 4x", "Anisotropic 8x", "Anisotropic 16x"]
 ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERING[3]: 16}
@@ -70,6 +75,7 @@ DEFAULTS = {
     # The original picture by default: render scales, FXAA and forced anisotropy aren't tested in this game yet.
     "render_scale": SCALES[0],
     "aa": "Off",
+    "upscaling": UPSCALING[0],
     "texture_filtering": "Game's own",
     # Draw commands recorded on a second thread (native patch 0093): ~2 ms a frame faster in busy scenes.
     "render_thread": True,
@@ -144,7 +150,7 @@ def load_settings():
         s.update(json.loads(SETTINGS_PATH.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         pass
-    for key, values in (("resolution", RESOLUTIONS), ("render_scale", SCALES), ("aa", AA),
+    for key, values in (("resolution", RESOLUTIONS), ("render_scale", SCALES), ("aa", AA), ("upscaling", UPSCALING),
                         ("texture_filtering", TEXTURE_FILTERING), ("fps", FPS), ("fps_counter", FPS_COUNTER),
                         ("pad_prompts", PAD_PROMPTS), ("language", list(LANGUAGES))):
         if s.get(key) not in values:
@@ -363,6 +369,9 @@ def game_args(s, screen=None):
         args.append("--achievement_popups=false")
     if int(s.get("brightness", 100)) != 100:
         args.append(f"--brightness={int(s['brightness']) / 100:.2f}")  # the native renderer's last pass
+    effect = UPSCALING_EFFECT.get(s.get("upscaling"))
+    if effect:
+        args.append(f"--present_effect={effect}")
     args.append(f"--user_language={LANGUAGES.get(s.get('language'), 1)}")
     # Controls: an extra dead zone on both sticks (the SDK's, as a fraction; 0 leaves the game's own), rumble
     # (the runtime's switch) and the button prompts (src/pad_prompts.cpp).
@@ -497,19 +506,22 @@ class SettingsView(tk.Frame):
         note(box, 3, "The game draws at 1280×720; the render resolution is what the native renderer draws it at. "
                      "Output resolution is the size of the picture on your screen.")
         self._combo(box, 4, "aa", "Anti-aliasing", AA)
-        self._combo(box, 5, "fps", "Frame rate", FPS)
-        note(box, 6, "30 is the original. The game runs at normal speed at any rate, but some scripted moments may "
+        self._combo(box, 5, "upscaling", "Upscaling", UPSCALING)
+        note(box, 6, "How the picture is scaled to your screen. FSR 1 upscales with sharper edges than bilinear: "
+                     "best with a render resolution below the output (e.g. 2560×1440 on a 4K screen).")
+        self._combo(box, 7, "fps", "Frame rate", FPS)
+        note(box, 8, "30 is the original. The game runs at normal speed at any rate, but some scripted moments may "
                      "misbehave above 30.")
-        self._check(box, 7, "vsync", "V-sync")
-        note(box, 8, "Off can smooth heavy scenes at 60 FPS, with some tearing.")
-        self._slider(box, 9, "fov", "Field of view (degrees)", 65, 110, 1)
-        note(box, 10, "65 is the original.")
-        self._combo(box, 11, "fps_counter", "FPS counter", FPS_COUNTER)
-        self._check(box, 12, "hide_achievements", "Hide achievement pop-ups")
+        self._check(box, 9, "vsync", "V-sync")
+        note(box, 10, "Off can smooth heavy scenes at 60 FPS, with some tearing.")
+        self._slider(box, 11, "fov", "Field of view (degrees)", 65, 110, 1)
+        note(box, 12, "65 is the original.")
+        self._combo(box, 13, "fps_counter", "FPS counter", FPS_COUNTER)
+        self._check(box, 14, "hide_achievements", "Hide achievement pop-ups")
         self.vars["language"].trace_add("write", lambda *_: self._game_language_changed())
         tk.Label(box, text=tr("Native renderer by the Skullburglar project (github.com/nlwstein/skullburglar, "
                               "BSD 3-Clause)."), font=("Segoe UI", 8), fg=DIM, bg=PANEL, anchor="w"
-                 ).grid(row=13, column=0, columnspan=2, sticky="w", pady=(10, 0))
+                 ).grid(row=15, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
         box = self._page("Graphics")
         self._slider(box, 0, "brightness", "Brightness (%)", 50, 200, 5)
