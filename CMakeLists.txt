@@ -5,6 +5,10 @@
 cmake_minimum_required(VERSION 3.25)
 project(qos LANGUAGES CXX)
 
+# The release number, shown in the log's first line (version_log.cpp). Keep it the same as
+# installer/qos_launcher.py's VERSION.
+set(QOS_RELEASE "0.1.0")
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -15,8 +19,11 @@ set(QOS_SOURCES
     src/main.cpp
     src/crash_win.cpp
     src/fps_unlock.cpp
+    src/fov.cpp
     src/menu_quit.cpp
     src/pad_prompts.cpp
+    src/version_log.cpp
+    src/achievement_list.cpp
 )
 
 if(WIN32)
@@ -26,15 +33,19 @@ else()
 endif()
 
 rexglue_setup_target(qos GPU_PLUGINS xenos)
+target_compile_definitions(qos PRIVATE QOS_VERSION="${QOS_RELEASE}")
 
 # The "B QUIT" title-screen hint images (hints/, tools/make_quit_hint.py) and the PlayStation button pictures with
 # the list of the game's textures they replace (prompts/, tools/make_ps_buttons.py), our own art, read by the native
 # renderer from beside the exe. Copied on every build (a target of their own, not a POST_BUILD step, which only runs
-# when qos.exe is relinked: on 20 Nov a changed playstation.txt didn't reach the build folder).
+# when qos.exe is relinked: on 20 Nov a changed playstation.txt didn't reach the build folder). pipelines/: shader refs
+# (tools/ff_shader_refs.py, native patch 0027): every shader and pipeline the native renderer has seen, named by where
+# the game's fastfiles hold it (no game data), built at startup so levels don't pop in on their first visit.
 add_custom_target(qos_assets ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/hints $<TARGET_FILE_DIR:qos>/hints
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/prompts $<TARGET_FILE_DIR:qos>/prompts
-    COMMENT "Copying menu hints and PlayStation button pictures")
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/pipelines $<TARGET_FILE_DIR:qos>/pipelines
+    COMMENT "Copying menu hints, PlayStation button pictures and shader refs")
 add_dependencies(qos_assets qos)
 
 # AMD FidelityFX runtime (FSR / CAS output filters). Present when the SDK was built with

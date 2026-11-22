@@ -1,0 +1,174 @@
+qos: shader refs from 007's fastfiles, so a shipped refs file (pipelines/*.refs next to the exe, made by the game's
+tools/ff_shader_refs.py from a pipeline manifest) preloads every shader and pipeline it lists without carrying the
+game's microcode. The refs reader reads `<path>.ff` sources as offsets into the decompressed zone (7-dword big-endian
+header, the zone's size in dword 1, then one zlib stream at byte 28; inflated with stb_image's zlib decoder, ~1 s for
+a 220 MB level zone), trying other language folders when the named one is missing; the zone is freed after loading.
+Shaders rebuilt from refs are appended to <title>.master.bin in the cache folder, so later starts read no game file.
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 66a6272..e7dfe32 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -5,6 +5,7 @@
+ // native renderer instead of the emulated EDRAM backend. A plugin rather than part of the game so its SDK sources
+ // and their cvars live in their own module, as the xenos plugin's do.
+ #include "../diag.h"
++#include "prompt_atlas.h"
+ #include "../path_utf8.h"
+ #include <algorithm>
+ #include <chrono>
+@@ -287,12 +288,13 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     // Shipped shader refs (B-098): next to the executable in pipelines/ (Contents/Resources/pipelines in the macOS
+     // app bundle), read from the player's disc and XEX image.
+     auto package = std::make_shared<std::pair<std::string, std::unique_ptr<upk::Package>>>();
++    auto zone = std::make_shared<std::pair<std::string, std::vector<uint8_t>>>();
+     const auto exe_dir = rex::filesystem::GetExecutableFolder();
+     std::vector<std::filesystem::path> refs_dirs{exe_dir / "pipelines"};
+     if (exe_dir.filename() == "MacOS") refs_dirs.push_back(exe_dir.parent_path() / "Resources" / "pipelines");
+     renderer_->SetShaderRefs(
+         std::move(refs_dirs),
+-        [this, package](const std::string& source, uint32_t offset, uint32_t size, std::vector<uint8_t>& out) {
++        [this, package, zone](const std::string& source, uint32_t offset, uint32_t size, std::vector<uint8_t>& out) {
+           if (source == "image") {
+             auto module = kernel_state_->GetExecutableModule();
+             const auto* xex = module ? module->xex_module() : nullptr;
+@@ -301,6 +303,49 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+             out.assign(bytes, bytes + size);
+             return true;
+           }
++          // qos: 007's fastfiles (tools/ff_shader_refs.py in the game project): offsets into the decompressed zone.
++          // A big-endian header of 7 dwords (0x1D6, the zone's size, ...), then one zlib stream. One zone is kept (the
++          // refs are read grouped by source). A language folder that isn't there is looked for in the others.
++          if (source.size() > 3 && source.compare(source.size() - 3, 3, ".ff") == 0) {
++            if (zone->first != source) {
++              zone->first = source;
++              zone->second.clear();
++              const auto root = kernel_state_->emulator()->game_data_root();
++              std::filesystem::path path = root / std::filesystem::path(source);
++              std::error_code ec;
++              if (!std::filesystem::exists(path, ec) && path.parent_path() != root) {
++                for (const auto& dir : std::filesystem::directory_iterator(root, ec)) {
++                  if (dir.is_directory(ec) && std::filesystem::exists(dir.path() / path.filename(), ec)) {
++                    path = dir.path() / path.filename();
++                    break;
++                  }
++                }
++              }
++              std::vector<uint8_t> file;
++              if (std::FILE* f = bots::OpenFile(path, "rb")) {
++                std::fseek(f, 0, SEEK_END);
++                const long length = std::ftell(f);
++                std::fseek(f, 0, SEEK_SET);
++                if (length > 28) {
++                  file.resize(size_t(length));
++                  if (std::fread(file.data(), 1, file.size(), f) != file.size()) file.clear();
++                }
++                std::fclose(f);
++              }
++              if (file.size() > 28) {
++                const uint32_t zone_size = uint32_t(file[4]) << 24 | uint32_t(file[5]) << 16 | uint32_t(file[6]) << 8 | file[7];
++                const auto start = std::chrono::steady_clock::now();
++                zone->second.resize(zone_size);
++                if (!bots::prompts::InflateZlib(file.data() + 28, file.size() - 28, zone->second)) zone->second.clear();
++                REXLOG_INFO("gfx native: shader refs: {} {} ({} MB, {:.0f} ms)", bots::PathUtf8(path),
++                            zone->second.empty() ? "unreadable" : "read",
++                            zone_size >> 20, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
++              }
++            }
++            if (uint64_t(offset) + size > zone->second.size()) return false;
++            out.assign(zone->second.begin() + offset, zone->second.begin() + offset + size);
++            return true;
++          }
+           if (package->first != source || !package->second) {
+             package->first = source;
+             package->second = std::make_unique<upk::Package>(kernel_state_->emulator()->game_data_root() / source);
+@@ -309,6 +354,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         });
+     renderer_->SetN1Dirs(n1_cooked_dir(), n1_cache_dir_);
+     if (!pipeline_cache_path_.empty()) renderer_->LoadPipelineCache(pipeline_cache_path_);
++    zone->first.clear(), zone->second = {};  // qos: the last fastfile zone read for shader refs (up to ~250 MB)
+     PublishWarmup();
+     const char* occlusion = std::getenv("BOTS_GFX_OCCLUSION");
+     if (occlusion && *occlusion ? *occlusion == '1' : renderer_->occlusion_queries_by_default()) {
+diff --git a/src/gfx/prompt_atlas.cpp b/src/gfx/prompt_atlas.cpp
+index e9edecb..1b1d04e 100644
+--- a/src/gfx/prompt_atlas.cpp
++++ b/src/gfx/prompt_atlas.cpp
+@@ -594,4 +594,11 @@ std::vector<uint8_t> BuildDxtSheet(int sheet, const uint8_t* guest, uint32_t pit
+   return out;
+ }
+ 
++bool InflateZlib(const uint8_t* in, size_t in_size, std::vector<uint8_t>& out) {
++  if (in_size > size_t(INT32_MAX) || out.size() > size_t(INT32_MAX)) return false;
++  const int n = stbi_zlib_decode_buffer(reinterpret_cast<char*>(out.data()), int(out.size()),
++                                        reinterpret_cast<const char*>(in), int(in_size));
++  return n >= 0 && size_t(n) == out.size();
++}
++
+ }  // namespace bots::prompts
+diff --git a/src/gfx/prompt_atlas.h b/src/gfx/prompt_atlas.h
+index 2a0614e..1bc2bf8 100644
+--- a/src/gfx/prompt_atlas.h
++++ b/src/gfx/prompt_atlas.h
+@@ -57,4 +57,8 @@ int FindDxtSheet(uint64_t hash, uint32_t width, uint32_t height);  // or -1
+ // pitch in texels (the fetch constant's pitch x 32). RGBA8 rows; empty on failure.
+ std::vector<uint8_t> BuildDxtSheet(int sheet, const uint8_t* guest, uint32_t pitch);
+ 
++// qos: a zlib stream (007's fastfiles) inflated into out, which has the expected size; stb_image's decoder (it is
++// built here for the PNGs). False if the stream is bad or doesn't fill out exactly.
++bool InflateZlib(const uint8_t* in, size_t in_size, std::vector<uint8_t>& out);
++
+ }  // namespace bots::prompts
+diff --git a/src/gfx/vk/manifest.cpp b/src/gfx/vk/manifest.cpp
+index 43eed93..8c74be3 100644
+--- a/src/gfx/vk/manifest.cpp
++++ b/src/gfx/vk/manifest.cpp
+@@ -120,6 +120,27 @@ void Renderer::LoadManifest(const std::filesystem::path& path) {
+     }
+   }
+   const size_t from_refs = manifest_records_.size() - before_refs;
++  // qos: shaders rebuilt from shader refs (007: read from its fastfiles, seconds of inflating) go into the master, so
++  // the next start has them as known shaders and reads no game file. A master of another device class is replaced.
++  if (!refs_rebuilt_.empty()) {
++    std::error_code dir_ec;
++    std::filesystem::create_directories(master.parent_path(), dir_ec);
++    if (std::FILE* f = bots::OpenFile(master, have_master ? "ab" : "wb")) {
++      if (!have_master) std::fwrite(&header, sizeof(header), 1, f);
++      for (const uint64_t hash : refs_rebuilt_) {
++        const ManifestShader& shader = manifest_shaders_[hash];
++        const uint32_t dwords = uint32_t(shader.ucode.size());
++        std::fputc('S', f);
++        std::fwrite(&hash, 8, 1, f);
++        std::fwrite(&shader.type, 4, 1, f);
++        std::fwrite(&dwords, 4, 1, f);
++        std::fwrite(shader.ucode.data(), 4, dwords, f);
++      }
++      std::fclose(f);
++      REXLOG_INFO("gfx native: {} shaders from shader refs kept in {}", refs_rebuilt_.size(), bots::PathUtf8(master));
++    }
++    refs_rebuilt_.clear();
++  }
+   std::error_code ec;
+   std::filesystem::create_directories(path.parent_path(), ec);
+   if (valid) {
+@@ -230,6 +251,7 @@ void Renderer::LoadShaderRefs(const std::filesystem::path& file, const void* hea
+     shader.ucode.resize(r.dwords);
+     std::memcpy(shader.ucode.data(), bytes.data(), bytes.size());
+     ++rebuilt;
++    refs_rebuilt_.push_back(r.hash);
+   }
+   REXLOG_INFO("gfx native: shader refs {}: {} pipelines, {} shaders rebuilt from the disc in {:.0f} ms, {} known{}",
+               bots::PathUtf8(file), records, rebuilt,
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index d929b86..ded7974 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -824,6 +824,8 @@ class Renderer : public Pm4Sink {
+   std::vector<std::filesystem::path> refs_dirs_;
+   ShaderSourceReader refs_reader_;
+   void LoadShaderRefs(const std::filesystem::path& file, const void* header, size_t header_size);
++  // qos: shaders LoadShaderRefs rebuilt from the game's files, kept in the master so later starts don't read them.
++  std::vector<uint64_t> refs_rebuilt_;
+   std::string last_pipeline_key_;
+   VkPipeline last_pipeline_ = VK_NULL_HANDLE;
+   // What the current command buffer has bound, so unchanged pipelines aren't rebound (VK_NULL_HANDLE: unknown).

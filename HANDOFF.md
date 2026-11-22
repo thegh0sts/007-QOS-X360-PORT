@@ -256,9 +256,188 @@ keep "Resume here" current.
   (R32_SFLOAT) keep guest-texel weights and offsets; `BOTS_GFX_SCALED_DEPTH_WEIGHTS=1` brings back the old way (A/B).
   Needs build_native + game build (no translator change, so no need to clear the shader cache). If still
   blocky: compare with native at 1x and with Xenos at the same spot.
+- **0026 works (21 Nov, 07:56):** user: shadows in the level are softer now. Both 0025 and 0026 are general
+  renderer rules (any copy into a taller texture; any shadow/depth texture), not tied to a level. Still to check on
+  other levels: outdoor/sun shadows (may use a different map layout) and the hard line down the nose.
+- **Grenade tutorial RB works (21 Nov, 08:03):** confirmed with a PS pad (an earlier run had only the Xbox pad
+  connected, so Xbox prompts were correct). All tutorial/takedown swaps found so far work; only START not seen.
+- **Level pop-in on first visit (21 Nov, 08:04-08:13):** a level's first start skips draws whose shaders are still
+  being built (qos_109: ~2,000 at the first level; qos_110: ~77,000 at the next new level). Gone on later starts: the
+  cache (Documents\qos\cache\native: 415607FF.manifest.bin 0.9 MB = shaders + pipeline records, the shippable part;
+  415607FF.pipelines.bin 53 MB = driver cache, this PC only) is built at startup. User chose to ship shader refs.
+- **Shader refs for 007 (21 Nov, 08:30), not built/tested:**
+  - 007's fastfile: 7 big-endian dwords (0x1D6, zone size, ...), then one zlib stream at byte 28 (verified on
+    code_post_gfx/common/ui/whites_estate/siena/operahouse). Shaders are stored raw in the zone; vertex shaders
+    differ in their vfetch dwords (the XDK patches them from the vertex declaration): 2-21 dwords, kept as patches.
+  - `tools/ff_shader_refs.py index MANIFEST pipelines/415607FF.refs --game game` (needs numpy; ~70 s for six fastfiles)
+    and `check IN.refs --game game --manifest MANIFEST`. On the 08:10 manifest (800 shaders, 804 pipelines): 787
+    referenced (631 exact, 156 patched; 7.5 KB of patch dwords), all rebuilt equal; 13 not in those six fastfiles
+    (incl. 1E6883FCCDE1F688, a startup clear shader: probably in the XEX image or other levels).
+  - `pipelines/415607FF.refs` (184 KB) on the PC; CMake's qos_assets copies pipelines/ beside the exe.
+  - Native patch `0027-fastfile-shader-refs.patch`: the refs reader reads `.ff` sources (whole zone inflated with
+    stb_image's zlib, ~1 s for a 220 MB level zone in a test; other language folders tried), zone freed after
+    loading; shaders rebuilt from refs are appended to `415607FF.master.bin` in the cache folder, so later starts read
+    no fastfile.
+  - **Test:** build_native + game build; rename `Documents\qos\cache\native` (a fresh machine); start: log
+    "shader refs ...: N pipelines, M shaders rebuilt", "kept in ...master.bin"; first level without pop-in. Second
+    start: no "shader refs: ... read" lines. Then put the old folder back (or keep the new one).
+  - To keep it complete: after playing new levels, rerun the tool on the newest manifest (needs the levels' .ff).
+- **Frame rate and FOV (21 Nov, 09:05), not built/tested:** from the generated code and the decrypted XEX (cloud
+  `/tmp/xex/xexdec.py`: XEX2 retail AES key + basic compression, image at 0x82000000; not kept between sessions):
+  - Com_Frame = sub_8229B7C0: waits until 1000/com_maxfps ms have passed (dvar ptr at 0x83375314; registered 30,
+    range 0-1000); with r_vsync (dvar ptr 0x84055C2C) on and timescale 1 also at least one refresh (1000 / the float
+    at 0x841ED138). D3D swap packet sub_820F2188 maps device+13596 (presentation interval) 0/1 -> 1, 2 -> 2, 4 -> 3,
+    0x80000000 -> 0; the Canary be8 at 0x820F2283 is the "1" case's immediate. (Earlier note "0x8229B808 bne /
+    0x8229B86C bge" was wrong for this XEX: the branches are at 0x8229B820 and 0x8229B8A4; the Canary SP file
+    couldn't be fetched, the MP file has 0x8225E8E0/0x8225E924 + 0x820F2283.)
+  - `src/fps_unlock.cpp` rewritten: `--frame_rate` 20-60 (default 30) sets com_maxfps's default and its current value
+    at every Com_Frame (configs could reset it); interval 2 passed as 1 above 30; logs "frame rate: ..." and the
+    device's interval once. Game speed: the engine times frames in real ms.
+  - New `src/fov.cpp` (in CMakeLists): `--fov` 65-110 (default 65): cg_fov (Dvar_RegisterFloat sub_822E41D0, name
+    0x82016FF8, default 65, range 1-160, dvar ptr 0x827700C0) default = --fov; each frame a current value of exactly 65
+    is set back to --fov (other values the game sets are left). Logs "fov: ...".
+  - **Test:** game build only (codegen not needed); `qos.exe ... --frame_rate=60 --fov=90`; check log lines, the FPS
+    counter, ADS zoom, cover camera, cutscenes; Canary warns some missions can softlock above 30.
+- **60 FPS works (21 Nov, 09:08, qos_114):** log "com_maxfps was 30, set to 60" when the level loaded (its config
+  resets it), interval 1, "fov: cg_fov default 90" + "back at 65, set to 90". User: fps a bit inconsistent in spots.
+  Heavy scenes (~5,500 draws, 420 render passes, 1,150 barriers a frame) take ~16 ms of renderer work (12 ms draws,
+  2.8 textures), so frames miss the vblank and take 33 ms (frame times bimodal 17/33, up to 400 of 600 at 33). Asked
+  to try `--vsync=false` (misses cost ~20 ms, not 33) and `BOTS_GFX_PASS_MERGE=1` (renderer's pass merging, off by
+  default), one at a time. If not enough: renderer per-draw CPU cost is the real fix.
+- **End-of-mission video black on native (21 Nov, 09:18, qos_115):** whites_estate ends with video `open_credits`:
+  audio plays, screen black. Xenos shows it (user, 09:25) -> native bug. While it plays the game sends exactly 1
+  draw a frame (600 draws / 600 frames, 2 resolves, 2 transfers) and the renderer loads/reloads 0 textures, i.e. the
+  video texture (CPU-written Bink frames) is never picked up. whites_estate_load and the menu background videos do
+  play. Asked for a BOTS_DRAW_TRACE run (stderr -> video-trace.txt) from a checkpoint near the end.
+- **21 Nov, 13:15 (qos_117), after 007's build_native (renderer 6,545,920 bytes, 0001-0027):** shader refs work on a fresh cache: "804 pipelines, 787 shaders rebuilt from the disc in 2150 ms", kept in 415607FF.master.bin, warm-up 1.3 s (17 missing a shader). **open_credits now plays** on native (no change aimed at it; the earlier black run may have had another renderer). **Achievement popup showed twice** (the renderer's own over the runtime's ImGui one): qos_app.h now returns no runtime popup with --gpu_plugin native, as Bourne does. Game build only. Pop-in on the first level with the fresh cache: ask the user.
+- **Launcher (21 Nov, 13:40), written, not built or run:** `installer/` (qos_launcher.py, qos_installer.py, build_installer.bat, README.md; from Eat Lead's, look from the design canvas "007 Quantum of Solace launcher mockup"). Tabs Game files (language English/French, shader cache Clear and rebuild), Display (render scale, FXAA, frame rate 30/40/50/60, V-sync, FOV 65-110, FPS counter), Graphics, Controls (prompts, dead zone, vibration on/off), Saves, Achievements. Game side: qos_app.h now has show_fps/show_fps_detail/brightness cvars, sets BOTS_GFX_NESTED_DRAWS=1 itself with native, logs the version (src/version_log.cpp, QOS_RELEASE 0.1.0 in CMakeLists) and exports the achievement list (src/achievement_list.cpp). SDK bundle name qos1. Defaults: render scale 1x, AA off, game's filtering (untested in 007). --user_language untested.
+- **Renderer CPU per draw (21 Nov, 14:15):** launcher install (its folder on another drive), game.log there. Busy scenes: ~11,500 draws a frame, 23-29 ms frames, renderer thread busy all of it (GPU 6-10 ms). BOTS_DRAW_PROFILE=1 per frame: textures 5.2 (2.8 of it reloads), setup 3.9, indices 3.6, descriptors 2.8, tracker 2.6, pass 2.0, constants 1.7, rest 3.5. BOTS_GFX_PASS_MERGE is already on by default. **Native patch 0028-draw-cpu (written, not built):** ProcessInvalidations in one pass over textures for all ranges and index uploads found by 64 KB block (index_blocks_) instead of a scan of all uploads per range per draw; shaders kept by ShaderLoad::serial (LoadShader keeps the serial for identical microcode) instead of XXH3 of both shaders every draw; each stage's last texture set reused without the hash lookup. Checked: applies in order (0001-0027, 0028, 0090), compiles apart from the cloud SDK's known mismatches. Next if needed: per-slot texture view/sampler memo, two-thread recording.
+- **0028 measured (21 Nov 15:11, CPU not shared):** 11,800 draws in 17.4-17.9 ms = 1.47-1.51 us/draw (was 1.65-1.71); setup 3.9 -> 1.9. An earlier run looked worse because another compile shared the CPU (every phase and menus 2-3x). Left: textures 4.8, indices 3.6-4.0 (~4,200 index buffers converted per frame, ~7,600 reused), tracker 2.5, descriptors 2.4, pass 2.0. Frames still 26-27 ms (~37 FPS) at 4K, vsync off.
+- **Native patch 0029-texture-memo-index-heap (written 21 Nov 15:21, not built):** (1) per-binding texture memo (texture_memo_[stage][binding]): same six fetch words + signedness + dimension and an unchanged texture_memo_epoch_ reuse the last view/swizzle/signs without texture_at_/guest_textures_/swizzled_views lookups; guest textures only (not resolve destinations, crops, raw depth, prompt atlases or pad sheets). Epoch bumped by DropGuestTexture (eviction, reload), a texture marked dirty or a texture_at_ entry erased in ProcessInvalidations, a resolve destination registered, DestroyFrameState. (2) Index heap (64 MB host-visible, BOTS_GFX_INDEX_HEAP=0 turns it off): direct DMA index buffers are requested from the tracker in the tracker phase (pages watched) and converted once into the heap, kept across submissions (index_static_, by 64 KB block); a CPU write erases the entry and marks the base dynamic (index_dynamic_, ring from then on). Heap full -> next Flush waits for all submissions and empties it (index_heap_generation_ guards a lookup across that flush). Profile line now adds "kept from earlier frames", heap resets, "texture bindings remembered". Checked: applies 0001-0028, 0029, 0090 identically to the cloud tree; syntax-checks against the linuxbuild SDK. Watch for: wrong/missing geometry (index heap: test with BOTS_GFX_INDEX_HEAP=0), wrong textures after loads (memo).
+- **0029 first run (21 Nov 20:06):** indices 4.0 -> 0.5 ms (7,600-8,300 of ~11,000 index buffers kept from earlier frames), textures 4.9 -> 3.9 (~43k bindings remembered), but tracker 2.5 -> 9.4-11.2 ms: the game streams dynamic indices at a new address each frame, so each new base was requested from the tracker (lock + page protect + upload, ~16 us each, ~550 a frame). Fixed (patch rewritten 20:09): index_dynamic_ now holds 64 KB blocks, not bases, so a block with rewritten indices stops being requested. Not built yet.
+- **0029 A/B (21 Nov 20:22-20:35):** with at most 32 heap tracker requests per submission (IsCurrent first) the run showed 0 heap requests but tracker still 6.8-7.0 ms (indices 0.5). With BOTS_GFX_INDEX_HEAP=0: tracker 2.63, indices 3.68, textures 3.43 (memo: ~43.5k bindings remembered), 11,497 draws in 15.56 ms = **1.35 us/draw** (0028: 1.47-1.51), 24.5 ms frames (~41 FPS). So the heap's per-draw lookups (index_static_ find, index_dynamic_, IsCurrent) cost ~4.4 ms vs 3.2 saved. Patch now has the heap **off by default** (BOTS_GFX_INDEX_HEAP=1 turns it on); texture memo stays. Next: two-thread recording, or a cheaper index cache (per-draw-slot memo instead of the big map).
+- **CP thread split (patch 0091-cp-profile, 21 Nov 21:10, 4K render, 11,200 draws):** wall 24.9-25.1 ms = command buffers 24.9 (swap 0.6 is inside them): IssueDraw 21.7, shader loads 0.2 (4,748 loads, 1,232 copied), PM4 parsing/register writes ~2.4 (71k register writes, 265k constant registers). **"ms in draws" (draw_us) undercounts**: ScopedMicros truncates each draw to whole microseconds; the phase sum (20.6 ms) matches IssueDraw. So draws are ~87% of the thread, ~1.9 us each with profiling on (13 clock reads a draw add ~2-3 ms). A PM4-parse thread would save <=2.4 ms; splitting Vulkan recording (descriptors, pipeline, pass, record ~5.8 ms profiled) <=~5 ms, big refactor. Real frame time without BOTS_DRAW_PROFILE not measured yet.
+- **Without profiler (21 Nov 21:15):** 21.7-21.8 ms frames (~46 FPS), 11,311 draws, max 25 ms; profiler costs ~3.3 ms.
+- **Native patches 0092-draw-memo and 0093-record-thread (written 21 Nov 21:42, not built):** 0092 (on by default, BOTS_GFX_DRAW_MEMO=0 off): per-slot sampler memo (fetch words + binding filters -> VkSampler), texture-set reuse by raw handle compare (no set_key_ string), sets 2-3 not rebound while layout/sets unchanged and dynamic_valid_; draw_us now summed in ns (ScopedNanos). 0093 (off by default, BOTS_GFX_RECORD_THREAD=1 on): DXVK-style worker (vk/recorder.h, SPSC byte ring, 4 KB batches, std::atomic wait): cmd_ renamed cmd_raw_, every direct use is Cmd() (drains the worker first); draws hand one DrawPacket (binds, changed dynamic state, index buffer, draw) via Rec(), plus Rec for queries, timestamps, barriers, Begin/EndRendering, guest-memory uploads, crop copies and descriptor updates. Profile CP line adds "recorder N packets, M waits". Recorder unit-tested (4M packets in order, TSan clean); ~30 ns a push on the 2-core cloud VM. Test: 4 runs without profiler (memo off/on x thread off/on).
+- **0092/0093 results (21 Nov 21:45-21:53, 4K render, ~11,250 draws, no profiler):** A only 21.7-22.1 ms (~46 FPS), B only 20.0-20.1 ms (~50), A+B 19.7-19.8 ms (~51, 62% of frames under 20 ms). No errors, user saw no visual problems. Baseline (both off) not run yet. Launcher: Graphics tab "Second render thread" (render_thread, default on) sets BOTS_GFX_RECORD_THREAD=1/0 in game_env (overrides the cmd environment). Needs the launcher rebuilt; a release needs the SDK bundle repacked with the new renderer DLL.
+- **To test later: are late frames rounded to 60 Hz? (22 Nov, 10:05, from the DX12 chat; not tested)** In
+  qos_117 (21 Nov 13:18, busy stretch, before 0028) frame times were "over 20 ms 412, over 25 ms 412, over 33 ms
+  173": not one frame between 20 and 25 ms, so late frames look pushed to the next 16.7 ms tick, not just slow.
+  The run's --vsync value isn't logged. Two game-side waits could do it even with the SDK's vsync off: the game's own
+  r_vsync wait in Com_Frame (dvar ptr 0x84055C2C, see Frame rate and FOV above) and D3D presentation interval 1
+  ("every vblank", set by fps_unlock.cpp), which waits on the emulated vblank. **Test:** busy spot, current renderer
+  (0092 + 0093 on), `--vsync=false --frame_rate=60`, no BOTS_DRAW_PROFILE; read the "frame times over 600 frames"
+  lines (game.log in the launcher install, or logs\qos_NNN.log): frames now between 20 and 25 ms -> no rounding,
+  what's left is renderer cost; still a gap at 20-25 ms -> fix in `src/fps_unlock.cpp`: game r_vsync 0 and
+  presentation interval 0 (the Canary "Unlock FPS" patch's "0 = unlimited"), com_maxfps 60 stays the cap. Also
+  Task Manager -> Performance -> CPU -> graph "Logical processors" (or Process Explorer, qos.exe threads): expect
+  one or two busy cores (the render thread, and the recorder with 0093), which is why total CPU use looks low.
+- **Result (22 Nov, 10:21-10:23, qos_118, build folder, --vsync=false --frame_rate=60, BOTS_GFX_RECORD_THREAD=1):
+  no rounding.** Busy windows: 7,408 draws -> >20 ms 352, >25 ms 132 (220 frames at 20-25 ms); 7,833 -> 318/144;
+  9,559 -> 492/71; 12,048 draws -> 600/397 (203 at 20-25), 21-26 ms wall, 16.6 ms in draws (~1.38 us/draw), max
+  31 ms, none over 33. So no fps_unlock.cpp change needed: what's left is renderer CPU cost (~40-50 FPS in busy
+  scenes). qos_117's gap was probably vsync on and/or the pre-0028 renderer. Many "ResolvePath(scaleform\) failed"
+  errors in the log (game probing a folder; no visible effect noted).
+- **Build folder's renderer is old (22 Nov, 10:35):** `out\build\...\rexgpu-nativerd.dll` is 6,545,920 bytes from 21
+  Nov 13:12 (patches 0001-0027): qos_118 and qos_119 ran without 0028/0029/0092/0093 (their log lines "recorder",
+  "kept from earlier frames", "texture bindings remembered" are missing). Last night's 0028-0093 runs were from the
+  launcher install. The shared SDK source was reset at 10:06 today by another project's build_native. So the
+  rounding result above holds, but its frame times are the old renderer's. qos_119 (profiler on, old renderer,
+  ~11,000 draws): 26.9 ms wall, 18.0 in draws: setup 3.28, shaders 0.65, tracker 2.36, textures 5.55, ring 0.20,
+  targets 0.65, indices 3.21, constants 1.57, descriptors 2.59, pipeline 0.81, pass 1.58, record 1.00; 6,994 index
+  buffers reused, 3,952 converted, 107 invalidations a frame.
+- **Native patch 0094-index-table (written 22 Nov 10:40, not built):** index_uploads_ + index_blocks_ (an
+  unordered_map node and a block-vector entry per converted index buffer, ~4,000 a frame, all freed every
+  submission) replaced by a flat open-addressed table (16,384 slots, emptied by a generation bump, at most 3/4
+  used); CPU writes (ProcessInvalidations) stamp their 4 KB pages, an entry counts only while none of its pages has
+  a newer stamp (no erasing). `BOTS_GFX_INDEX_FLAT=0` brings back the maps (A/B). Also: the 16-bit-list-with-reset
+  path reuses a scratch vector; the profile line adds "converted (N KB), M rebuilt on the CPU" (index bytes
+  converted; quad/fan/other draws whose indices are rebuilt in std::vectors). Checked in the cloud: 0001-0094 apply
+  to Skullburglar 67aacb28 (base rebuilt from the PC's .git pack); the table's logic tested standalone against the
+  map semantics (10M random lookups with writes and resets: no wrong hits); map bookkeeping cost there ~0.35-0.5 ms
+  a frame vs ~0.1 flat, so expect ~0.3-0.5 ms (more if the Windows heap is slower); the rest of "indices" is the
+  conversion itself, which the new KB counter will size. Not compiled against the SDK (headers not in the cloud).
+  **Test:** `tools\build_native.bat` (resets the shared SDK to 007's set) + game build; check the DLL's date in the
+  build folder; profiled run (BOTS_DRAW_PROFILE=1, BOTS_GFX_RECORD_THREAD=1, --vsync=false --frame_rate=60) at a
+  busy spot, then the same with BOTS_GFX_INDEX_FLAT=0.
+- **0094 works (22 Nov, 10:44, qos_120, renderer DLL 6,588,416 bytes 10:42, 0001-0094, profiler on, recorder on):**
+  ~11,400 draws: 20.3 ms wall, 16.7 in draws (1.46 us/draw profiled); **indices 0.99 ms** (3.2-3.7 before): the
+  maps were nearly all of it (only ~2.2 MB of indices converted a frame, ~4,100 buffers; 25 rebuilt on the CPU).
+  Frames >20 ms 327/600, >25 ms 2. Phases now: textures 3.94, tracker 2.08, descriptors 1.88, setup 1.75,
+  constants 1.63, record 0.99, indices 0.99, pipeline 0.83, shaders 0.65, targets 0.61, pass 0.41, ring 0.22.
+  No errors.
+- **0094 A/B and real FPS (22 Nov, 10:55-11:00):** qos_121 (BOTS_GFX_INDEX_FLAT=0, profiler on): indices 3.1-3.35
+  ms, wall 21.9-23.7 ms at 10,500-11,900 draws -> the table saves ~2.2-2.4 ms a frame. qos_122 (table, no
+  profiler, recorder on): wall a flat **16.6-16.7 ms = held at the 60 FPS cap** in the busy spot (11,100-11,200
+  draws in 12.5-12.9 ms, ~1.13 us/draw); 9-22 of 600 frames over 20 ms, max 23-27 ms. User: run 2 felt better.
+  Headroom left ~4 ms a frame at that spot; the late frames are the next thing (hitches, not average cost).
+- **Hitch log (22 Nov, 11:07-11:12, qos_123, BOTS_HITCH_MS=20; logs frames > 20 ms and > 1.5x the recent
+  average):** gameplay windows: >20 ms 1-11 of 600, mostly 0 over 25, max 20-23 ms. Logged slow frames: menus/
+  videos (CP idle 20-64 ms: the game itself; a 1280x720 untiled fmt 2 video frame rewritten every other frame),
+  level load (89 ms, 349 new textures, 67 MB), one 112 ms frame with 1 new pipeline started (draws 104.8 ms), a few
+  30-37 ms with CP idle 17-24 ms (game side). In gameplay: **exactly 600 texture reloads per 600 frames**; the
+  hitch lines name a 256x256x4 format 6 (8888) tiled texture, 1.4-2.8 ms per reload (far too slow for 1 MB: likely
+  3D, which the loader copied block by block).
+- **Native patch 0095-texture-reload-hash (written 22 Nov 11:25, not built):** (1) every loaded texture keeps an
+  XXH3 of its guest ranges (not prompt atlases/pad sheets); a dirty texture whose bytes hash the same is kept (write
+  watch re-armed, no reload), counted in the textures log line "(N more kept: written but unchanged)";
+  `BOTS_GFX_RELOAD_HASH=0` off. (2) 3D tiled textures copied in 16-byte runs like 2D, only for shapes where a one-time
+  check of every run found it contiguous (log "3D tiled ... contiguous, copied in runs" / "not contiguous");
+  `BOTS_GFX_3D_RUNS=0` off. Logs the first 8 real reloads ("reloaded after a CPU write (contents changed)", with
+  address, size, dim, format) and the first 8 kept ones. Applies after 0001-0094 (checked); not compiled here.
+- **0095 works (22 Nov, 11:23-11:28, qos_124, renderer 6,598,144 bytes 11:20):** "3D tiled 256x256x4 blocks of 4
+  bytes: runs of 4 contiguous, copied in runs": that per-frame texture's reload now 0.4-0.8 ms (was 1.4-2.8). It
+  really changes every frame (~540-600 reloads per 600 frames remain); the hash keeps 0-133 per 600 (mostly menu
+  video frames 1C3B9000/1C16F000, 921,600 bytes, written unchanged). Gameplay windows: >20 ms 0-8 of 600, >25 ms
+  0-1, max 20-22 ms. Left: one 48.5 ms frame with 12 new pipelines (19,122 draws: a new area; cached for next time),
+  one window with 30 frames >25 ms around it, and game-side frames (CP idle 18-41 ms: videos, menus, loads). No
+  visual problems reported.
+- **Shader refs refreshed (22 Nov, 11:55):** `tools/ff_shader_refs.py` has `--keep OLD.refs` (an earlier refs
+  file's shaders and pipelines missing from the manifest stay in). Run in the cloud on the manifest copied to
+  `dumps\415607FF.manifest.bin` (11:20, 1.8 MB) + the English common and all single-player .ff (no mp_, ~8.5 min):
+  `pipelines\415607FF.refs` now 365,894 bytes: **1,437 shaders (1,224 exact, 209 patched, 4 kept from the old
+  file), 1,655 pipelines** (was 787 / 804); `check` against the manifest: 1437/1437 rebuilt and equal. 14 shaders
+  not in any SP fastfile (1E6883FCCDE1F688 and 13 more; the old file had 13 missing too: XEX image or mp). Takes
+  effect after a game build (qos_assets copies pipelines/). A player's first start rebuilds them into
+  415607FF.master.bin (expect a few seconds; was 2.2 s for 787).
+- **Wrong renderer again (22 Nov, 11:58, qos_125 + crash-6600):** low FPS then a crash (strlen null in
+  ParsedTextureFetchInstruction::Disassemble <- Shader::AnalyzeUcode <- ShaderCache::Get <- IssueDraw). Cause: another
+  project's build_native rebuilt the shared SDK at 11:55 (skullburglar sources rewritten, no recorder.h; renderer DLL
+  14,602,752 bytes, 11:56), and 007's game build at 11:57 copied it: log shows "unsupported prims" (no 0016) and no
+  recorder lines. Not caused by 0094/0095 or the refs. The refs themselves loaded ("1437 known", 1655 pipelines
+  warmed). The cache folder wasn't renamed in that run (manifest 1646 pipelines read). Fix: 007's
+  `tools\build_native.bat` again, then the game build. While two sessions build the shared SDK, check the DLL size
+  before testing (007's with 0001-0095: 6,598,144 bytes).
+- **Fresh-cache test of the new refs (22 Nov, 12:17, qos_127, right renderer; the old cache renamed to
+  `Documents\qos\cache\native-keep`; `native-old` from 21 Nov also still there):** "1655 pipelines, 1437 shaders
+  rebuilt from the disc in 7681 ms", kept in 415607FF.master.bin; warm-up 1.7 s: 1636 built, **19 missing a shader**
+  (the 14 shaders not in any SP fastfile). During play 27 built (20 of them those 19-ish, 7 other state), 74 draws
+  skipped for pipelines in total: no visible pop-in reported. Gameplay windows >20 ms 1-10 of 600, max 20-22 ms.
+  **Cost: 7.7 s at the first start** (13 fastfiles fully inflated, ~600 ms per 200 MB level zone). Possible later:
+  pick refs by set cover (each shader from whichever fastfile covers the most others) to read ~5 files instead of
+  13, and find the 14 missing shaders (XEX image / mp fastfiles) or ship them another way.
+- **Refs by set cover (22 Nov, 12:35):** `ff_shader_refs.py index ... --cover` searches every fastfile for every
+  shader (~10 min in the cloud), then picks sources greedily by shaders newly covered per MB of zone. Result:
+  **6 sources, 801 MB of zones** (was 13, ~2.4 GB): siena 729 shaders, operahouse 343, english/common 146,
+  whites_estate 125, english/code_post_gfx 63, siena_rooftops 31. Same 1,437 shaders (1,210 exact, 227 patched),
+  1,655 pipelines; `check`: 1437/1437 rebuilt and equal. Written to `pipelines\415607FF.refs` (365,892 bytes;
+  the first write silently kept the old file, rewritten from a new staging folder, size checked). Expected first
+  start ~2.5 s instead of 7.7 s. **Tested 13:15 (qos_131, renderer 6,598,144 bytes, fresh cache):** 6 fastfiles
+  read, "1655 pipelines, 1437 shaders rebuilt from the disc in **2736 ms**" (was 7681), warm-up 1.7 s (19 missing a
+  shader, as before), 37 draws skipped for pipelines up to the main menu. Done.
+  Command used: `ff_shader_refs.py index dumps/415607FF.manifest.bin OUT --game game --keep
+  pipelines/415607FF.refs --cover`.
+- **Shared SDK, 13:11:** the renderer DLL was 14 MB again: Bourne is getting renderer changes and its builds replace
+  the shared SDK. Before every 007 test: `tools\build_native.bat`, game build, then check `rexgpu-nativerd.dll` is
+  6,598,144 bytes.
+- **Bourne port of the speed-ups (parked until 007 is done, user 13:14):** 0094/0095 are game-agnostic but sit on
+  0028/0029/0091-0093, which Bourne lacks. Cloud test on Skullburglar 67aacb2 + 0001-0012 (Bourne's renderer set):
+  0028 applies after 007's 0017 (copy shader at load, harmless elsewhere); 0029 conflicts in draw.cpp (hand
+  merge); 0091-0095 not tried. Check first whether Bourne is draw-CPU bound (a BOTS_DRAW_PROFILE run). The refs
+  set-cover idea fits Bourne's own refs tool; ff_shader_refs.py itself is 007-only (fastfile format).
 - **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
   BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
-- **Shared SDK folder:** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 works 23:54; 0026 written, not built). Eat Lead has the same SDK set (own13,
+- **Shared SDK folder:** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 + 0026 work; 0027 written 21 Nov, not built). Eat Lead has the same SDK set (own13,
   native 0001-0015); Bourne's is tbc12. Each project's `build_native` resets it to its own set.
 - **Check the renderer before testing:** 007's build copies whatever renderer the shared SDK folder last built. On
   20 Nov another project's build_native (16:53) replaced it: text gone and "unsupported draw (primitive): prim 1"
@@ -282,6 +461,56 @@ qos.exe --game_data_root=%USERPROFILE%\source\repos\007qol\game --gpu_plugin nat
 
 - **Logs and crashes:** `out\build\win-amd64-relwithdebinfo\logs\qos_NNN.log`, `crash-PID.txt/.dmp`. Generated
   code: `generated\default\qos_recomp.N.cpp` (`codegen.partition.json` maps a function's address to its file N).
+
+## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
+
+Wanted later, from the PC version's layout. Takedowns to work like the Bourne port's (its keyboard takedown/QTE
+handling: see the Bourne project's handoff before starting).
+
+- Movement & cover: move/strafe `WASD`; jump/mantle `Space`; take cover / dash to cover `E`.
+- Weapons & combat: aim/look mouse; fire `Mouse 1`; reload `R`; throw grenade `G` (hold to cook); change grenade
+  type `3`; toggle silencer / fire mode `4` / `X`; take down (melee) `Q` near an enemy, then the prompt's keys.
+- Menus & extras: phone / objectives `Tab`.
+- **Key pictures made (21 Nov, 09:45), not wired up:** `tools/make_kbm_keys.py` (own art, not Bourne's) ->
+  `prompts/kbm/` (54 PNGs): `k_*` HUD-font style (light grey cap, edge 150, label 131,129,131 like the LB glyph),
+  `kt_*` tutorial/takedown style (dark cap 88, black edge, light label, shadow like t_l1), `km_enter`/`km_esc` menu
+  keys in light grey with a shadow (user didn't want green/maroon, 09:44; dark ones are kt_enter/kt_esc). Keys: W A S D E R G Q X F C V 1-4, WASD cluster, Space, Tab, Enter, Shift, Esc;
+  mouse left/right/middle/move. Wide keys are wider PNGs ("fit" keeps the shape). Previews sent in chat (09:45).
+  **Isometric alternative (09:50):** `*_iso_*` (k_iso_, kt_iso_, km_iso_; 52 more PNGs, same sizes): top face
+  sheared and squashed (SHEAR 0.32, SQUASH 0.78) with the label on it, sides extruded down-right (DEPTH 7). User
+  liked the grey menu keys; flat vs isometric still to choose.
+  **Tilted-back version (09:55, user: "take the top view and tilt back"):** `*_tilt_*` (k_tilt_, kt_tilt_,
+  km_tilt_; 52 PNGs): the flat face in perspective, narrower at the top (TILT_TOP 0.84, TILT_SQUASH 0.80), front edge
+  below (TILT_DEPTH 6), labels upright. Previews preview_tilt.png in chat. The `_iso_` set can be deleted if unused.
+  **Decision (09:53): flat keys** (`k_*`, `kt_*`, `km_*`): the game's own prompts are all flat, so the tilted and
+  isometric sets don't fit. Their PNGs (`*_iso_*`, `*_tilt_*`) can be deleted; the tool still has both functions.
+  **10:01:** user would like 3D keys for the takedown diamond (Bourne's): keep the
+  `_iso_`/`_tilt_` sets. Diamond only is 3D (10:03); the game animates it, so pressed frames were added:
+  `k_tilt_<key>_pressed` / `kt_tilt_<key>_pressed` for every single-character key (32 PNGs): face dropped by 4.5 of
+  the 6-texel front edge, 14% darker, tighter shadow. Assumed the tilted set (user's last 3D pick); iso pressed not made.
+  **Correction (10:05): the 3D diamond keys are for Bourne's takedown diamond, not 007's.** 007 stays all flat (its
+  diamond scales up and fades one picture, user). The `_tilt_` up/pressed PNGs here are a starting point for the
+  Bourne project: redo them there in Bourne's prompt colours, and check how its diamond animates (frame swap or not).
+  **Bourne WASD diamond made (21 Nov, 10:10):** Bourne's originals are in `tbc-test/assets/` (ButtonPresses*.dds,
+  128x512 DXT5, rows A B X Y; the diamond already drawn tilted back as ellipses). New `tbc-test/assets/kbm-test/`:
+  make_kbm_diamond.py + the three .dds (same layout, positions measured from the originals): Y top -> W, X left -> A,
+  A bottom -> S, B right -> D as tilted-back key caps; lit key in the original button colour with the black ring,
+  unlit keys dark grey with a light rim and faint letters. Comparison: kbm_diamond_compare.png. Not wired up in
+  Bourne (its ps-test set shows how replacements are loaded).
+  Light grey version (10:12): `kbm-test/grey/` (make_kbm_diamond.py --grey): lit key light grey (216,218,216) with a
+  dark grey letter, same ring and unlit keys. **Decision (10:14): QTE diamond in colour; every other key glyph flat
+  light grey.** Bourne's `tbc-test/assets/keys/*.png` (read by its src/key_glyphs.cpp: scaled into the button font's
+  40 px cells, 80 px when wide) replaced (10:16) by own flat light grey caps (make_key_glyphs.py in kbm-test; 128x128,
+  wide keys 256x128): a c d e f g q r s v w x 1-4, space shift enter ctrl tab alt escape backspace_icon, mouse
+  left/right/scroll. The old Kenney-style ones are in tbc-test's git history. Not test-run in Bourne yet.
+  **3D diamond wired into Bourne (10:22), not built:** tbc-test `src/key_glyphs.cpp` (HudTexture.whole): the three QTE
+  textures get `keys/qte/<texture>.png` (assets/keys/qte, colour version; grey PNGs in kbm-test/grey) drawn over the
+  whole texture while their binds are the default W A S D (--qte_wasd, on by default); otherwise the old per-badge
+  drawing. Log "key_glyphs: ... replaced by its 3D picture" / "QTE picture <name>: 128x512". Needs Bourne's own
+  build (its build_native first: the shared SDK folder was last built by 007).
+  To use them later: a second prompt list (e.g. prompts/keyboard.txt) chosen when keyboard/mouse is the last device.
+- Notes for then: the SDK already has mouse-to-stick and keyboard binds (SDK patches 0004, 0008, 0009, used by Bourne
+  and Eat Lead); keyboard prompts would need glyph swaps like the PlayStation ones (prompts/, native 0021/0022).
 
 ## Next
 

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <memory>
 
 #include <rex/rex_app.h>
@@ -21,6 +22,26 @@
 // --achievement_popups=false hides it.
 REXCVAR_DEFINE_BOOL(achievement_popups, true, "UI", "Show the achievement unlocked popup");
 
+// Read by the native renderer (native-plugin/patches/0006-fps-counter.patch), which draws the counter into the
+// picture itself, so it shows in fullscreen; set by the launcher (installer/qos_launcher.py). As in the Bourne and
+// Eat Lead ports.
+REXCVAR_DEFINE_BOOL(show_fps, false, "UI", "Show a small frame rate counter in the corner (native renderer)");
+REXCVAR_DEFINE_BOOL(show_fps_detail, false, "UI",
+                    "With show_fps: also frame time, GPU, CPU and memory (native renderer)");
+REXCVAR_DEFINE_DOUBLE(brightness, 1.0, "GPU", "Picture brightness, native renderer (1 = the game's)")
+    .range(0.5, 2.0);
+
+namespace qos {
+// The log's first lines: the release, the build time and the launch options (version_log.cpp).
+void LogVersion();
+}  // namespace qos
+
+namespace qos::achievements {
+// <user data>/achievements/<title id>-list.json and the icons, for the launcher's Achievements tab
+// (achievement_list.cpp, from the Eat Lead port).
+void ExportList(rex::Runtime* runtime);
+}  // namespace qos::achievements
+
 class QosApp : public rex::ReXApp {
  public:
   using rex::ReXApp::ReXApp;
@@ -31,11 +52,19 @@ class QosApp : public rex::ReXApp {
         PPCImageConfig));
   }
 
-  void OnPostInitLogging() override { qos::crash::Install(); }
+  void OnPostInitLogging() override {
+    qos::crash::Install();
+    qos::LogVersion();
+  }
+
+  void OnPostSetup() override { qos::achievements::ExportList(runtime()); }
 
   std::unique_ptr<rex::ui::AchievementNotificationDialog> CreateAchievementNotificationDialog()
       override {
-    if (!REXCVAR_GET(achievement_popups)) {
+    // None with the native renderer either: it draws the popup itself, in the same style
+    // (native-plugin patches), so with the runtime's own as well two showed, one over the other
+    // (21 Nov).
+    if (!REXCVAR_GET(achievement_popups) || native_renderer_) {
       return nullptr;  // the runtime skips the popup when there's none
     }
     return rex::ReXApp::CreateAchievementNotificationDialog();
@@ -56,12 +85,26 @@ class QosApp : public rex::ReXApp {
     if (config.gpu_plugin == "xenos-vulkan") {
       config.graphics = rex::system::LoadGpuPlugin("xenos", "vulkan");
     }
+    native_renderer_ = config.gpu_plugin == "native";
+    // The native renderer needs nested draws for this game's menus and text (native patch 0001); set here, so a
+    // start without the launcher (Play.bat, a build started by hand) has it too. A value already set is kept.
+    if (native_renderer_ && !std::getenv("BOTS_GFX_NESTED_DRAWS")) {
+#ifdef _WIN32
+      _putenv_s("BOTS_GFX_NESTED_DRAWS", "1");
+#else
+      setenv("BOTS_GFX_NESTED_DRAWS", "1", 0);
+#endif
+    }
   }
+
+ private:
+  bool native_renderer_ = false;
+
+ public:
 
   // Other hooks available for customization:
   // void OnLoadXexImage(std::string& xex_image) override {}
   // void OnPostLoadXexImage() override {}
-  // void OnPostSetup() override {}
   // void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {}
   // std::unique_ptr<rex::ui::ImGuiDialog> CreateAchievementsOverlay() override;
   // void OnShutdown() override {}
