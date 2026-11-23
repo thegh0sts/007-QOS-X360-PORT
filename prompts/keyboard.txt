@@ -8,11 +8,10 @@
 # tools/make_kbm_prompts.py (the takedown discs tk_, km_backspace, k_space_sq).
 
 # Menus and tutorial text (Scaleform, 64x64 DXT5): the same A and B pictures show in menus ("select", "back") and
-# in the tutorial boxes ("Press A to take cover"): A shows E (cover; it selects in menus too). B shows Shift, for
-# "Hold B and pull away from cover with LS to stay low" (user, 23 Nov 22:54: Shift and S there; pictures only, the
-# binds stay as they are). The menus' "back" shows Shift too.
+# in the tutorial boxes ("Press A to take cover"): A shows E (cover; it selects in menus too). B shows a BACK key
+# (Backspace, menus' back; user 23 Nov 23:04, after Shift at 22:54 for "Hold B and pull away from cover...").
 replace btn_accept 64 64 FFC0169EA80A8F57 kbm/km_e
-replace btn_back   64 64 09784A4CD20751E1 kbm/km_shift_sq
+replace btn_back   64 64 09784A4CD20751E1 kbm/km_back_sq
 
 # Tutorial boxes (64x64 DXT5): light grey keys like every other prompt (user: no mix of light and dark, 23 Nov).
 # The LS picture means the stick there ("pull away from cover with LS"), so it shows S (pulling back), not Shift.
