@@ -572,6 +572,13 @@ light grey with shadow; make_kbm_prompts.py draws km_e c r f g s q tab mouse_lef
 build copies them. "Hold B and pull away from cover with LS to stay low": user wants Shift and S there, pictures
 only, binds unchanged (22:54): btn_back -> km_shift_sq; then (23:04, main menu "SHIFT BACK") a BACK key, km_back_sq.
 
+**Open (23 Nov, 23:07, user: "we'll try again later"):** one game picture serves several hints, so one key can't fit
+all of them. Tutorial LS picture (748B...): "pull away from cover with LS" (user wanted S) and "Click LS while
+pushing forward to sprint" (user wants Shift). Scaleform B (btn_back): main menu BACK (now a BACK key), phone EXIT
+(user asked for Tab), "Hold B ... to stay low" (user asked for Shift). Options put to the user: Shift everywhere / S
+everywhere / one picture with both keys / find which hint is up (hook the tutorial hint code) and pick per hint.
+Undecided; keyboard.txt currently has LS -> km_s, btn_back -> km_back_sq.
+
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 
 Wanted later, from the PC version's layout. Takedowns to work like the Bourne port's (its keyboard takedown/QTE
