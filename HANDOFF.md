@@ -450,7 +450,7 @@ keep "Resume here" current.
   -> `--present_effect=fsr|cas`. Only upscales when the render resolution is below the window (e.g. render 2x =
   2560x1440 on a 4K screen); at equal sizes FSR may do nothing or sharpen only. Test: qos.exe ... --present_effect=fsr
   with BOTS_GFX_RENDER_SCALE=2 on the 4K screen, compare with bilinear.
-- **Title screen prompts (23 Nov, 18:15, not built/tested):** user asked for the main menu's two prompts on the Press
+- **Title screen prompts (23 Nov, 18:15; works, user 18:09):** user asked for the main menu's two prompts on the Press
   Start screen, B relabelled: "A SELECT" over "B QUIT (HOLD)" (was "B QUIT (HOLD)" alone in A's place). Measured from
   the user's 4K screenshots (main menu): discs 60 px (30 at 1080p), lines 90 px apart (45), A disc at 707-766 x,
   1844-1903 y. `tools/make_quit_hint.py` now draws `hints/start_prompts.png` (A green disc, our own art) and
