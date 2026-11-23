@@ -9,8 +9,8 @@
 // mouse look, mouse 1 fire, mouse 2 aim down sight, G grenade, 3 switch grenade, Q take down, Ctrl sprint, 1 & 2
 // cycle weapon, C stance, Shift walk, R reload, Space jump/mantle, E cover/dash to cover, 4 silencer, X rate of fire,
 // Tab phone, Esc pause, F use. The pad's X is both use and reload (+usereload), so R and F both press it. Shift walks
-// through SDK patch 0017 (keybind_walk: the stick keys push the stick part way, mnk_walk_scale). Menus: Return and
-// Backspace as A and B too, arrows as the D-pad. The right stick has no keys: the mouse turns the view
+// through SDK patch 0017 (keybind_walk: the stick keys push the stick part way, mnk_walk_scale). Menus: Return as A
+// too (B is C only: Backspace unbound, user 24 Nov), arrows as the D-pad. The right stick has no keys: the mouse turns the view
 // (mouse_look.cpp). Only binds still at the SDK's compiled-in default are set, so the command line, the config file
 // and the Rebind screen win.
 
@@ -32,7 +32,7 @@ void SetDefaults() {
       {"keybind_rstick_left", ""},          {"keybind_rstick_right", ""},
       {"keybind_right_trigger", "LMB"},     {"keybind_left_trigger", "RMB"},
       {"keybind_right_shoulder", "G"},      {"keybind_left_shoulder", "1,2"},
-      {"keybind_a", "E,Return"},            {"keybind_b", "C,Backspace"},
+      {"keybind_a", "E,Return"},            {"keybind_b", "C"},
       {"keybind_x", "R,F"},                {"keybind_y", "Space"},
       {"keybind_dpad_up", "X,Up"},          {"keybind_dpad_down", "4,Down"},
       {"keybind_dpad_left", "3,Left"},      {"keybind_dpad_right", "Right"},

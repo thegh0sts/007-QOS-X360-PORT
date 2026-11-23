@@ -590,7 +590,7 @@ load: CP idle (game) vs textures (renderer) in the slow frames.
 
 User shared the PC manual's "Movement Controls" page. `src/kbm_binds.cpp` now matches it: WASD, mouse, Mouse 1 fire
 (RT), Mouse 2 ADS (LT), G grenade (RB), 3 switch grenade (D-pad left), Q take down (RS), **Ctrl sprint** (LS, was
-Shift), **1 & 2 cycle weapon** (LB, was F/1/2/MMB), C stance (B; Backspace in menus, Ctrl removed), **Shift walk** (new
+Shift), **1 & 2 cycle weapon** (LB, was F/1/2/MMB), C stance (B; Ctrl removed; Backspace unbound later the same morning, so B is C only, menus too), **Shift walk** (new
 SDK patch `0017-mnk-walk-key`: keybind_walk, mnk_walk_scale 0.4, build_sdk own17), R reload and **F use** (both X,
 +usereload), Space jump (Y), E cover (A), 4 silencer (D-pad down), X rate of fire (D-pad up), Tab phone (BACK), Esc
 pause (START). The manual's phone submenus on the arrow keys are not mapped (on the pad they are the triggers; the
