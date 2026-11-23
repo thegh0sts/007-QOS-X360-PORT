@@ -22,6 +22,7 @@ set(QOS_SOURCES
     src/fov.cpp
     src/menu_quit.cpp
     src/pad_prompts.cpp
+    src/mouse_look.cpp
     src/version_log.cpp
     src/achievement_list.cpp
 )

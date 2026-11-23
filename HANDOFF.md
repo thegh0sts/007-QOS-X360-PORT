@@ -499,6 +499,23 @@ qos.exe --game_data_root=%USERPROFILE%\source\repos\007qol\game --gpu_plugin nat
 - **Logs and crashes:** `out\build\win-amd64-relwithdebinfo\logs\qos_NNN.log`, `crash-PID.txt/.dmp`. Generated
   code: `generated\default\qos_recomp.N.cpp` (`codegen.partition.json` maps a function's address to its file N).
 
+## Mouse look (23 Nov): the game's own PC mouse code, fed real mouse counts
+
+`src/mouse_look.cpp`, **built but not yet tested in game**. The 360 executable still has CoD4's PC mouse code,
+whole: `CL_MouseMove` = sub_821B8908 (called every frame from CL_CreateCmd sub_821B94F8 unless `cl_ignoreinput`),
+reading the dvars `sensitivity` (default 5), `cl_mouseAccel`, `m_yaw`/`m_pitch` (0.022), `m_side`/`m_forward`
+(0.25), `m_filter`, `cl_freelook`; `CL_GetMouseMovement` = sub_821B87E0. `cl` is at 0x82809AD8: `mouseDx[2]`
++0x9B40, `mouseDy[2]` +0x9B48, `mouseIndex` +0x9B50 (ints); `viewangles` pitch/yaw at +0x9B98/+0x9B9C; frame_msec
+0x827E3310. Dvar pointers: sensitivity 0x82809818, m_yaw 0x82809820, m_pitch 0x82809824, cl_mouseAccel 0x82809A98,
+cl_freelook 0x82809ACC, m_filter 0x82809AC4. Nothing on the console fills mouseDx/Dy.
+The hook puts the SDK's keyboard/mouse driver in direct mode (SDK 0009 `SetMouseDirect`) and, before CL_MouseMove,
+adds `ConsumeMouseDelta` counts to mouseDx/Dy[mouseIndex]. So the game's sensitivity, zoom scaling and pitch limits
+apply: 0.11 degrees a count at `--mouse_sensitivity=1`. Movement with a gap over 250 ms between calls (menus,
+loading) is dropped. Cvars: `--mouse_look` (on), `--mouse_sensitivity` (0.05-10), `--mouse_invert`. Needs the SDK's
+keyboard/mouse input on (`--mnk_mouse=true` and the driver enabled). Log: "mouse look: ..." and counts per second
+for the first 3 s of movement. Found with `xexdec.py` (cloud) + a small PPC decoder over the decrypted image.
+Still to do: launcher Controls options, default key binds (below), keyboard prompts.
+
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 
 Wanted later, from the PC version's layout. Takedowns to work like the Bourne port's (its keyboard takedown/QTE
