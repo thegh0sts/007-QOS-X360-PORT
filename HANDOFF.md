@@ -647,6 +647,15 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    only the recompiled default.xex, so the relaunch ends the process: that's the "close". Fix: hook sub_821BCD08 and
    return before it shuts anything down (the menu should stay as it is; check it doesn't sit in a loading state), or
    hide the menu entry. Playing MP would need default_mp.xex as its own recompilation project (parked).
+
+**Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
+1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base
+   67aacb28): what it implements (XNet addressing, System Link broadcast between PCs, XSession) and how complete it is.
+2. Check 007's System Link needs against it (QoS 360 MP: up to 12 players, online or System Link; no split-screen or
+   bots as far as known). Reference: Xenia Canary Netplay (AdrianCassar), Xenia-WebServices.
+3. If it fits: port `game/default_mp.xex` as a second recompilation project (same engine: reuse the codegen setup,
+   jump-table/setjmp fixes, renderer, input, frame-rate hooks), make the two executables switch (SP's
+   sub_821BCD08 -> launch MP; MP's way back), then test LAN / VPN (e.g. Tailscale) play between two PCs.
 10. **Gameplay dips in easy areas** (user, 23:45): in qos_142 the renderer was mostly idle during them (22:38:08-18:
     5 ms in draws, CP idle 11.5 ms, 79 textures streamed in, a takedown), so the game thread was late; vsync on turned
     each ~18 ms frame into 33 ms. Capture a dip with Tracy (built in: TRACY_ON_DEMAND, connect the Tracy app) to see
