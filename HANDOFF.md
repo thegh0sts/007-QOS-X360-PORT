@@ -598,6 +598,14 @@ mouse buttons do it). Prompts: X glyph and tutorial X disc -> F, LB -> 1 (HUD k_
 (k_ctrl); the tutorial LS picture stays S (shared with the cover hints; the sprint hint would want Ctrl now). Launcher
 note updated. Test: build_native (SDK own17) + game build; log "keyboard binds: 25 of 25".
 
+**Esc goes back in menus (24 Nov, 07:00), written, not built or tested:** SDK patch `0018-mnk-start-keys-back`
+(`SetStartKeysAsBack`: keys bound to Start press B while on; a press keeps the meaning it started with, so the Esc that
+opens the pause menu doesn't close it; build_sdk own18). `src/menu_keys.cpp` (from the Com_Frame hook) turns it on
+while KEYCATCH_UI (0x10) is set in clientUIActive.keyCatchers at 0x82809ADC (CL_SetKeyCatchers = sub_821BBED8,
+called with 16 by the pause menu's open sub_822CE670, which also sets cl_paused 1; cl_paused dvar ptr 0x82770100 /
+0x8337417C). Logs the first 24 key-catcher values ("menu keys: key catchers 0x..."): check main menu, Press Start,
+pause menu and the phone (the phone may not use the UI catcher). `--menu_esc_back` (on). Backspace unbound (B = C).
+
 ## To do, 24 Nov (user, 23:20)
 
 Test like the launcher: `--vsync=false` (the 23 Nov dev run had vsync on: 18 ms frames became 33 ms, so the intro

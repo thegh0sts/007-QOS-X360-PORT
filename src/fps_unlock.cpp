@@ -43,6 +43,9 @@ void OnFrame(uint8_t* base);  // fov.cpp: keeps cg_fov at --fov
 namespace qos::takedown_keys {
 void OnFrame();
 }  // namespace qos::takedown_keys
+namespace qos::menu_keys {
+void OnFrame(uint8_t* base);
+}  // namespace qos::menu_keys
 
 namespace {
 
@@ -86,6 +89,7 @@ extern "C" REX_FUNC(sub_8229B7C0) {
   }
   qos::fov::OnFrame(base);
   qos::takedown_keys::OnFrame();
+  qos::menu_keys::OnFrame(base);
   __imp__sub_8229B7C0(ctx, base);
 }
 

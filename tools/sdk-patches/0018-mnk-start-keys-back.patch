@@ -1,0 +1,62 @@
+ReXGlue input: Start keys as B in menus (SetStartKeysAsBack).
+
+While on, the keys bound to Start press B instead, so a pause key such as Esc also goes back in menus.
+The game turns it on while a menu has focus. A press keeps the meaning it started with (Esc opening
+the pause menu stays Start until released). Off by default; keyboard only.
+
+diff --git a/include/rex/input/mnk/mnk_input_driver.h b/include/rex/input/mnk/mnk_input_driver.h
+index 283e51b..5088fe8 100644
+--- a/include/rex/input/mnk/mnk_input_driver.h
++++ b/include/rex/input/mnk/mnk_input_driver.h
+@@ -31,6 +31,9 @@ bool ConsumeMouseDelta(float* dx, float* dy);
+ // left X, down A, right B (button-press sequences shown as the pad's diamond). Off by default.
+ void SetStickKeysAsFaceButtons(bool on);
+ bool StickKeysAsFaceButtons();
++// While on, the keys bound to Start press B (back) instead: a game turns it on while a menu has focus, so its pause
++// key (Esc) also goes back in menus. Off by default.
++void SetStartKeysAsBack(bool on);
+ bool IsMouseLookActive();
+ 
+ class MnkInputDriver final : public InputDriver,
+diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver.cpp
+index bfadbe3..429a877 100644
+--- a/src/input/mnk/mnk_input_driver.cpp
++++ b/src/input/mnk/mnk_input_driver.cpp
+@@ -191,6 +191,12 @@ std::atomic<bool> mouse_direct{false};
+ // (up Y, left X, down A, right B) and the left stick gets nothing from the keys. For a game's
+ // button-press sequences (takedowns, quick-time events) shown as the pad's diamond, so WASD answer them.
+ std::atomic<bool> stick_keys_face{false};
++// Menu mode: while on, the keys bound to Start press B instead (back), e.g. Esc pauses in game and goes back in
++// menus. The game turns it on while a menu has focus.
++std::atomic<bool> start_keys_back{false};
++// A press keeps the meaning it started with: Esc opening the pause menu (which turns menu mode on) must not
++// become a B press, and close it again, while it's still held.
++bool start_press_is_back = false;
+ std::mutex mouse_direct_mutex;
+ double mouse_direct_dx = 0.0, mouse_direct_dy = 0.0;
+ 
+@@ -351,6 +357,10 @@ void SetStickKeysAsFaceButtons(bool on) {
+   stick_keys_face.store(on, std::memory_order_relaxed);
+ }
+ 
++void SetStartKeysAsBack(bool on) {
++  start_keys_back.store(on, std::memory_order_relaxed);
++}
++
+ bool StickKeysAsFaceButtons() {
+   return stick_keys_face.load(std::memory_order_relaxed);
+ }
+@@ -538,8 +548,11 @@ X_RESULT MnkInputDriver::GetDeviceState(DeviceId id, X_INPUT_STATE* out_state) {
+     buttons |= X_INPUT_GAMEPAD_RIGHT_THUMB;
+   if (IsBindPressed(key_down_, REXCVAR_GET(keybind_back)))
+     buttons |= X_INPUT_GAMEPAD_BACK;
+-  if (IsBindPressed(key_down_, REXCVAR_GET(keybind_start)))
+-    buttons |= X_INPUT_GAMEPAD_START;
++  if (IsBindPressed(key_down_, REXCVAR_GET(keybind_start))) {
++    buttons |= start_press_is_back ? X_INPUT_GAMEPAD_B : X_INPUT_GAMEPAD_START;
++  } else {
++    start_press_is_back = start_keys_back.load(std::memory_order_relaxed);
++  }
+   if (IsBindPressed(key_down_, REXCVAR_GET(keybind_guide)))
+     buttons |= X_INPUT_GAMEPAD_GUIDE;
+   if (IsBindPressed(key_down_, REXCVAR_GET(keybind_dpad_up)))
