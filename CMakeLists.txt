@@ -7,7 +7,7 @@ project(qos LANGUAGES CXX)
 
 # The release number, shown in the log's first line (version_log.cpp). Keep it the same as
 # installer/qos_launcher.py's VERSION.
-set(QOS_RELEASE "0.1.0")
+set(QOS_RELEASE "0.1.1")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
