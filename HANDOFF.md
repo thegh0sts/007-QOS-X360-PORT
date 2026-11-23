@@ -656,6 +656,16 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
 3. If it fits: port `game/default_mp.xex` as a second recompilation project (same engine: reuse the codegen setup,
    jump-table/setjmp fixes, renderer, input, frame-rate hooks), make the two executables switch (SP's
    sub_821BCD08 -> launch MP; MP's way back), then test LAN / VPN (e.g. Tailscale) play between two PCs.
+- **What default_mp.xex holds (24 Nov, decrypted in the cloud with xexdec.py, strings only):** CoD4's MP stack.
+  Listen server (one player hosts; "Listen server cannot sound restart"), plus a `dedicated` dvar ("True if this is a
+  dedicated server", probably unused on 360). sv_* (maxclients, fps, maxRate, maxPing, mapRotation, hostname,
+  privateClients), ~40 party_* lobby dvars (host, min/max players, gametype, map, timers, team balance, map veto), host
+  migration (PartyMigrate_*, XSessionMigrateHost). Modes: systemlink, onlinegame, xblive_privatematch,
+  xblive_rankedmatch. Uses XNetStartup, XNetXnAddrToInAddr, XNetServerToInAddr, XSession*, XOnlineGetServiceInfo.
+  Test bots: `addtestclient`, sv_botsPressAttackBtn (a way to test a match on one PC). **No split-screen**: the MP
+  menus (scaleform MpMainMenu: Xbox Live and System Link; MpSys* System Link create/join/map/mode/options; MpXb*
+  Live lobbies, private match, playlists) have none, and menus run `nosplitscreen`; the split-screen code is CoD4
+  leftover. **Target: System Link** (no servers; LAN or a VPN); Live would need a matchmaking stand-in.
 10. **Gameplay dips in easy areas** (user, 23:45): in qos_142 the renderer was mostly idle during them (22:38:08-18:
     5 ms in draws, CP idle 11.5 ms, 79 textures streamed in, a takedown), so the game thread was late; vsync on turned
     each ~18 ms frame into 33 ms. Capture a dip with Tracy (built in: TRACY_ON_DEMAND, connect the Tracy app) to see
