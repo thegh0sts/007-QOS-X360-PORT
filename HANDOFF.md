@@ -590,8 +590,9 @@ load: CP idle (game) vs textures (renderer) in the slow frames.
 
 Test like the launcher: `--vsync=false` (the 23 Nov dev run had vsync on: 18 ms frames became 33 ms, so the intro
 dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the same level start).
-1. **Airport profile** (draw CPU): `BOTS_DRAW_PROFILE=1 BOTS_GFX_RECORD_THREAD=1 --vsync=false --frame_rate=60`, in the
-   4th level's airport where FPS dips to the mid 50s. Pick the biggest phase from it.
+1. **Draw CPU profile:** `BOTS_DRAW_PROFILE=1 BOTS_GFX_RECORD_THREAD=1 --vsync=false --frame_rate=60` at a busy spot
+   (the 22 Nov one, ~11,000 draws a frame). Pick the biggest phase from it. (The "airport level" FPS dip mentioned on
+   23 Nov was another game, not 007: user, 23:20.)
 2. **Level-start stall:** `BOTS_HITCH_MS=20` from a checkpoint load; CP idle (game) vs textures (renderer). Worst frame
    500 ms in the dev build vs ~130 ms in 0.1.1: A/B the dev build without `--mnk_mode=true --mnk_mouse=true` (0098's
    prompt lookups) to see whether tonight's code adds to it.
