@@ -609,6 +609,11 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    split like 0093's recorder). Draw setup itself doesn't split well (each draw depends on the last).
 7. **Menu video frames:** 0.1.1 menu had 109 frames > 20 ms in 10 s at 19 draws a frame: the game's Bink decode
    (game side) plus a 900 KB texture upload each frame; the upload side could be cheaper. Low priority.
+9. **Disable MULTIPLAYER on the main menu** (user, 23:23): choosing it closes the game (multiplayer is parked).
+   Grey it out or hide it, or make selecting it do nothing. Ways in: the main menu is Scaleform (ui.ff .gfx files,
+   zlib SWF "CFX"), so either hook the menu action that starts multiplayer (find what selecting it calls: likely a
+   command string such as the MP fastfile / "xstartprivateparty"-style entry; search the decrypted XEX and ui.ff
+   for "multiplayer") and swallow it, or patch the menu data. Check what the crash/close is first (log, crash-*.txt).
 8. **Shared prompt pictures** (keyboard prompts, open question above): LS picture (S vs Shift), B picture (BACK / Tab
    / Shift); options: one key, a two-key picture, or pick per hint by hooking the tutorial hint code.
 
