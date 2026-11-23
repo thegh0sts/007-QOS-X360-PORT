@@ -537,6 +537,32 @@ ik_enable; end restores them), with a 20 s safety off from the Com_Frame hook. `
 readers 0x82384180, 0x82384580, 0x82385850, 0x82385C28, 0x8238A920. The on-screen diamond still shows pad buttons
 (keyboard prompts to do). Also noticed: Skullburglar has SDK patch 0018-netplay-system-link (for multiplayer later).
 
+## Keyboard prompts (23 Nov, 22:40), written, not built or tested
+
+User: "create the keyboard glyphs. the takedowns should keep their colour and shape"; ignore the 3D tilt keys.
+- **SDK patch 0016-keyboard-mouse-active** (`rex::input::KeyboardMouseActive()` in pad_style.h): true while the MnK
+  device is the input system's active device for user 0 (ActiveDeviceTracker: real input takes over, a neutral pad
+  never does; mouse movement alone doesn't count, a key or click does). build_sdk tag own16.
+- **Native patch 0098-keyboard-prompts:** a second list `prompts/keyboard.txt` (same syntax as playstation.txt) for
+  pad_prompts_active 2. prompt_atlas Find*/Build*/ReplacementPixels take the mode; mode 0 asks every list, so a
+  texture any list changes is marked pad_sheet and reloaded when the mode changes. Syntax-checked prompt_atlas.cpp
+  only (texture.cpp not compiled here).
+- `src/pad_prompts.cpp`: active 2 while KeyboardMouseActive() (--pad_prompts auto; also `keyboard` forces it, xbox /
+  playstation force those). Launcher "Button prompts" gains "Keyboard only".
+- `prompts/keyboard.txt`: menus btn_accept -> km_enter, btn_back -> km_backspace; tutorial pictures -> kt_r (X disc
+  82C5...), kt_f, kt_mouse_right/left, kt_g, kt_tab, kt_shift (LS 748B...), kt_q (RS 9849...); takedown 50 px discs ->
+  tk_w (Y), tk_a (X), tk_s (A), tk_d (B); HUD font 28/14 px cells -> k_e, k_c, k_r, k_space_sq, k_f, k_g, k_esc, k_tab,
+  k_shift (LS 372-405 x 190-222; 14 px 466-483 x 422-439), k_q (RS 406-439; 14 px 0-17 x 426-443),
+  k_mouse_right/left. D-pad glyph left. Image names are relative to prompts/ (kbm/...).
+- Art: `tools/make_kbm_prompts.py` (new): tk_w/a/s/d = make_ps_buttons.py's disc with a Montserrat Black letter, in
+  the game's colours (decoded from texdump4 this evening: yellow disc (125,87,29) letter (205,143,51); blue
+  (57,66,100)/(122,138,180); green (74,97,57)/(133,168,112); red as the HUD glyph); km_backspace (arrow); k_space_sq.
+  Title screen: `hints/start_prompts_kbm.png` (ENTER SELECT / Backspace QUIT (HOLD), 176x77 = 13,552 texels, under
+  0096's 13,600), menu_hint_images gets it as image 3. A cloud DXT5 decoder for the dumps: rewritten this evening
+  (tiled, 8-in-16), not kept in the repo.
+- Test: build_native (SDK own16 + native 0098) + game build. Log "pad prompts: prompts/keyboard.txt: 1 textures, N
+  images, 16 replaced textures", "pad_prompts: keyboard keys" after a key press, "Xbox buttons" after a pad press.
+
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 
 Wanted later, from the PC version's layout. Takedowns to work like the Bourne port's (its keyboard takedown/QTE

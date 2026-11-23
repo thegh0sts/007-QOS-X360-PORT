@@ -53,12 +53,13 @@
 REXCVAR_DEFINE_BOOL(menu_b_quit, true, "UI", "Holding B on the Press Start screen closes the game");
 // Read by the native renderer each frame (native-plugin/patches/0013-menu-hint.patch); set here, not by hand.
 REXCVAR_DEFINE_INT32(menu_hint, 0, "UI", "Menu hint the renderer draws: 0 none, N the Nth of menu_hint_images; set by the game");
-REXCVAR_DEFINE_STRING(menu_hint_images, "start_prompts,start_prompts_ps", "UI", "The menu hints' images, hints/<name>.png, comma-separated");
+REXCVAR_DEFINE_STRING(menu_hint_images, "start_prompts,start_prompts_ps,start_prompts_kbm", "UI", "The menu hints' images, hints/<name>.png, comma-separated");
 REXCVAR_DEFINE_STRING(menu_hint_pos, "353,921", "UI", "Where the menu hint goes: top-left x,y in 1080p pixels of the picture");
 
 namespace qos::pad_prompts {
 void Update();       // pad_prompts.cpp
 bool PlayStation();
+bool Keyboard();
 }  // namespace qos::pad_prompts
 
 namespace {
@@ -149,8 +150,8 @@ void OnPad(uint8_t* base, uint32_t user, uint16_t buttons) {
       s.since = now;
     }
     const bool settled = title && now - s.since >= kSettle && !s.quitting;
-    const bool ps = qos::pad_prompts::PlayStation();
-    const int32_t hint = !settled ? 0 : ps ? 2 : 1;  // start_prompts / start_prompts_ps
+    const bool ps = qos::pad_prompts::PlayStation(), keys = qos::pad_prompts::Keyboard();
+    const int32_t hint = !settled ? 0 : keys ? 3 : ps ? 2 : 1;  // start_prompts / _ps / _kbm
     if (REXCVAR_GET(menu_hint) != hint) REXCVAR_SET(menu_hint, hint);
     const uint16_t pressed = buttons & ~s.last[user];
     s.last[user] = buttons;

@@ -1,0 +1,54 @@
+ReXGlue input: KeyboardMouseActive() for keyboard button prompts.
+
+True while the keyboard/mouse device is the one that last gave player 1 real input (the active-device
+rule the input system already keeps: a neutral pad never takes over). A game reads it to show key
+pictures instead of pad buttons.
+
+diff --git a/include/rex/input/pad_style.h b/include/rex/input/pad_style.h
+index 6292ee5..dd4510f 100644
+--- a/include/rex/input/pad_style.h
++++ b/include/rex/input/pad_style.h
+@@ -13,4 +13,8 @@ enum class PadStyle : int { kNone = 0, kXbox = 1, kPlayStation = 2 };
+ PadStyle ConnectedPadStyle();
+ void SetConnectedPadStyle(PadStyle style);
+ 
++// True while keyboard/mouse is the device that last gave player 1 real input (a key, a mouse button: the same
++// rule that picks the active device), for keyboard prompts.
++bool KeyboardMouseActive();
++
+ }  // namespace rex::input
+diff --git a/src/input/input_system.cpp b/src/input/input_system.cpp
+index bc99205..8f3c752 100644
+--- a/src/input/input_system.cpp
++++ b/src/input/input_system.cpp
+@@ -44,6 +44,9 @@ REXCVAR_DEFINE_DOUBLE(right_stick_deadzone_percentage, 0.0, "Input",
+ namespace rex::input {
+ 
+ namespace {
++// Whether keyboard/mouse (the MnK driver's one device) is the device that last gave user 0 real input.
++std::atomic<bool> g_keyboard_mouse_active{false};
++constexpr DeviceId kMnkDeviceId = static_cast<DeviceId>(0x4D4E4B00);  // mnk_input_driver.cpp's kMnkDevice
+ 
+ // Synthetic devices are parked past every physical ordinal so they cannot push
+ // a real pad off guest user 0. SlotAssignment routes them by their synthetic
+@@ -330,6 +333,9 @@ X_RESULT InputSystem::GetStateForUI(uint32_t user_index, X_INPUT_STATE* out_stat
+     }
+   }
+ 
++  if (user_index == 0) {
++    g_keyboard_mouse_active.store(active_devices_.Active(0) == kMnkDeviceId, std::memory_order_relaxed);
++  }
+   if (!any) {
+     UpdateConnectedUser(user_index, false);
+     return X_ERROR_DEVICE_NOT_CONNECTED;
+@@ -499,7 +505,9 @@ X_RESULT InputSystem::GetKeystroke(uint32_t user_index, uint32_t flags,
+ 
+ namespace {
+ std::atomic<int> g_pad_style{0};
+-}
++}  // namespace
++
++bool KeyboardMouseActive() { return g_keyboard_mouse_active.load(std::memory_order_relaxed); }
+ 
+ PadStyle ConnectedPadStyle() { return static_cast<PadStyle>(g_pad_style.load(std::memory_order_relaxed)); }
+ void SetConnectedPadStyle(PadStyle style) { g_pad_style.store(static_cast<int>(style), std::memory_order_relaxed); }

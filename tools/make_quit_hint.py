@@ -122,6 +122,41 @@ def prompts(lines, out):
     print(out, img.size, W * H, "pixels")
 
 
+def key_picture(path):
+    """A key picture (prompts/kbm, make_kbm_keys.py) cropped to its cap and shadow, KEY_H high, at S times."""
+    im = Image.open(path).convert("RGBA")
+    im = im.crop(im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox())
+    h = int(KEY_H * S)
+    return im.resize((max(1, round(im.width * h / im.height)), h), Image.LANCZOS)
+
+
+KEY_H = 24.0  # key pictures' height (a little under the discs': the hint must stay within 13,600 texels)
+
+
+def key_prompts(lines, out):
+    """lines: (key picture path, label) from the top, LINE apart; the labels start 6 px after the widest key."""
+    keys = [key_picture(k) for k, _ in lines]
+    text_x = max(k.width for k in keys) / S + 6
+    W = int(round(PAD + text_x + max(text_width(t) for _, t in lines) / S + 3))
+    H = int(round(LINE * (len(lines) - 1) + D + 2 * PAD))
+    img = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0))
+    g0 = ImageDraw.Draw(Image.new("L", (1, 1)))
+    for i, ((_, text), k) in enumerate(zip(lines, keys)):
+        top = LINE * i
+        img.alpha_composite(k, (int(PAD * S), int(round((top + PAD + (D - KEY_H) / 2) * S))))
+        f, track = label(text)
+        hb = g0.textbbox((0, 0), "H", font=f)
+        x = (PAD + text_x) * S
+        y = (top + PAD + CAP_TOP) * S - hb[1]
+        g = ImageDraw.Draw(img)
+        for ch in text:
+            g.text((x, y), ch, font=f, fill=GREY)
+            x += g0.textlength(ch, font=f) + track
+    img = img.resize((W, H), Image.LANCZOS)
+    img.save(out)
+    print(out, img.size, W * H, "pixels")
+
+
 def hint(symbol, text, out):
     prompts([(symbol, text)], out)
 
@@ -131,3 +166,7 @@ if __name__ == "__main__":
     # The title screen's (src/menu_quit.cpp): A SELECT over B QUIT (HOLD), and the PlayStation pair.
     prompts([("A", "SELECT"), ("B", "QUIT (HOLD)")], out + "/start_prompts.png")
     prompts([("X", "SELECT"), ("O", "QUIT (HOLD)")], out + "/start_prompts_ps.png")
+    # Keyboard (23 Nov): Enter selects, Backspace held quits (the B bind, src/kbm_binds.cpp); the menu-style keys.
+    kbm = (sys.argv[2] if len(sys.argv) > 2 else "prompts/kbm") + "/"
+    key_prompts([(kbm + "km_enter.png", "SELECT"), (kbm + "km_backspace.png", "QUIT (HOLD)")],
+                out + "/start_prompts_kbm.png")

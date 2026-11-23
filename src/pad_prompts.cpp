@@ -13,6 +13,10 @@
 // --pad_prompts=playstation  always PlayStation's
 // With no pad connected (one unplugged before the next is plugged in) the last pad's pictures stay.
 //
+// Keyboard and mouse (23 Nov): while keyboard or mouse is what player 1 used last (the SDK's active-device rule:
+// SDK patch 0016 KeyboardMouseActive), pad_prompts_active is 2 and the renderer shows the key pictures listed in
+// prompts/keyboard.txt (native patch 0098), whatever --pad_prompts says; --pad_prompts=keyboard always shows them.
+//
 // Not done yet: text that names buttons (the Press Start screen's text, the controls screen's labels).
 
 #include "generated/default/qos_pch.h"
@@ -25,9 +29,10 @@
 #include <rex/logging.h>
 
 REXCVAR_DEFINE_STRING(pad_prompts, "auto", "Input",
-                      "Controller button prompts: auto (PlayStation buttons with a PlayStation pad), xbox, playstation");
+                      "Button prompts: auto (PlayStation buttons with a PlayStation pad, keys while keyboard/mouse is in "
+                      "use), xbox, playstation, keyboard");
 REXCVAR_DEFINE_INT32(pad_prompts_active, 0, "Input",
-                     "The buttons the prompts show now, 0 Xbox, 1 PlayStation; set by the game for the renderer");
+                     "The buttons the prompts show now, 0 Xbox, 1 PlayStation, 2 keyboard; set by the game for the renderer");
 
 namespace qos::pad_prompts {
 
@@ -36,14 +41,16 @@ void Update() {
   static rex::input::PadStyle last_pad = rex::input::PadStyle::kXbox;
   if (const auto style = rex::input::ConnectedPadStyle(); style != rex::input::PadStyle::kNone) last_pad = style;
   const std::string mode = REXCVAR_GET(pad_prompts);
+  const bool keys = mode == "keyboard" || (mode != "xbox" && mode != "playstation" && rex::input::KeyboardMouseActive());
   const bool ps = mode == "playstation" || (mode == "auto" && last_pad == rex::input::PadStyle::kPlayStation);
-  const int32_t active = ps ? 1 : 0;
+  const int32_t active = keys ? 2 : ps ? 1 : 0;
   if (REXCVAR_GET(pad_prompts_active) != active) {
     REXCVAR_SET(pad_prompts_active, active);
-    REXLOG_INFO("pad_prompts: {} buttons", ps ? "PlayStation" : "Xbox");
+    REXLOG_INFO("pad_prompts: {}", keys ? "keyboard keys" : ps ? "PlayStation buttons" : "Xbox buttons");
   }
 }
 
 bool PlayStation() { return REXCVAR_GET(pad_prompts_active) == 1; }
+bool Keyboard() { return REXCVAR_GET(pad_prompts_active) == 2; }
 
 }  // namespace qos::pad_prompts

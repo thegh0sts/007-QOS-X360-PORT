@@ -66,8 +66,9 @@ ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERIN
 FPS = ["30 (original)", "40", "50", "60"]
 FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60}
 FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
-PAD_PROMPTS = ["Auto", "PlayStation only", "Xbox only"]
-PAD_PROMPTS_FLAG = {"Auto": "auto", "PlayStation only": "playstation", "Xbox only": "xbox"}
+PAD_PROMPTS = ["Auto", "PlayStation only", "Xbox only", "Keyboard only"]
+PAD_PROMPTS_FLAG = {"Auto": "auto", "PlayStation only": "playstation", "Xbox only": "xbox",
+                    "Keyboard only": "keyboard"}
 
 DEFAULTS = {
     "fullscreen": True,
@@ -547,7 +548,7 @@ class SettingsView(tk.Frame):
                                                                          pady=(0, 8))
         self._combo(box, 1, "pad_prompts", "Button prompts", PAD_PROMPTS)
         note(box, 2, "Auto shows PlayStation buttons while a DualShock or DualSense is connected, Xbox buttons "
-                     "otherwise.")
+                     "otherwise, and keys while you play with the keyboard and mouse.")
         self._slider(box, 3, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
         note(box, 4, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
         self._check(box, 5, "vibration", "Controller vibration")
