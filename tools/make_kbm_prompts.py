@@ -12,7 +12,7 @@
 #   k_space_sq    Space as a square key for the HUD font's square cells (Y: jump).
 #   km_<key>      the tutorial boxes' and menus' whole 64x64 pictures in the light grey menu style (user, 23 Nov: all
 #                 prompts light grey, no dark ones), with the same margin as km_enter so they sit at the size the
-#                 game's 40 px discs did: E C R F G S Q Tab and the mouse's left / right buttons.
+#                 game's 40 px discs did: E C R F G S Q Tab Shift and the mouse's left / right buttons.
 import sys
 from pathlib import Path
 
@@ -68,7 +68,8 @@ def main():
     kk.key("SPACE", str(out / "k_space_sq.png"), kk.HUD)
     for t in ("E", "C", "R", "F", "G", "S", "Q"):
         kk.key(t, str(out / f"km_{t.lower()}.png"), kk.MENU)
-    kk.key("TAB", str(out / "km_tab.png"), kk.MENU)  # square: "replace" stretches to the 64x64 texture
+    kk.key("TAB", str(out / "km_tab.png"), kk.MENU)
+    kk.key("SHIFT", str(out / "km_shift_sq.png"), kk.MENU)  # square, as above  # square: "replace" stretches to the 64x64 texture
     for m in ("left", "right"):
         kk.mouse(m, str(out / f"km_mouse_{m}.png"), kk.MENU)
 

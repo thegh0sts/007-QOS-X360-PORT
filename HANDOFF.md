@@ -569,7 +569,8 @@ HUD font, tutorial and takedown swaps seen in the log; takedown begin/end pairs 
 ("Press A to take cover"), so btn_accept -> E and btn_back -> C (both bound in menus too); the tutorial LS picture is
 the stick ("pull away from cover with LS") -> S; and all prompts light grey: tutorial pictures now `km_*` (menu style,
 light grey with shadow; make_kbm_prompts.py draws km_e c r f g s q tab mouse_left/right). Prompts-only change: a game
-build copies them. Open: "Hold B and pull away from cover with LS to stay low" (user: "S + Shift").
+build copies them. "Hold B and pull away from cover with LS to stay low": user wants Shift and S there, pictures
+only, binds unchanged (22:54): btn_back -> km_shift_sq (so the menus' "back" shows Shift too).
 
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 
