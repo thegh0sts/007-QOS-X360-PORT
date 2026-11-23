@@ -607,7 +607,10 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
 6. **A third render thread** (user, 23:47: worth trying despite the risk). Off by default, one switch per duty, e.g.
    `BOTS_GFX_WORKER=textures,hash` (duties: `hash` unchanged-texture checks, `textures` loads/untiling/decompression
    and per-frame reloads, `uploads` vertex/constant copies, `parse` PM4 + register writes, maybe its own thread, i.e.
-   a 4th). Build the duty the profile favours first, measure (vsync off), then add the others one at a time.
+   a 4th). **Agreed start (user, 23:48): `hash` + `textures`** (the dips are texture-write/streaming bursts; the worker
+   runs beside the render thread, which waits for a texture that isn't ready, so the worst case is no gain, not wrong
+   pictures; also takes the menu video's per-frame upload). `parse` later (more risk, mainly for slower CPUs). Measure a
+   level start and a streaming walk with the worker on/off, vsync off.
    Duties, chosen by the profile: (a) texture loading/untiling/hashing on a worker that stays ahead
    of the draws (most help in bursts); (b) PM4 parsing/register writes on their own thread (<= 2.4 ms a frame, a clean
    split like 0093's recorder). Draw setup itself doesn't split well (each draw depends on the last).
