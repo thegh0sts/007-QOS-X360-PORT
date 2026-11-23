@@ -574,7 +574,7 @@ only, binds unchanged (22:54): btn_back -> km_shift_sq; then (23:04, main menu "
 
 **Open (23 Nov, 23:07, user: "we'll try again later"):** one game picture serves several hints, so one key can't fit
 all of them. Tutorial LS picture (748B...): "pull away from cover with LS" (user wanted S) and "Click LS while
-pushing forward to sprint" (user wants Shift). Scaleform B (btn_back): main menu BACK (now a BACK key), phone EXIT
+pushing forward to sprint" (user wanted Shift; sprint is Ctrl since 24 Nov). Scaleform B (btn_back): main menu BACK (now a BACK key), phone EXIT
 (user asked for Tab), "Hold B ... to stay low" (user asked for Shift). Options put to the user: Shift everywhere / S
 everywhere / one picture with both keys / find which hint is up (hook the tutorial hint code) and pick per hint.
 Undecided; keyboard.txt currently has LS -> km_s, btn_back -> km_back_sq.
@@ -585,6 +585,18 @@ Undecided; keyboard.txt currently has LS -> km_s, btn_back -> km_back_sq.
 descriptor reuse / push descriptors, setup from register dirty bits, constants by changed ranges, page-level hash for
 the unchanged-texture check, PM4 parse thread (<= 2.4 ms). (2) level-start stall: `BOTS_HITCH_MS=20` from a checkpoint
 load: CP idle (game) vs textures (renderer) in the slow frames.
+
+## Keyboard binds as the PC game's manual (24 Nov, 06:50), written, not built or tested
+
+User shared the PC manual's "Movement Controls" page. `src/kbm_binds.cpp` now matches it: WASD, mouse, Mouse 1 fire
+(RT), Mouse 2 ADS (LT), G grenade (RB), 3 switch grenade (D-pad left), Q take down (RS), **Ctrl sprint** (LS, was
+Shift), **1 & 2 cycle weapon** (LB, was F/1/2/MMB), C stance (B; Backspace in menus, Ctrl removed), **Shift walk** (new
+SDK patch `0017-mnk-walk-key`: keybind_walk, mnk_walk_scale 0.4, build_sdk own17), R reload and **F use** (both X,
++usereload), Space jump (Y), E cover (A), 4 silencer (D-pad down), X rate of fire (D-pad up), Tab phone (BACK), Esc
+pause (START). The manual's phone submenus on the arrow keys are not mapped (on the pad they are the triggers; the
+mouse buttons do it). Prompts: X glyph and tutorial X disc -> F, LB -> 1 (HUD k_1, tutorial km_1), HUD LS -> CTRL
+(k_ctrl); the tutorial LS picture stays S (shared with the cover hints; the sprint hint would want Ctrl now). Launcher
+note updated. Test: build_native (SDK own17) + game build; log "keyboard binds: 25 of 25".
 
 ## To do, 24 Nov (user, 23:20)
 

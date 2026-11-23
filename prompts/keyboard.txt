@@ -1,9 +1,9 @@
 # Keyboard and mouse button pictures for 007: Quantum of Solace, read by the native renderer
 # (native-plugin/patches/0098-keyboard-prompts.patch) while --pad_prompts_active is 2: keyboard or mouse was the last
 # thing player 1 used (src/pad_prompts.cpp). Same syntax as playstation.txt. The keys are 007's default binds
-# (src/kbm_binds.cpp): A E (cover; Enter in menus), B C (crouch; Backspace in menus), X R, Y Space, LB F, RB G,
-# LT right mouse button, RT left mouse button, LS Shift, RS Q, START Esc, BACK Tab. A bind changed on the Rebind
-# screen still shows its default key here.
+# (src/kbm_binds.cpp, as the PC game's manual): A E (cover), B C (stance), X F (use; R reloads too), Y Space, LB 1,
+# RB G, LT right mouse button, RT left mouse button, LS Ctrl (sprint), RS Q (take down), START Esc, BACK Tab. A bind
+# changed on the Rebind screen still shows its default key here.
 # The pictures are our own art: tools/make_kbm_keys.py (k_ HUD style, kt_ tutorial style, km_ menu style) and
 # tools/make_kbm_prompts.py (the takedown discs tk_, km_backspace, k_space_sq).
 
@@ -15,8 +15,8 @@ replace btn_back   64 64 09784A4CD20751E1 kbm/km_back_sq
 
 # Tutorial boxes (64x64 DXT5): light grey keys like every other prompt (user: no mix of light and dark, 23 Nov).
 # The LS picture means the stick there ("pull away from cover with LS"), so it shows S (pulling back), not Shift.
-replace qte_x         64 64 82C5D2A286CB4ABC kbm/km_r
-replace tutorial_lb   64 64 FFE4445869FD3106 kbm/km_f
+replace qte_x         64 64 82C5D2A286CB4ABC kbm/km_f
+replace tutorial_lb   64 64 FFE4445869FD3106 kbm/km_1
 replace tutorial_lt   64 64 DC83034FD7B78B60 kbm/km_mouse_right
 replace tutorial_rt   64 64 30044CB9F07E3F81 kbm/km_mouse_left
 replace tutorial_rb   64 64 FE735E11E62340EA kbm/km_g
@@ -36,26 +36,26 @@ texture hud_font 512 1024 C1DB20162D971011 dxt5
 # 28 px
 draw 102 191 132 221 kbm/k_e fit clear
 draw 136 191 166 221 kbm/k_c fit clear
-draw 170 191 200 221 kbm/k_r fit clear
+draw 170 191 200 221 kbm/k_f fit clear
 draw 204 191 234 221 kbm/k_space_sq fit clear
-draw 236 193 270 219 kbm/k_f fit clear
+draw 236 193 270 219 kbm/k_1 fit clear
 draw 270 193 304 219 kbm/k_g fit clear
 draw 308 190 334 214 kbm/k_esc fit clear
 draw 342 190 368 214 kbm/k_tab fit clear
-draw 372 190 405 222 kbm/k_shift fit clear
+draw 372 190 405 222 kbm/k_ctrl fit clear
 draw 406 190 439 222 kbm/k_q fit clear
 draw 444 189 470 223 kbm/k_mouse_right fit clear
 draw 4 210 30 244 kbm/k_mouse_left fit clear
 # 14 px
 draw 261 410 277 426 kbm/k_e fit clear
 draw 341 423 357 439 kbm/k_c fit clear
-draw 359 423 375 439 kbm/k_r fit clear
+draw 359 423 375 439 kbm/k_f fit clear
 draw 377 423 393 439 kbm/k_space_sq fit clear
-draw 394 424 412 438 kbm/k_f fit clear
+draw 394 424 412 438 kbm/k_1 fit clear
 draw 412 424 430 438 kbm/k_g fit clear
 draw 432 424 446 438 kbm/k_esc fit clear
 draw 450 424 464 438 kbm/k_tab fit clear
-draw 466 422 483 439 kbm/k_shift fit clear
+draw 466 422 483 439 kbm/k_ctrl fit clear
 draw 0 426 17 443 kbm/k_q fit clear
 draw 20 426 34 441 kbm/k_mouse_right fit clear
 draw 38 426 52 441 kbm/k_mouse_left fit clear

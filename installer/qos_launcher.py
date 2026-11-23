@@ -553,8 +553,9 @@ class SettingsView(tk.Frame):
         note(box, 4, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
         self._check(box, 5, "vibration", "Controller vibration")
         self._check(box, 6, "kbm", "Keyboard and mouse")
-        note(box, 7, "WASD move, mouse look, left click fire, right click aim, Space jump, E cover, R reload, G grenade, "
-                     "Q takedown, Shift sprint, C crouch, F swap weapon, Tab phone, Esc pause.")
+        note(box, 7, "As the PC game: WASD move, Shift walk, Ctrl sprint, mouse look, left click fire, right click aim, "
+                     "Space jump, E cover, C stance, R reload, F use, G grenade, 3 grenade type, Q take down, 1/2 weapon, "
+                     "4 silencer, X fire rate, Tab phone, Esc pause.")
         self._slider(box, 8, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
         self._check(box, 9, "mouse_invert", "Invert mouse up/down")
 

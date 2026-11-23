@@ -12,7 +12,7 @@
 #   k_space_sq    Space as a square key for the HUD font's square cells (Y: jump).
 #   km_<key>      the tutorial boxes' and menus' whole 64x64 pictures in the light grey menu style (user, 23 Nov: all
 #                 prompts light grey, no dark ones), with the same margin as km_enter so they sit at the size the
-#                 game's 40 px discs did: E C R F G S Q Tab Shift Back(space) and the mouse's left / right buttons.
+#                 game's 40 px discs did: E C R F G S Q 1 Tab Shift Ctrl Back(space) and the mouse's left / right buttons.
 import sys
 from pathlib import Path
 
@@ -70,7 +70,11 @@ def main():
         kk.key(t, str(out / f"km_{t.lower()}.png"), kk.MENU)
     kk.key("TAB", str(out / "km_tab.png"), kk.MENU)
     kk.key("SHIFT", str(out / "km_shift_sq.png"), kk.MENU)  # square, as above
-    kk.key("BACK", str(out / "km_back_sq.png"), kk.MENU)  # Backspace, as keyboards label it (menus' back)  # square: "replace" stretches to the 64x64 texture
+    kk.key("BACK", str(out / "km_back_sq.png"), kk.MENU)  # Backspace, as keyboards label it (menus' back)
+    # 24 Nov, binds as the PC game's manual: sprint Ctrl (LS), swap weapon 1 (LB), use F (X).
+    kk.key("CTRL", str(out / "k_ctrl.png"), kk.HUD, width=80)
+    kk.key("CTRL", str(out / "km_ctrl_sq.png"), kk.MENU)
+    kk.key("1", str(out / "km_1.png"), kk.MENU)  # square: "replace" stretches to the 64x64 texture
     for m in ("left", "right"):
         kk.mouse(m, str(out / f"km_mouse_{m}.png"), kk.MENU)
 

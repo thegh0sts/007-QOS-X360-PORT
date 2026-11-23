@@ -1,0 +1,33 @@
+ReXGlue input: a walk key for the keyboard pad (keybind_walk, mnk_walk_scale).
+
+While the walk key is held, the left-stick keys push the stick only part way (mnk_walk_scale, 0.4 by
+default), so a game that walks on a half-pushed stick walks. Unbound by default. Shows in the
+settings overlay with the other controller binds.
+
+diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver.cpp
+index 17acc84..bfadbe3 100644
+--- a/src/input/mnk/mnk_input_driver.cpp
++++ b/src/input/mnk/mnk_input_driver.cpp
+@@ -66,6 +66,10 @@ REXCVAR_DEFINE_STRING(keybind_dpad_right, "Shift+Right", "Input/Keybinds/Control
+ REXCVAR_DEFINE_STRING(keybind_back, "Z,Tab", "Input/Keybinds/Controller", "Back button");
+ REXCVAR_DEFINE_STRING(keybind_start, "X,Return", "Input/Keybinds/Controller", "Start button");
+ REXCVAR_DEFINE_STRING(keybind_guide, "", "Input/Keybinds/Controller", "Guide button");
++REXCVAR_DEFINE_STRING(keybind_walk, "", "Input/Keybinds/Controller",
++                      "Walk: while held, the left-stick keys push the stick only part way (mnk_walk_scale)");
++REXCVAR_DEFINE_DOUBLE(mnk_walk_scale, 0.4, "Input", "How far the left-stick keys push the stick while walking")
++    .range(0.1, 1.0);
+ 
+ REXCVAR_DEFINE_BOOL(mnk_passthrough, false, "Input",
+                     "Surface raw keystrokes to the title instead of emulating a pad, for "
+@@ -570,6 +574,11 @@ X_RESULT MnkInputDriver::GetDeviceState(DeviceId id, X_INPUT_STATE* out_state) {
+       ly += INT16_MAX;
+     if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_down)))
+       ly -= INT16_MAX;
++    if ((lx || ly) && IsBindPressed(key_down_, REXCVAR_GET(keybind_walk))) {
++      const double k = REXCVAR_GET(mnk_walk_scale);
++      lx = int32_t(lx * k);
++      ly = int32_t(ly * k);
++    }
+   }
+ 
+   int32_t rx = 0;
