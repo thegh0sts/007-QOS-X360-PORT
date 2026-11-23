@@ -563,6 +563,14 @@ User: "create the keyboard glyphs. the takedowns should keep their colour and sh
 - Test: build_native (SDK own16 + native 0098) + game build. Log "pad prompts: prompts/keyboard.txt: 1 textures, N
   images, 16 replaced textures", "pad_prompts: keyboard keys" after a key press, "Xbox buttons" after a pad press.
 
+**Keyboard prompts test 1 (23 Nov, 22:35-22:52, qos_142):** works: keyboard.txt loaded (14 replaced textures), menu,
+HUD font, tutorial and takedown swaps seen in the log; takedown begin/end pairs come back to back within one takedown
+(no gap where WASD moves). User's fixes (screenshots): the Scaleform A/B pictures also show in tutorial text
+("Press A to take cover"), so btn_accept -> E and btn_back -> C (both bound in menus too); the tutorial LS picture is
+the stick ("pull away from cover with LS") -> S; and all prompts light grey: tutorial pictures now `km_*` (menu style,
+light grey with shadow; make_kbm_prompts.py draws km_e c r f g s q tab mouse_left/right). Prompts-only change: a game
+build copies them. Open: "Hold B and pull away from cover with LS to stay low" (user: "S + Shift").
+
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 
 Wanted later, from the PC version's layout. Takedowns to work like the Bourne port's (its keyboard takedown/QTE

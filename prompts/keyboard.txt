@@ -7,19 +7,22 @@
 # The pictures are our own art: tools/make_kbm_keys.py (k_ HUD style, kt_ tutorial style, km_ menu style) and
 # tools/make_kbm_prompts.py (the takedown discs tk_, km_backspace, k_space_sq).
 
-# Menus (Scaleform, 64x64 DXT5)
-replace btn_accept 64 64 FFC0169EA80A8F57 kbm/km_enter
-replace btn_back   64 64 09784A4CD20751E1 kbm/km_backspace
+# Menus and tutorial text (Scaleform, 64x64 DXT5): the same A and B pictures show in menus ("select", "back") and
+# in the tutorial boxes ("Press A to take cover"), so they show the in-game keys, E and C, which work in menus too
+# (src/kbm_binds.cpp: A is E or Enter, B is C, Ctrl or Backspace). User, 23 Nov 22:52.
+replace btn_accept 64 64 FFC0169EA80A8F57 kbm/km_e
+replace btn_back   64 64 09784A4CD20751E1 kbm/km_c
 
-# Tutorial boxes (64x64 DXT5, dark pictures): the keys in the tutorial style.
-replace qte_x         64 64 82C5D2A286CB4ABC kbm/kt_r
-replace tutorial_lb   64 64 FFE4445869FD3106 kbm/kt_f
-replace tutorial_lt   64 64 DC83034FD7B78B60 kbm/kt_mouse_right
-replace tutorial_rt   64 64 30044CB9F07E3F81 kbm/kt_mouse_left
-replace tutorial_rb   64 64 FE735E11E62340EA kbm/kt_g
-replace tutorial_back 64 64 92F008A6E5D310A6 kbm/kt_tab
-replace tutorial_ls   64 64 748B7606A1F93C3C kbm/kt_shift
-replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/kt_q
+# Tutorial boxes (64x64 DXT5): light grey keys like every other prompt (user: no mix of light and dark, 23 Nov).
+# The LS picture means the stick there ("pull away from cover with LS"), so it shows S (pulling back), not Shift.
+replace qte_x         64 64 82C5D2A286CB4ABC kbm/km_r
+replace tutorial_lb   64 64 FFE4445869FD3106 kbm/km_f
+replace tutorial_lt   64 64 DC83034FD7B78B60 kbm/km_mouse_right
+replace tutorial_rt   64 64 30044CB9F07E3F81 kbm/km_mouse_left
+replace tutorial_rb   64 64 FE735E11E62340EA kbm/km_g
+replace tutorial_back 64 64 92F008A6E5D310A6 kbm/km_tab
+replace tutorial_ls   64 64 748B7606A1F93C3C kbm/km_s
+replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/km_q
 
 # Takedowns (50 px discs): the game's colours and shape, the key that answers them in place of the pad's letter
 # (src/takedown_keys.cpp: W A S D press Y X A B during a takedown).

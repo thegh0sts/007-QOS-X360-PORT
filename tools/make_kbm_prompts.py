@@ -10,6 +10,9 @@
 #        (133,168,112); red as the HUD glyph (115,40,41) / (205,101,98).
 #   km_backspace  the menus' B (back) as a key, in the light grey menu style (Backspace goes back in menus).
 #   k_space_sq    Space as a square key for the HUD font's square cells (Y: jump).
+#   km_<key>      the tutorial boxes' and menus' whole 64x64 pictures in the light grey menu style (user, 23 Nov: all
+#                 prompts light grey, no dark ones), with the same margin as km_enter so they sit at the size the
+#                 game's 40 px discs did: E C R F G S Q Tab and the mouse's left / right buttons.
 import sys
 from pathlib import Path
 
@@ -63,6 +66,11 @@ def main():
     takedown_disc("D", pb.G_RED, str(out / "tk_d.png"))
     kk.key("←", str(out / "km_backspace.png"), kk.MENU, width=96, px=60)
     kk.key("SPACE", str(out / "k_space_sq.png"), kk.HUD)
+    for t in ("E", "C", "R", "F", "G", "S", "Q"):
+        kk.key(t, str(out / f"km_{t.lower()}.png"), kk.MENU)
+    kk.key("TAB", str(out / "km_tab.png"), kk.MENU)  # square: "replace" stretches to the 64x64 texture
+    for m in ("left", "right"):
+        kk.mouse(m, str(out / f"km_mouse_{m}.png"), kk.MENU)
 
 
 if __name__ == "__main__":
