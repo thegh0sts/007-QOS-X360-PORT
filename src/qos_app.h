@@ -42,6 +42,10 @@ namespace qos::achievements {
 void ExportList(rex::Runtime* runtime);
 }  // namespace qos::achievements
 
+namespace qos::kbm_binds {
+void SetDefaults();
+}  // namespace qos::kbm_binds
+
 class QosApp : public rex::ReXApp {
  public:
   using rex::ReXApp::ReXApp;
@@ -79,6 +83,7 @@ class QosApp : public rex::ReXApp {
   // with the same SPIR-V translator, so a picture that's right here and wrong there points at
   // the native renderer itself.
   void OnPreSetup(rex::RuntimeConfig& config) override {
+    qos::kbm_binds::SetDefaults();  // keyboard/mouse binds for 007 (src/kbm_binds.cpp)
     if (config.gpu_plugin.empty()) {
       config.gpu_plugin = "xenos";
     }

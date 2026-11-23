@@ -514,7 +514,18 @@ apply: 0.11 degrees a count at `--mouse_sensitivity=1`. Movement with a gap over
 loading) is dropped. Cvars: `--mouse_look` (on), `--mouse_sensitivity` (0.05-10), `--mouse_invert`. Needs the SDK's
 keyboard/mouse input on (`--mnk_mouse=true` and the driver enabled). Log: "mouse look: ..." and counts per second
 for the first 3 s of movement. Found with `xexdec.py` (cloud) + a small PPC decoder over the decrypted image.
-Still to do: launcher Controls options, default key binds (below), keyboard prompts.
+**Works (user, 23 Nov 21:45): "basic controls work".**
+**Default binds + launcher (23 Nov, 22:00), not built/tested:** the game's pad layout is `buttons_default.cfg` in
+english/code_post_gfx.ff (RT +attack, LT +speed (ADS), RB +frag, LB weapnext, RS +melee_qk, LS +dash, A +cover2,
+B +stance, X +usereload, Y +gostand2, D-pad up nextfiretype / down togglesilencer / left-right grenadenext;
+alternatives buttons_alternative*.cfg). `src/kbm_binds.cpp` (called first in OnPreSetup) sets the SDK's keybind_*
+cvars still at their compiled-in default: WASD, Shift sprint (LS), Q takedown (RS), LMB fire, RMB aim, G grenade,
+F/1/2/MMB swap weapon, E/Return A (cover, menu select), C/Control/Backspace B, R X, Space Y, X/Up fire type, 4/Down
+silencer, 3/Left grenade type, Right, Tab back (phone), Escape start; right-stick keys cleared. Bind tokens from
+the SDK's src/ui/keybinds.cpp (LMB/RMB/MMB, Shift, Control, Escape, Return...; no mouse wheel). Launcher Controls:
+"Keyboard and mouse" (default on: --mnk_mode=true --mnk_mouse=true), "Mouse sensitivity (%)" 10-300 ->
+--mouse_sensitivity, "Invert mouse up/down". Check: Q does the takedown (if not, B might: its comment says "Melee /
+QK / Exit cover"); takedown QTE presses map to E/C/R/Space for now (A/B/X/Y). Still to do: keyboard prompts.
 
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 

@@ -89,6 +89,11 @@ DEFAULTS = {
     "deadzone": 0,
     "vibration": True,
     "pad_prompts": "Auto",
+    # Keyboard and mouse (the SDK's keyboard/mouse pad; 007's binds in src/kbm_binds.cpp, mouse look in
+    # src/mouse_look.cpp). Sensitivity in % of CoD4 PC's default (0.11 degrees a mouse count).
+    "kbm": True,
+    "mouse_sensitivity": 100,
+    "mouse_invert": False,
     "close_on_play": True,
     # The launcher's own language (launcher_text.py): "same" as the game's, or en / de / fr / es / it.
     "launcher_language": "same",
@@ -382,6 +387,11 @@ def game_args(s, screen=None):
     if not s.get("vibration", True):
         args.append("--vibration=false")
     args.append(f"--pad_prompts={PAD_PROMPTS_FLAG.get(s.get('pad_prompts'), 'auto')}")
+    if s.get("kbm", True):
+        args += ["--mnk_mode=true", "--mnk_mouse=true",
+                 f"--mouse_sensitivity={int(s.get('mouse_sensitivity', 100)) / 100:.2f}"]
+        if s.get("mouse_invert"):
+            args.append("--mouse_invert=true")
     return args
 
 
@@ -541,6 +551,11 @@ class SettingsView(tk.Frame):
         self._slider(box, 3, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
         note(box, 4, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
         self._check(box, 5, "vibration", "Controller vibration")
+        self._check(box, 6, "kbm", "Keyboard and mouse")
+        note(box, 7, "WASD move, mouse look, left click fire, right click aim, Space jump, E cover, R reload, G grenade, "
+                     "Q takedown, Shift sprint, C crouch, F swap weapon, Tab phone, Esc pause.")
+        self._slider(box, 8, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
+        self._check(box, 9, "mouse_invert", "Invert mouse up/down")
 
         box = self._page("Saves")
         line = tk.Frame(box, bg=PANEL)
