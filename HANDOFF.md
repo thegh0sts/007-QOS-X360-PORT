@@ -579,7 +579,7 @@ pushing forward to sprint" (user wants Shift). Scaleform B (btn_back): main menu
 everywhere / one picture with both keys / find which hint is up (hook the tutorial hint code) and pick per hint.
 Undecided; keyboard.txt currently has LS -> km_s, btn_back -> km_back_sq.
 
-**Next tests (23 Nov, 23:11):** (1) airport level, profile: `BOTS_DRAW_PROFILE=1 BOTS_GFX_RECORD_THREAD=1`,
+**Next tests (23 Nov, 23:11):** (1) busy-spot profile (not the airport: that was another game): `BOTS_DRAW_PROFILE=1 BOTS_GFX_RECORD_THREAD=1`,
 `--vsync=false --frame_rate=60` (last split, 22 Nov qos_120, with 0028/0029/0092/0093/0094: textures 3.94, tracker
 2.08, descriptors 1.88, setup 1.75, constants 1.63, rest ~4.5 ms). Ideas: tracker memo by page stamps (like 0094),
 descriptor reuse / push descriptors, setup from register dirty bits, constants by changed ranges, page-level hash for
