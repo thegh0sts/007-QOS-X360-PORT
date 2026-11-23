@@ -641,6 +641,12 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    zlib SWF "CFX"), so either hook the menu action that starts multiplayer (find what selecting it calls: likely a
    command string such as the MP fastfile / "xstartprivateparty"-style entry; search the decrypted XEX and ui.ff
    for "multiplayer") and swallow it, or patch the menu data. Check what the crash/close is first (log, crash-*.txt).
+   **Found (24 Nov):** multiplayer is a separate executable, `game/default_mp.xex` (6.3 MB; mp_*.ff and level_mp/ beside
+   it). sub_821BCD08 shuts systems down (sub_8229BE60, sub_8256F7B8, sub_825CE62C, sub_822A1290) and then calls
+   sub_82423D78("default_mp.xex", string at 0x8201D510): the title relaunch (XamLoaderLaunchTitle path). ReXGlue runs
+   only the recompiled default.xex, so the relaunch ends the process: that's the "close". Fix: hook sub_821BCD08 and
+   return before it shuts anything down (the menu should stay as it is; check it doesn't sit in a loading state), or
+   hide the menu entry. Playing MP would need default_mp.xex as its own recompilation project (parked).
 10. **Gameplay dips in easy areas** (user, 23:45): in qos_142 the renderer was mostly idle during them (22:38:08-18:
     5 ms in draws, CP idle 11.5 ms, 79 textures streamed in, a takedown), so the game thread was late; vsync on turned
     each ~18 ms frame into 33 ms. Capture a dip with Tracy (built in: TRACY_ON_DEMAND, connect the Tracy app) to see
