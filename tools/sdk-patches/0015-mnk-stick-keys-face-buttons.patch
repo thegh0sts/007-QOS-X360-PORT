@@ -1,0 +1,86 @@
+ReXGlue input: left-stick keys as face buttons (WASD for takedown / QTE diamonds).
+
+With SetStickKeysAsFaceButtons(true) the keys bound to the left stick press the face buttons by
+their place on the pad (up Y, left X, down A, right B) and move nothing. A game turns it on while
+a button-press sequence drawn as the pad diamond is up (007: quick-kill takedowns), so W A S D
+answer it. Off by default; keyboard only (a real pad is untouched).
+
+diff --git a/include/rex/input/mnk/mnk_input_driver.h b/include/rex/input/mnk/mnk_input_driver.h
+index 5cbe9d6..283e51b 100644
+--- a/include/rex/input/mnk/mnk_input_driver.h
++++ b/include/rex/input/mnk/mnk_input_driver.h
+@@ -27,6 +27,10 @@ void SetMouseLookActive(bool active);
+ // for the game to take with ConsumeMouseDelta (counts since the last call; true if any).
+ void SetMouseDirect(bool direct);
+ bool ConsumeMouseDelta(float* dx, float* dy);
++// While on, the left-stick keys (WASD) press the face buttons by their place on the pad: up Y,
++// left X, down A, right B (button-press sequences shown as the pad's diamond). Off by default.
++void SetStickKeysAsFaceButtons(bool on);
++bool StickKeysAsFaceButtons();
+ bool IsMouseLookActive();
+ 
+ class MnkInputDriver final : public InputDriver,
+diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver.cpp
+index 1006e34..17acc84 100644
+--- a/src/input/mnk/mnk_input_driver.cpp
++++ b/src/input/mnk/mnk_input_driver.cpp
+@@ -183,6 +183,10 @@ std::atomic<bool> mouse_look_active{true};
+ // Direct mouse look: the game takes the mouse's movement itself (ConsumeMouseDelta) instead of
+ // as right-stick deflection.
+ std::atomic<bool> mouse_direct{false};
++// Face-button mode: while on, the left-stick keys press the face buttons by their place on the pad
++// (up Y, left X, down A, right B) and the left stick gets nothing from the keys. For a game's
++// button-press sequences (takedowns, quick-time events) shown as the pad's diamond, so WASD answer them.
++std::atomic<bool> stick_keys_face{false};
+ std::mutex mouse_direct_mutex;
+ double mouse_direct_dx = 0.0, mouse_direct_dy = 0.0;
+ 
+@@ -339,6 +343,14 @@ std::array<PadBind, 24> PadBinds() {
+ 
+ }  // namespace
+ 
++void SetStickKeysAsFaceButtons(bool on) {
++  stick_keys_face.store(on, std::memory_order_relaxed);
++}
++
++bool StickKeysAsFaceButtons() {
++  return stick_keys_face.load(std::memory_order_relaxed);
++}
++
+ void SetMouseDirect(bool direct) {
+   mouse_direct.store(direct, std::memory_order_relaxed);
+ }
+@@ -540,14 +552,25 @@ X_RESULT MnkInputDriver::GetDeviceState(DeviceId id, X_INPUT_STATE* out_state) {
+ 
+   int32_t lx = 0;
+   int32_t ly = 0;
+-  if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_left)))
+-    lx -= INT16_MAX;
+-  if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_right)))
+-    lx += INT16_MAX;
+-  if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_up)))
+-    ly += INT16_MAX;
+-  if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_down)))
+-    ly -= INT16_MAX;
++  if (stick_keys_face.load(std::memory_order_relaxed)) {
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_up)))
++      buttons |= X_INPUT_GAMEPAD_Y;
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_left)))
++      buttons |= X_INPUT_GAMEPAD_X;
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_down)))
++      buttons |= X_INPUT_GAMEPAD_A;
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_right)))
++      buttons |= X_INPUT_GAMEPAD_B;
++  } else {
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_left)))
++      lx -= INT16_MAX;
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_right)))
++      lx += INT16_MAX;
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_up)))
++      ly += INT16_MAX;
++    if (IsBindPressed(key_down_, REXCVAR_GET(keybind_lstick_down)))
++      ly -= INT16_MAX;
++  }
+ 
+   int32_t rx = 0;
+   int32_t ry = 0;

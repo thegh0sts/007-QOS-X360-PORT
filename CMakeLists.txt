@@ -24,6 +24,7 @@ set(QOS_SOURCES
     src/pad_prompts.cpp
     src/mouse_look.cpp
     src/kbm_binds.cpp
+    src/takedown_keys.cpp
     src/version_log.cpp
     src/achievement_list.cpp
 )

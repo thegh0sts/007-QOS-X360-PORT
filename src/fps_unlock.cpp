@@ -40,6 +40,9 @@ void OnDvarRegistered(const char* name, uint32_t dvar);  // menu_quit.cpp: finds
 namespace qos::fov {
 void OnFrame(uint8_t* base);  // fov.cpp: keeps cg_fov at --fov
 }  // namespace qos::fov
+namespace qos::takedown_keys {
+void OnFrame();
+}  // namespace qos::takedown_keys
 
 namespace {
 
@@ -82,6 +85,7 @@ extern "C" REX_FUNC(sub_8229B7C0) {
     }
   }
   qos::fov::OnFrame(base);
+  qos::takedown_keys::OnFrame();
   __imp__sub_8229B7C0(ctx, base);
 }
 

@@ -525,7 +525,17 @@ silencer, 3/Left grenade type, Right, Tab back (phone), Escape start; right-stic
 the SDK's src/ui/keybinds.cpp (LMB/RMB/MMB, Shift, Control, Escape, Return...; no mouse wheel). Launcher Controls:
 "Keyboard and mouse" (default on: --mnk_mode=true --mnk_mouse=true), "Mouse sensitivity (%)" 10-300 ->
 --mouse_sensitivity, "Invert mouse up/down". Check: Q does the takedown (if not, B might: its comment says "Melee /
-QK / Exit cover"); takedown QTE presses map to E/C/R/Space for now (A/B/X/Y). Still to do: keyboard prompts.
+QK / Exit cover"). Still to do: keyboard prompts.
+**WASD takedowns (23 Nov, 22:10, user: "i want the takedowns to also be WASD"), not built/tested:** SDK patch
+`0015-mnk-stick-keys-face-buttons` (`SetStickKeysAsFaceButtons(bool)`: the left-stick keys press Y/X/A/B by their
+place on the pad, up/left/down/right, and move nothing; keyboard pad only; build_sdk tag own15, launcher SDK bundle
+qos4). `src/takedown_keys.cpp` turns it on in the quick-kill begin method sub_823866D0 and off in its end
+sub_823877C8 (virtual methods: vtables at 0x82059068/0x82059070...; begin saves and sets kill-camera dvars:
+cg_showBarrelModel, r_motionblur_enable, r_lodBias, cg_showHurtBlur, cg_hudDamageIconTime, health_regen_enable,
+ik_enable; end restores them), with a 20 s safety off from the Com_Frame hook. `--takedown_wasd` (on). Log
+"takedown: begins/ends". The quick-kill dvars (bg_quick_kill_*, qk_*) are registered around 0x8214B000; their
+readers 0x82384180, 0x82384580, 0x82385850, 0x82385C28, 0x8238A920. The on-screen diamond still shows pad buttons
+(keyboard prompts to do). Also noticed: Skullburglar has SDK patch 0018-netplay-system-link (for multiplayer later).
 
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 
