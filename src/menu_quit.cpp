@@ -2,7 +2,9 @@
 //
 // On the console, B does nothing on the title screen ("PRESS START"): there's no way back from it. On PC that leaves
 // no way out but the window's close button, so holding B there for a second quits (held, so a stray press doesn't),
-// and a "B QUIT (HOLD)" prompt in the game's own prompt style shows where the main menu has its "A SELECT".
+// and the title screen shows the main menu's two prompts in the game's own style, "A SELECT" over "B QUIT (HOLD)"
+// (the main menu's "B BACK" relabelled; 2026-11-23, at the user's request: before that, "B QUIT (HOLD)" alone in A's
+// place).
 //
 // How the title screen is told apart (from the decrypted executable, 2026-11-20):
 // - The dvar ui_reachedIIS: "Has the player reached the PRESS START IIS? 0 not yet, 1-2 there now (normal=1/
@@ -28,7 +30,8 @@
 //
 // The hint is drawn by the native renderer (native-plugin patch 0013, from the Eat Lead port): --menu_hint picks image
 // N of --menu_hint_images (hints/<name>.png beside the exe), drawn at --menu_hint_pos (top-left, 1080p pixels).
-// b_quit.png / b_quit_ps.png are our own art (tools/make_quit_hint.py); the PlayStation one shows with PlayStation
+// start_prompts.png / start_prompts_ps.png (172x77, two lines 45 px apart, so native patch 0096's bigger hint limit is
+// needed) are our own art (tools/make_quit_hint.py); the PlayStation one (cross, circle) shows with PlayStation
 // prompts (pad_prompts.cpp). The Xenos renderer doesn't draw hints; B still quits there.
 // --menu_b_quit=false turns all of it off.
 
@@ -50,8 +53,8 @@
 REXCVAR_DEFINE_BOOL(menu_b_quit, true, "UI", "Holding B on the Press Start screen closes the game");
 // Read by the native renderer each frame (native-plugin/patches/0013-menu-hint.patch); set here, not by hand.
 REXCVAR_DEFINE_INT32(menu_hint, 0, "UI", "Menu hint the renderer draws: 0 none, N the Nth of menu_hint_images; set by the game");
-REXCVAR_DEFINE_STRING(menu_hint_images, "b_quit,b_quit_ps", "UI", "The menu hints' images, hints/<name>.png, comma-separated");
-REXCVAR_DEFINE_STRING(menu_hint_pos, "354,922", "UI", "Where the menu hint goes: top-left x,y in 1080p pixels of the picture");
+REXCVAR_DEFINE_STRING(menu_hint_images, "start_prompts,start_prompts_ps", "UI", "The menu hints' images, hints/<name>.png, comma-separated");
+REXCVAR_DEFINE_STRING(menu_hint_pos, "353,921", "UI", "Where the menu hint goes: top-left x,y in 1080p pixels of the picture");
 
 namespace qos::pad_prompts {
 void Update();       // pad_prompts.cpp
@@ -147,7 +150,7 @@ void OnPad(uint8_t* base, uint32_t user, uint16_t buttons) {
     }
     const bool settled = title && now - s.since >= kSettle && !s.quitting;
     const bool ps = qos::pad_prompts::PlayStation();
-    const int32_t hint = !settled ? 0 : ps ? 2 : 1;  // b_quit / b_quit_ps
+    const int32_t hint = !settled ? 0 : ps ? 2 : 1;  // start_prompts / start_prompts_ps
     if (REXCVAR_GET(menu_hint) != hint) REXCVAR_SET(menu_hint, hint);
     const uint16_t pressed = buttons & ~s.last[user];
     s.last[user] = buttons;

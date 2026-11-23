@@ -450,6 +450,14 @@ keep "Resume here" current.
   -> `--present_effect=fsr|cas`. Only upscales when the render resolution is below the window (e.g. render 2x =
   2560x1440 on a 4K screen); at equal sizes FSR may do nothing or sharpen only. Test: qos.exe ... --present_effect=fsr
   with BOTS_GFX_RENDER_SCALE=2 on the 4K screen, compare with bilinear.
+- **Title screen prompts (23 Nov, 18:15, not built/tested):** user asked for the main menu's two prompts on the Press
+  Start screen, B relabelled: "A SELECT" over "B QUIT (HOLD)" (was "B QUIT (HOLD)" alone in A's place). Measured from
+  the user's 4K screenshots (main menu): discs 60 px (30 at 1080p), lines 90 px apart (45), A disc at 707-766 x,
+  1844-1903 y. `tools/make_quit_hint.py` now draws `hints/start_prompts.png` (A green disc, our own art) and
+  `start_prompts_ps.png` (blue cross, circle), 172x77; b_quit*.png removed. menu_quit.cpp: menu_hint_images
+  start_prompts,start_prompts_ps, menu_hint_pos 353,921. The image is over 0013's hint limit, so **native patch
+  0096-hint-two-lines**: hints up to 256x96 / 13600 texels (present UBO 64,384 bytes; static_assert <= 65536, NVIDIA's
+  maxUniformBufferRange). Needs build_native + game build; an old renderer logs "too big" and shows no hint.
 - **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
   BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
 - **Shared SDK folder (history; 007 moved to `C:\rexglue-src-007` on 22 Nov):** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 + 0026 work; 0027 written 21 Nov, not built). Eat Lead has the same SDK set (own13,
