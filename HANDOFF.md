@@ -458,6 +458,16 @@ keep "Resume here" current.
   start_prompts,start_prompts_ps, menu_hint_pos 353,921. The image is over 0013's hint limit, so **native patch
   0096-hint-two-lines**: hints up to 256x96 / 13600 texels (present UBO 64,384 bytes; static_assert <= 65536, NVIDIA's
   maxUniformBufferRange). Needs build_native + game build; an old renderer logs "too big" and shows no hint.
+- **Red rock face / missing haze (23 Nov, 18:10-18:40):** user saw a red-brown rock face with a hard vertical edge
+  (4th level, a desert rock passage, checkpoint). Xenos (build_Screenshot 18:32) shows the same red face: the game's
+  own material, not a bug. But Xenos draws a bright dusty haze over the scene there (light through dust, softening the
+  far rocks) that the native renderer doesn't: matches 21 Nov's "Xenos darker, hazier (more fog)". Suspects: dust /
+  light-shaft particles (soft sprites reading scene depth) dropped or invisible, or fog not applied.
+  **Native patch 0097-trace-now (written, not built):** the draw trace on demand: a file `trace-now` in the working
+  folder (polled every 30 frames, deleted) traces the next BOTS_DRAW_TRACE_FRAMES (default 2) frames like
+  BOTS_DRAW_TRACE=1, the trace lines now carry vs/ps ucode hashes, and each pixel shader met in the window is printed
+  once (microcode + non-zero pixel constants). Markers "=== draw trace start/end ===" in stderr. Next: a trace at that
+  checkpoint (2> haze-trace.txt), look for additive/alpha-blended sprite draws, depth-reading shaders, skipped draws.
 - **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
   BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
 - **Shared SDK folder (history; 007 moved to `C:\rexglue-src-007` on 22 Nov):** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 + 0026 work; 0027 written 21 Nov, not built). Eat Lead has the same SDK set (own13,

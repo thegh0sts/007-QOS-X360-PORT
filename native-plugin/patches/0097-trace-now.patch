@@ -1,0 +1,103 @@
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index e966bec..cb50776 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -1127,10 +1127,11 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   const auto& vsamplers = vshader->GetSamplerBindingsAfterTranslation();
+   const auto& ptextures = pshader ? pshader->GetTextureBindingsAfterTranslation() : kNoTextures;
+   const auto& psamplers = pshader ? pshader->GetSamplerBindingsAfterTranslation() : kNoSamplers;
+-  static const bool trace = [] {
++  static const bool trace_always = [] {
+     const char* v = std::getenv("BOTS_DRAW_TRACE");
+     return v && *v == '1';
+   }();
++  const bool trace = trace_always || trace_frames_left_ > 0;  // qos (0097): or a trace-now window
+   trace_textures_ = trace;
+   static const bool trace_signs = std::getenv("BOTS_TRACE_SIGNS") != nullptr;  // fetch swizzle/signs/exp_adjust
+   std::string trace_textures;
+@@ -2297,13 +2298,26 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   if (trace) {
+     std::fprintf(stderr,
+                  "draw %llu: prim %u %s count %u mode %u rt0 %08X %ux%u%s ps %s blend %08X mask %X%s | depth %08X "
+-                 "dc %08X pitch %u scm %08X sref %08X\n",
++                 "dc %08X pitch %u scm %08X sref %08X vs %016llX ps %016llX\n",
+                  (unsigned long long)stats_.draws, uint32_t(prim), dma ? "dma" : "auto", count, uint32_t(mode),
+                  regs.values[rg::XE_GPU_REG_RB_COLOR_INFO], width, height, attachments.depth ? " +depth" : "",
+                  pshader ? "yes" : "no", key.blend[0], color_mask, trace_textures.c_str(),
+                  regs.values[rg::XE_GPU_REG_RB_DEPTH_INFO], regs.values[rg::XE_GPU_REG_RB_DEPTHCONTROL],
+                  uint32_t(surface_info.surface_pitch), regs.values[rg::XE_GPU_REG_PA_SU_SC_MODE_CNTL],
+-                 regs.values[rg::XE_GPU_REG_RB_STENCILREFMASK]);
++                 regs.values[rg::XE_GPU_REG_RB_STENCILREFMASK], (unsigned long long)vshader->ucode_data_hash(),
++                 (unsigned long long)(pshader ? pshader->ucode_data_hash() : 0));
++    // qos (0097): in a trace-now window, each pixel shader once: its microcode and the non-zero pixel constants.
++    if (trace_frames_left_ > 0 && pshader && trace_dumped_.insert(pshader->ucode_data_hash()).second) {
++      std::fprintf(stderr, "--- pixel shader %016llX (first at draw %llu)\n%s", (unsigned long long)pshader->ucode_data_hash(),
++                   (unsigned long long)stats_.draws, pshader->ucode_disassembly().c_str());
++      for (uint32_t c = 0; c < 256; ++c) {
++        const uint32_t* v = &regs.values[rg::XE_GPU_REG_SHADER_CONSTANT_256_X + 4 * c];
++        if (!(v[0] | v[1] | v[2] | v[3])) continue;
++        float f[4];
++        std::memcpy(f, v, sizeof(f));
++        std::fprintf(stderr, "  c%u = %g %g %g %g\n", c, f[0], f[1], f[2], f[3]);
++      }
++    }
+     // Where the draw can land (BOTS_DRAW_TRACE): scissor, write bound, guest samples per pixel, viewport, and a
+     // rectangle list's vertex positions (XDK clears and copies).
+     std::string verts;
+diff --git a/src/gfx/vk/present.cpp b/src/gfx/vk/present.cpp
+index 271956e..2f44e69 100644
+--- a/src/gfx/vk/present.cpp
++++ b/src/gfx/vk/present.cpp
+@@ -469,8 +469,34 @@ bool Renderer::InitPresent() {
+   return present_pipeline_ != VK_NULL_HANDLE;
+ }
+ 
++void Renderer::PollTraceTrigger() {
++  if (trace_frames_left_ > 0) {
++    if (--trace_frames_left_ == 0) {
++      std::fprintf(stderr, "=== draw trace end (after draw %llu) ===\n", (unsigned long long)stats_.draws);
++      std::fflush(stderr);
++      REXLOG_INFO("gfx native: draw trace (trace-now) done");
++    }
++    return;
++  }
++  if (++trace_poll_ % 30) return;
++  std::error_code ec;
++  if (!std::filesystem::exists("trace-now", ec)) return;
++  std::filesystem::remove("trace-now", ec);
++  static const uint32_t frames = [] {
++    const char* v = std::getenv("BOTS_DRAW_TRACE_FRAMES");
++    const int n = v ? std::atoi(v) : 2;
++    return uint32_t(std::clamp(n, 1, 60));
++  }();
++  trace_frames_left_ = frames;
++  trace_dumped_.clear();
++  std::fprintf(stderr, "=== draw trace start: %u frames, from draw %llu ===\n", frames,
++               (unsigned long long)stats_.draws + 1);
++  REXLOG_INFO("gfx native: draw trace for {} frames (trace-now found)", frames);
++}
++
+ bool Renderer::Present(uint32_t address, VkImage target, VkImageView target_view, uint32_t width, uint32_t height,
+                        const uint32_t* gamma_ramp) {
++  PollTraceTrigger();
+   auto it = texture_at_.find(address);
+   if (it == texture_at_.end()) it = texture_at_.find(last_resolve_address_);
+   if (it == texture_at_.end()) {
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index ecc2ba9..69008a6 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -1037,6 +1037,13 @@ class Renderer : public Pm4Sink {
+   void DropGuestTexture(GuestTexture& texture);
+   std::unordered_map<SamplerKey, VkSampler, WordsHash> samplers_;
+   bool trace_textures_ = false;
++  // qos (0097): the draw trace on demand. A file named trace-now in the working folder (checked every 30 frames, then
++  // deleted) traces the next BOTS_DRAW_TRACE_FRAMES frames (default 2) as BOTS_DRAW_TRACE=1 would, and prints each
++  // pixel shader met in that window once (microcode + its non-zero constants at that draw).
++  uint32_t trace_frames_left_ = 0;
++  uint64_t trace_poll_ = 0;
++  std::unordered_set<uint64_t> trace_dumped_;
++  void PollTraceTrigger();
+   // False on GPUs without BC (DXT) texture formats, such as Apple's before A16 (the A15 Apple TV 4K): those textures
+   // are decoded on the CPU instead. BOTS_GFX_DECODE_BC=1 forces the decoding anywhere.
+   bool bc_textures_ = true;
