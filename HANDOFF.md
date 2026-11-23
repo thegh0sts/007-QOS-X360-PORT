@@ -586,6 +586,31 @@ descriptor reuse / push descriptors, setup from register dirty bits, constants b
 the unchanged-texture check, PM4 parse thread (<= 2.4 ms). (2) level-start stall: `BOTS_HITCH_MS=20` from a checkpoint
 load: CP idle (game) vs textures (renderer) in the slow frames.
 
+## To do, 24 Nov (user, 23:20)
+
+Test like the launcher: `--vsync=false` (the 23 Nov dev run had vsync on: 18 ms frames became 33 ms, so the intro
+dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the same level start).
+1. **Airport profile** (draw CPU): `BOTS_DRAW_PROFILE=1 BOTS_GFX_RECORD_THREAD=1 --vsync=false --frame_rate=60`, in the
+   4th level's airport where FPS dips to the mid 50s. Pick the biggest phase from it.
+2. **Level-start stall:** `BOTS_HITCH_MS=20` from a checkpoint load; CP idle (game) vs textures (renderer). Worst frame
+   500 ms in the dev build vs ~130 ms in 0.1.1: A/B the dev build without `--mnk_mode=true --mnk_mouse=true` (0098's
+   prompt lookups) to see whether tonight's code adds to it.
+3. **Faster loads:** hook the game's fastfile inflate (recompiled PPC zlib) and use host zlib (a whites_estate load
+   ~5 s, 23:13:19.7-23:13:25.0 in 0.1.1's game.log). Find the inflate routine first (zlib strings / the fastfile
+   loader).
+4. **Unchanged-texture check by written pages:** hash only the 4 KB pages the tracker saw written (now XXH3 of the
+   whole texture, 0095). Helps the level-start burst (~2,100 checks in 10 s) and steady play (~600 reloads a minute).
+5. **Draw CPU ideas** (from the profile): tracker memo by page stamps / lock-free "pages unwritten" fast path
+   (60M memory sync requests, 3.7M took the lock, 23 Nov), descriptor reuse or push descriptors, setup from register
+   dirty bits, constants by changed ranges.
+6. **A third render thread**, chosen by the profile: (a) texture loading/untiling/hashing on a worker that stays ahead
+   of the draws (most help in bursts); (b) PM4 parsing/register writes on their own thread (<= 2.4 ms a frame, a clean
+   split like 0093's recorder). Draw setup itself doesn't split well (each draw depends on the last).
+7. **Menu video frames:** 0.1.1 menu had 109 frames > 20 ms in 10 s at 19 draws a frame: the game's Bink decode
+   (game side) plus a 900 KB texture upload each frame; the upload side could be cheaper. Low priority.
+8. **Shared prompt pictures** (keyboard prompts, open question above): LS picture (S vs Shift), B picture (BACK / Tab
+   / Shift); options: one key, a two-key picture, or pick per hint by hooking the tutorial hint code.
+
 ## Planned: keyboard and mouse (user's binds, 21 Nov 09:30; not started)
 
 Wanted later, from the PC version's layout. Takedowns to work like the Bourne port's (its keyboard takedown/QTE
