@@ -604,7 +604,11 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
 5. **Draw CPU ideas** (from the profile): tracker memo by page stamps / lock-free "pages unwritten" fast path
    (60M memory sync requests, 3.7M took the lock, 23 Nov), descriptor reuse or push descriptors, setup from register
    dirty bits, constants by changed ranges.
-6. **A third render thread**, chosen by the profile: (a) texture loading/untiling/hashing on a worker that stays ahead
+6. **A third render thread** (user, 23:47: worth trying despite the risk). Off by default, one switch per duty, e.g.
+   `BOTS_GFX_WORKER=textures,hash` (duties: `hash` unchanged-texture checks, `textures` loads/untiling/decompression
+   and per-frame reloads, `uploads` vertex/constant copies, `parse` PM4 + register writes, maybe its own thread, i.e.
+   a 4th). Build the duty the profile favours first, measure (vsync off), then add the others one at a time.
+   Duties, chosen by the profile: (a) texture loading/untiling/hashing on a worker that stays ahead
    of the draws (most help in bursts); (b) PM4 parsing/register writes on their own thread (<= 2.4 ms a frame, a clean
    split like 0093's recorder). Draw setup itself doesn't split well (each draw depends on the last).
 7. **Menu video frames:** 0.1.1 menu had 109 frames > 20 ms in 10 s at 19 draws a frame: the game's Bink decode
@@ -614,6 +618,11 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    zlib SWF "CFX"), so either hook the menu action that starts multiplayer (find what selecting it calls: likely a
    command string such as the MP fastfile / "xstartprivateparty"-style entry; search the decrypted XEX and ui.ff
    for "multiplayer") and swallow it, or patch the menu data. Check what the crash/close is first (log, crash-*.txt).
+10. **Gameplay dips in easy areas** (user, 23:45): in qos_142 the renderer was mostly idle during them (22:38:08-18:
+    5 ms in draws, CP idle 11.5 ms, 79 textures streamed in, a takedown), so the game thread was late; vsync on turned
+    each ~18 ms frame into 33 ms. Capture a dip with Tracy (built in: TRACY_ON_DEMAND, connect the Tracy app) to see
+    the game thread's work (streaming, sound, AI, scripts); if it's decompression it shares item 3's native zlib.
+    Also decide the launcher's V-sync default (DEFAULTS["vsync"] is True; the user plays with it off).
 8. **Shared prompt pictures** (keyboard prompts, open question above): LS picture (S vs Shift), B picture (BACK / Tab
    / Shift); options: one key, a two-key picture, or pick per hint by hooking the tutorial hint code.
 
