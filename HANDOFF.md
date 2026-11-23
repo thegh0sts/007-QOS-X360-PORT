@@ -468,6 +468,10 @@ keep "Resume here" current.
   BOTS_DRAW_TRACE=1, the trace lines now carry vs/ps ucode hashes, and each pixel shader met in the window is printed
   once (microcode + non-zero pixel constants). Markers "=== draw trace start/end ===" in stderr. Next: a trace at that
   checkpoint (2> haze-trace.txt), look for additive/alpha-blended sprite draws, depth-reading shaders, skipped draws.
+  **Update 18:48:** user played on with native: the dust effects do show. The two screenshots weren't a fair pair
+  (native 17:44, ammo 81, later in the fight; Xenos 18:32 just after loading the checkpoint, ammo 76): the dust is
+  probably a timed effect that had settled in the native shot. Likely no bug. To be sure: both renderers right after
+  loading the same checkpoint. 0097 stays (off unless trace-now is created).
 - **Next on PS prompts:** START tutorial picture if it exists; menus' other icons (btn_y, bumpers...) when seen in a dump; START/
   BACK glyphs (OPTIONS/touchpad); then the text (Press Start, controls labels).
 - **Shared SDK folder (history; 007 moved to `C:\rexglue-src-007` on 22 Nov):** last built by 007 (SDK own14 + native 0001-0024 since 23:30; native 0025 + 0026 work; 0027 written 21 Nov, not built). Eat Lead has the same SDK set (own13,
