@@ -205,6 +205,10 @@ version byte; a non-VDP socket receiving one strips the 2-byte length and cuts t
    medievalvillage, miamiconcourse, offices, rooftop(s), sauna, sciencecenter, shantytown, siena, slowdown,
    spread, step, venice (+ test maps; not all may be playable). Then a launcher "Host a server" tab (name, max/min
    players, rotation list of mode + map, limits, VPN peers, Start/Stop, status).
+   The host's own client 0 is a player (listen server): it takes a slot and counts toward party_minplayers (the
+   two-instance test: Host alone showed "Waiting for min players (1/2)"). Plan: (a) spectator at every map start,
+   min players +1, try sv_maxclients 13; (b) then hide it from scoreboard/player counts if needed; (c) a true
+   no-client server (CoD4 PC's dedicated path) is mostly cut from the 360 build: last resort.
 6. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC, hosting a server.
 - No two-PC test: the user has no second PC. Two instances on one PC (24 Nov 23:39) stand in for it; LAN and VPN
