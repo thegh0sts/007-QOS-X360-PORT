@@ -48,7 +48,7 @@
 REXCVAR_DEFINE_BOOL(tutorial_keys, true, "Input",
                     "Keyboard prompts: give sprint, stance and cover their own pictures in tutorial text");
 REXCVAR_DEFINE_BOOL(tutorial_keys_test, false, "Input",
-                    "Keyboard prompts test: every hint shows the library's spare pictures, numbered 1-6, "
+                    "Keyboard prompts test: every hint shows the library's spare pictures, numbered 1-7, "
                     "to find which look alike and to dump their textures");
 
 REX_EXTERN(__imp__sub_823D4580);  // command -> button image name (wide string)
@@ -71,9 +71,10 @@ Swap g_swaps[] = {{"+dash", "btn_left"},          {"+stance", "btn_right"},     
                   {"togglesilencer", "btn_nav_down"},
                   // tutorial_keys_test: the spare pictures, one each
                   {"kbm_t1", "btn_left"},          {"kbm_t2", "btn_right"},         {"kbm_t3", "btn_navigate_h"},
-                  {"kbm_t4", "btn_navigate_v"},    {"kbm_t5", "btn_navigate_all"},  {"kbm_t6", "btn_y"}};
+                  {"kbm_t4", "btn_navigate_v"},    {"kbm_t5", "btn_navigate_all"},  {"kbm_t6", "btn_nav_up"},
+                  {"kbm_t7", "btn_nav_down"}};
 constexpr char kTestText[] =
-    "1 [[{kbm_t1}]] 2 [[{kbm_t2}]] 3 [[{kbm_t3}]] 4 [[{kbm_t4}]] 5 [[{kbm_t5}]] 6 [[{kbm_t6}]]";
+    "1 [[{kbm_t1}]] 2 [[{kbm_t2}]] 3 [[{kbm_t3}]] 4 [[{kbm_t4}]] 5 [[{kbm_t5}]] 6 [[{kbm_t6}]] 7 [[{kbm_t7}]]";
 uint32_t g_test_text = 0;
 
 struct Reword {

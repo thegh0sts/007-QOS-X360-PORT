@@ -644,7 +644,8 @@ dump run (BOTS_GFX_DUMP_TEXTURES=texdump6), find the seven 64x64 hashes, fill ke
 is lit (btn_left: left; btn_navigate_all: all; btn_nav_up: up), so they're separate pictures. btn_y is not spare (the
 Y button's own picture, Space on keyboard): kbm_2 (weapons "2") now uses btn_navigate_v, and keyboard_phone.txt gives
 btn_navigate_v an arrow-keys picture (km_updown) on the phone's cameras screen. `--tutorial_keys_test=true` makes
-every hint show the six candidates 1-6 (btn_left, btn_right, btn_navigate_h, btn_navigate_v, btn_navigate_all, btn_y)
+every hint show the seven pictures 1-7 (btn_left, btn_right, btn_navigate_h, btn_navigate_v, btn_navigate_all,
+btn_nav_up, btn_nav_down)
 for the dump run. Hashes to fill: btn_left, btn_right, btn_navigate_h, btn_navigate_v, btn_navigate_all, btn_nav_up,
 btn_nav_down.
 
