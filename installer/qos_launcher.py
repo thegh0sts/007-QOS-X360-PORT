@@ -231,8 +231,19 @@ def load_settings():
             s[key] = DEFAULTS[key]
     s["gamertag"] = clean_gamertag(s.get("gamertag"))
     if not re.fullmatch(r"E[0-9A-F]{15}", str(s.get("xuid", ""))):
-        # An offline profile's XUID (E000...), random so two PCs don't share one.
+        # An offline profile's XUID (E000...), random so two PCs don't share one. Saved at once, so it stays the
+        # same even if the launcher is closed without saving.
         s["xuid"] = "E000" + os.urandom(6).hex().upper()
+        try:
+            stored = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            stored = {}
+        stored["xuid"] = s["xuid"]
+        try:
+            LAUNCHER_HOME.mkdir(parents=True, exist_ok=True)
+            SETTINGS_PATH.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+        except OSError:
+            pass
     return s
 
 
