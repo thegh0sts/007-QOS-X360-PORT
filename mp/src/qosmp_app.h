@@ -1,4 +1,4 @@
-// qos_mp - the multiplayer executable's app: for now only what single player's app does without game hooks (crash
+// qosmp - the multiplayer executable's app: for now only what single player's app does without game hooks (crash
 // reports, the default GPU plugin, the native renderer's nested draws). Single player's hooks (src/) use
 // default.xex's function addresses and don't apply here; each gets its own multiplayer version when needed.
 
@@ -25,7 +25,7 @@ class QosMpApp : public rex::ReXApp {
   using rex::ReXApp::ReXApp;
 
   static std::unique_ptr<rex::ui::WindowedApp> Create(rex::ui::WindowedAppContext& ctx) {
-    return std::unique_ptr<QosMpApp>(new QosMpApp(ctx, "qos_mp", PPCImageConfig));
+    return std::unique_ptr<QosMpApp>(new QosMpApp(ctx, "qosmp", PPCImageConfig));
   }
 
   void OnPostInitLogging() override { qos::crash::Install(); }

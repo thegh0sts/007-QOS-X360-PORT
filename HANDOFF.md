@@ -95,8 +95,8 @@ keep "Resume here" current.
 ## Multiplayer recompilation (24 Nov): mp/, written, not built yet
 
 The user asked whether default_mp.xex can run; step 1 is recompiling it. `mp/` is a second ReXGlue project
-(qos_mp_manifest.toml, game_root `../game`, entrypoint `../game/default_mp.xex`, output `mp/generated/default`),
-with its own codegen target `qos_mp_codegen` and exe `qos_mp`. It shares single player's crash handler
+(qosmp_manifest.toml, game_root `../game`, entrypoint `../game/default_mp.xex`, output `mp/generated/default`),
+with its own codegen target `qosmp_codegen` and exe `qosmp` (the SDK drops underscores from project names, so not qos_mp). It shares single player's crash handler
 (src/crash_win.cpp), prompts/ and pipelines/, and the SDK. MP's CRT: setjmp 0x8250B6C0, longjmp 0x8250B3A0
 (mp/mp_functions.toml; matched against SP's 0x825ABAE0/0x825AB7C0). No game hooks: SP's hooks use default.xex
 addresses. Next: run codegen, add the "Unresolved" function starts it reports to mp/mp_functions.toml, build, run to
@@ -106,7 +106,7 @@ the MP menu; then a way to start it (the SP menu's MULTIPLAYER item runs default
 Commands (Windows, from the repo):
     cd mp
     cmake --preset win-amd64-relwithdebinfo -DCMAKE_PREFIX_PATH=C:/rexglue-src-007/rexglue-sdk/out/install/win-amd64
-    cmake --build out\build\win-amd64-relwithdebinfo --target qos_mp_codegen
+    cmake --build out\build\win-amd64-relwithdebinfo --target qosmp_codegen
     cmake --preset win-amd64-relwithdebinfo
     cmake --build out\build\win-amd64-relwithdebinfo
 

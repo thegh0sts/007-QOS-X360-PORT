@@ -87,13 +87,13 @@ macro(rexglue_setup_target target_name)
         target_link_libraries(${target_name}_recomp PRIVATE rex::runtime)
         rexglue_apply_target_settings(${target_name}_recomp)
         rexglue_apply_recomp_settings(${target_name}_recomp
-            "${REXGLUE_ENTRYPOINT_INCLUDE_DIR}/qos_mp_pch.h")
-        add_dependencies(${target_name}_recomp qos_mp_codegen)
+            "${REXGLUE_ENTRYPOINT_INCLUDE_DIR}/qosmp_pch.h")
+        add_dependencies(${target_name}_recomp qosmp_codegen)
         target_link_libraries(${target_name} PRIVATE
             ${target_name}_recomp)
     endif()
     # Also on the host, so a tree that has never run codegen still generates it.
-    add_dependencies(${target_name} qos_mp_codegen)
+    add_dependencies(${target_name} qosmp_codegen)
     target_include_directories(${target_name} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -109,7 +109,7 @@ macro(rexglue_setup_target target_name)
 endmacro()
 
 # Codegen runs as part of the build, re-running only when an input in codegen.d
-# changes. Build it alone with 'cmake --build . --target qos_mp_codegen'.
+# changes. Build it alone with 'cmake --build . --target qosmp_codegen'.
 # Listing the sources as outputs orders any target that compiles them after
 # codegen, including one a project assembles itself rather than taking the
 # library rexglue_setup_target() builds. The stamp comes first: the DEPFILE
@@ -117,13 +117,13 @@ endmacro()
 add_custom_command(
     OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp"
            ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
-    COMMAND $<TARGET_FILE:rex::rexglue> codegen ${CMAKE_CURRENT_SOURCE_DIR}/qos_mp_manifest.toml
+    COMMAND $<TARGET_FILE:rex::rexglue> codegen ${CMAKE_CURRENT_SOURCE_DIR}/qosmp_manifest.toml
     DEPFILE "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.d"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Generating recompiled code for qos_mp (default_mp.xex)"
+    COMMENT "Generating recompiled code for qosmp"
     VERBATIM
 )
-add_custom_target(qos_mp_codegen
+add_custom_target(qosmp_codegen
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp")
 
 # Include DLL module shared library targets if codegen has generated them
