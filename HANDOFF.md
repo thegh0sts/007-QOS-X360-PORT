@@ -673,7 +673,12 @@ needs a spare picture, all seven used). **User: leave it, keyboard hints done fo
 
 Test like the launcher: `--vsync=false` (the 23 Nov dev run had vsync on: 18 ms frames became 33 ms, so the intro
 dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the same level start).
-1. **Draw CPU profile:** `BOTS_DRAW_PROFILE=1 BOTS_GFX_RECORD_THREAD=1 --vsync=false --frame_rate=60` at a busy spot
+1. **Draw CPU profile — done (24 Nov 20:05, qos_157, 4K render 2x, recorder on, profiler on):** busiest windows
+   5,200-6,066 draws, 8.2-9.0 ms in draws, frames held at the 60 cap (16.7 ms wall, CP idle 5.2-6.2 ms), >20 ms 7-31
+   of 600. Phases at 6,066 draws: tracker 1.39, textures 1.22, descriptors 1.20, setup 1.19, constants 0.89, record
+   0.64, indices 0.51, pipeline 0.47, shaders 0.34, targets 0.34, pass 0.24, ring 0.12 (~1.48 us/draw profiled);
+   587 texture reloads per 600 frames; memory sync 50M requests, 2.5M took the lock. Spot was lighter than 22 Nov's
+   11k. Biggest: tracker, then textures/descriptors/setup (all close). Was:  `BOTS_DRAW_PROFILE=1 BOTS_GFX_RECORD_THREAD=1 --vsync=false --frame_rate=60` at a busy spot
    (the 22 Nov one, ~11,000 draws a frame). Pick the biggest phase from it. (The "airport level" FPS dip mentioned on
    23 Nov was another game, not 007: user, 23:20.)
 2. **Level-start stall:** `BOTS_HITCH_MS=20` from a checkpoint load; CP idle (game) vs textures (renderer). Worst frame
