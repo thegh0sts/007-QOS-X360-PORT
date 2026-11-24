@@ -7,5 +7,5 @@
 replace btn_back 64 64 09784A4CD20751E1 kbm/km_tab
 
 # btn_navigate_v: the cameras screen's "scroll cameras" (W and S scroll, user 24 Nov); keyboard.txt makes it 2 for the
-# weapons hint (src/tutorial_keys.cpp). Hash still to come from a texture dump:
-#   replace btn_navigate_v 64 64 <hash> kbm/km_ws
+# weapons hint (src/tutorial_keys.cpp). Hash from texdump6 (24 Nov).
+replace btn_navigate_v 64 64 23A5DEDB971F4898 kbm/km_ws
