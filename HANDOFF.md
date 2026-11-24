@@ -788,6 +788,10 @@ pad_prompts migrate. New strings translated in launcher_text.py.
 no keyboard binds yet), and the reinstall first failed because build_installer.bat didn't copy thirdparty\ (miniz):
 fixed (d12282d; miniz licence in licenses\). The launcher only offers "Reinstall now" when GAME_VERSION changes
 (still 0.1.1): use Game files -> Reinstall to test new builds, or raise the version for a release.
+**Control maps (21:20, user):** Controls shows a "Controller map" (PAD_MAP: buttons_default.cfg layout, Xbox names,
+PlayStation names when PlayStation controller is picked) under the controller settings and a "Keyboard and mouse map"
+(KBM_MAP: kbm_binds.cpp) under the keyboard settings, each two columns of control / action; the mouse sensitivity
+slider (10-300 %) is in the keyboard section. Display only, no remapping. Strings translated in launcher_text.py.
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base

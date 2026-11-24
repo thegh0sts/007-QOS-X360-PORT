@@ -1565,4 +1565,174 @@ TEXT = {
         "2 enregistre le rendu sur un deuxième thread : plus rapide dans les scènes chargées. 3 copie aussi les textures sur un troisième thread, pour moins d'à-coups au chargement des zones. Revenez à 1 si l'image scintille ou si des objets disparaissent.",
         '2 graba el dibujado en un segundo hilo: más rápido en escenas cargadas. 3 también copia las texturas en un tercer hilo, para menos tirones al cargar zonas. Vuelve a 1 si la imagen parpadea o faltan objetos.',
         '2 registra il disegno su un secondo thread: più veloce nelle scene affollate. 3 copia anche le texture su un terzo thread, per meno scatti quando si caricano le zone. Torna a 1 se l\'immagine sfarfalla o mancano oggetti.'),
+    'Controller map': (
+        'Controller-Belegung',
+        'Commandes de la manette',
+        'Controles del mando',
+        'Comandi del controller'),
+    'Keyboard and mouse map': (
+        'Tastatur- und Mausbelegung',
+        'Commandes clavier et souris',
+        'Controles de teclado y ratón',
+        'Comandi tastiera e mouse'),
+    "100 is the PC game's default speed.": (
+        '100 ist die Standardgeschwindigkeit des PC-Spiels.',
+        '100 est la vitesse par défaut du jeu PC.',
+        '100 es la velocidad predeterminada del juego de PC.',
+        '100 è la velocità predefinita del gioco PC.'),
+    'Look': (
+        'Umsehen',
+        'Regarder',
+        'Mirar',
+        'Guardarsi intorno'),
+    'Aim': (
+        'Zielen',
+        'Viser',
+        'Apuntar',
+        'Mirare'),
+    'Throw grenade': (
+        'Granate werfen',
+        'Lancer une grenade',
+        'Lanzar granada',
+        'Lanciare granata'),
+    'Switch weapon': (
+        'Waffe wechseln',
+        "Changer d'arme",
+        'Cambiar de arma',
+        'Cambiare arma'),
+    'Take cover': (
+        'In Deckung gehen',
+        'Se mettre à couvert',
+        'Cubrirse',
+        'Mettersi al riparo'),
+    'Crouch / stand': (
+        'Ducken / aufstehen',
+        "S'accroupir / se lever",
+        'Agacharse / levantarse',
+        'Accovacciarsi / alzarsi'),
+    'Reload / use': (
+        'Nachladen / benutzen',
+        'Recharger / utiliser',
+        'Recargar / usar',
+        'Ricaricare / usare'),
+    'Use': (
+        'Benutzen',
+        'Utiliser',
+        'Usar',
+        'Usare'),
+    'Jump / climb': (
+        'Springen / klettern',
+        'Sauter / escalader',
+        'Saltar / trepar',
+        'Saltare / arrampicarsi'),
+    'Walk': (
+        'Gehen',
+        'Marcher',
+        'Caminar',
+        'Camminare'),
+    'Take down': (
+        'Ausschalten',
+        'Neutraliser',
+        'Derribar',
+        'Abbattere'),
+    'Take down (then W A S D)': (
+        'Ausschalten (dann W A S D)',
+        'Neutraliser (puis W A S D)',
+        'Derribar (luego W A S D)',
+        'Abbattere (poi W A S D)'),
+    'Fire mode': (
+        'Feuermodus',
+        'Mode de tir',
+        'Modo de disparo',
+        'Modalità di fuoco'),
+    'Silencer': (
+        'Schalldämpfer',
+        'Silencieux',
+        'Silenciador',
+        'Silenziatore'),
+    'Grenade type': (
+        'Granatentyp',
+        'Type de grenade',
+        'Tipo de granada',
+        'Tipo di granata'),
+    'Phone': (
+        'Telefon',
+        'Téléphone',
+        'Teléfono',
+        'Telefono'),
+    'Pause / back': (
+        'Pause / zurück',
+        'Pause / retour',
+        'Pausa / atrás',
+        'Pausa / indietro'),
+    'Left stick': (
+        'Linker Stick',
+        'Stick gauche',
+        'Stick izquierdo',
+        'Levetta sinistra'),
+    'Right stick': (
+        'Rechter Stick',
+        'Stick droit',
+        'Stick derecho',
+        'Levetta destra'),
+    'Left stick click': (
+        'Linken Stick drücken',
+        'Clic stick gauche',
+        'Pulsar stick izquierdo',
+        'Pressione levetta sinistra'),
+    'Right stick click': (
+        'Rechten Stick drücken',
+        'Clic stick droit',
+        'Pulsar stick derecho',
+        'Pressione levetta destra'),
+    'D-pad up': (
+        'Steuerkreuz oben',
+        'Croix haut',
+        'Cruceta arriba',
+        'Croce direzionale su'),
+    'D-pad down': (
+        'Steuerkreuz unten',
+        'Croix bas',
+        'Cruceta abajo',
+        'Croce direzionale giù'),
+    'D-pad left / right': (
+        'Steuerkreuz links / rechts',
+        'Croix gauche / droite',
+        'Cruceta izquierda / derecha',
+        'Croce direzionale sinistra / destra'),
+    'Touch pad': (
+        'Touchpad',
+        'Pavé tactile',
+        'Panel táctil',
+        'Touch pad'),
+    'Left click': (
+        'Linksklick',
+        'Clic gauche',
+        'Clic izquierdo',
+        'Clic sinistro'),
+    'Right click': (
+        'Rechtsklick',
+        'Clic droit',
+        'Clic derecho',
+        'Clic destro'),
+    'Cross': (
+        'Kreuz',
+        'Croix',
+        'Cruz',
+        'Croce'),
+    'Circle': (
+        'Kreis',
+        'Rond',
+        'Círculo',
+        'Cerchio'),
+    'Square': (
+        'Quadrat',
+        'Carré',
+        'Cuadrado',
+        'Quadrato'),
+    'Triangle': (
+        'Dreieck',
+        'Triangle',
+        'Triángulo',
+        'Triangolo'),
 }

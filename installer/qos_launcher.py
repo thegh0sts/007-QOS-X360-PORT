@@ -72,6 +72,49 @@ FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
 INPUT_DEVICES = ["Auto", "Keyboard and mouse", "Xbox controller", "PlayStation controller"]
 INPUT_PROMPTS = {"Auto": "auto", "Keyboard and mouse": "keyboard", "Xbox controller": "xbox",
                  "PlayStation controller": "playstation"}
+# The control maps shown in Controls: the game's default pad layout (buttons_default.cfg in english/code_post_gfx.ff)
+# and 007's keyboard binds (src/kbm_binds.cpp, as the PC game's manual). Pad rows: (Xbox name, PlayStation name, what
+# it does).
+PAD_MAP = [
+    ("Left stick", "Left stick", "Move"),
+    ("Right stick", "Right stick", "Look"),
+    ("RT", "R2", "Fire"),
+    ("LT", "L2", "Aim"),
+    ("RB", "R1", "Throw grenade"),
+    ("LB", "L1", "Switch weapon"),
+    ("A", "Cross", "Take cover"),
+    ("B", "Circle", "Crouch / stand"),
+    ("X", "Square", "Reload / use"),
+    ("Y", "Triangle", "Jump / climb"),
+    ("Left stick click", "L3", "Sprint"),
+    ("Right stick click", "R3", "Take down"),
+    ("D-pad up", "D-pad up", "Fire mode"),
+    ("D-pad down", "D-pad down", "Silencer"),
+    ("D-pad left / right", "D-pad left / right", "Grenade type"),
+    ("Back", "Touch pad", "Phone"),
+    ("Start", "Options", "Pause"),
+]
+KBM_MAP = [
+    ("W A S D", "Move"),
+    ("Mouse", "Look"),
+    ("Left click", "Fire"),
+    ("Right click", "Aim"),
+    ("G", "Throw grenade"),
+    ("1 / 2", "Switch weapon"),
+    ("E", "Take cover"),
+    ("C", "Crouch / stand"),
+    ("R", "Reload"),
+    ("F", "Use"),
+    ("Space", "Jump / climb"),
+    ("Ctrl", "Sprint"),
+    ("Shift", "Walk"),
+    ("Q", "Take down (then W A S D)"),
+    ("X", "Fire mode"),
+    ("4", "Silencer"),
+    ("3", "Grenade type"),
+    ("Tab", "Phone"),
+    ("Esc", "Pause / back"),
+]
 # Settings from before the input device choice (launcher 0.1.1: "pad_prompts").
 # Render threads (Graphics tab): 1 = the renderer alone (original), 2 = plus the draw-recording thread (native patch
 # 0093, BOTS_GFX_RECORD_THREAD), 3 = plus the texture worker (native patch 0099, BOTS_GFX_WORKER). Each includes the
@@ -577,15 +620,20 @@ class SettingsView(tk.Frame):
         self._slider(pad, 1, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
         note(pad, 2, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
         self._check(pad, 3, "vibration", "Controller vibration")
+        self._subheading(pad, 4, "Controller map")
+        self.pad_map = tk.Frame(pad, bg=PANEL)
+        self.pad_map.grid(row=5, column=0, columnspan=2, sticky="w")
         kbm = self.kbm_settings = tk.Frame(box, bg=PANEL)
         kbm.columnconfigure(1, weight=1)
         kbm.grid(row=3, column=0, columnspan=2, sticky="ew")
         self._subheading(kbm, 0, "Keyboard and mouse")
-        note(kbm, 1, "As the PC game: WASD move, Shift walk, Ctrl sprint, mouse look, left click fire, right click aim, "
-                     "Space jump, E cover, C stance, R reload, F use, G grenade, 3 grenade type, Q take down, 1/2 weapon, "
-                     "4 silencer, X fire rate, Tab phone, Esc pause.")
-        self._slider(kbm, 2, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
+        self._slider(kbm, 1, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
+        note(kbm, 2, "100 is the PC game's default speed.")
         self._check(kbm, 3, "mouse_invert", "Invert mouse up/down")
+        self._subheading(kbm, 4, "Keyboard and mouse map")
+        kbm_map = tk.Frame(kbm, bg=PANEL)
+        kbm_map.grid(row=5, column=0, columnspan=2, sticky="w")
+        self._control_map(kbm_map, KBM_MAP)
         self.vars["input_device"].trace_add("write", lambda *_: self._input_device_changed())
         self._input_device_changed()
 
@@ -727,8 +775,23 @@ class SettingsView(tk.Frame):
         if self.on_language:
             self.after_idle(self.on_language, self.collect(), self.saved)
 
+    def _control_map(self, frame, rows):
+        """A control map in two columns of (control, action) pairs, to keep the page short."""
+        for child in frame.winfo_children():
+            child.destroy()
+        half = (len(rows) + 1) // 2
+        for i, (control, action) in enumerate(rows):
+            r, c = i % half, (i // half) * 3
+            tk.Label(frame, text=tr(control), font=("Segoe UI", 9, "bold"), fg=FG, bg=PANEL, anchor="w"
+                     ).grid(row=r, column=c, sticky="w", padx=(0, 10))
+            tk.Label(frame, text=tr(action), font=("Segoe UI", 9), fg=DIM, bg=PANEL, anchor="w"
+                     ).grid(row=r, column=c + 1, sticky="w", padx=(0, 28))
+
     def _input_device_changed(self):
-        keyboard = self.vars["input_device"].get() == "Keyboard and mouse"
+        device = self.vars["input_device"].get()
+        ps = device == "PlayStation controller"
+        self._control_map(self.pad_map, [(p if ps else x, what) for x, p, what in PAD_MAP])
+        keyboard = device == "Keyboard and mouse"
         if keyboard:
             self.pad_settings.grid_remove()
             self.kbm_settings.grid()
