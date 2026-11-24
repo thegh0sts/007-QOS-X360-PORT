@@ -623,7 +623,7 @@ class SettingsView(tk.Frame):
         self._check(pad, 3, "vibration", "Controller vibration")
         self._subheading(pad, 4, "Controller map")
         self.pad_map = tk.Frame(pad, bg=PANEL)
-        self.pad_map.grid(row=5, column=0, columnspan=2, sticky="w")
+        self.pad_map.grid(row=5, column=0, columnspan=2, sticky="ew")
         kbm = self.kbm_settings = tk.Frame(box, bg=PANEL)
         kbm.columnconfigure(1, weight=1)
         kbm.grid(row=3, column=0, columnspan=2, sticky="ew")
@@ -633,7 +633,7 @@ class SettingsView(tk.Frame):
         self._check(kbm, 3, "mouse_invert", "Invert mouse up/down")
         self._subheading(kbm, 4, "Keyboard and mouse map")
         kbm_map = tk.Frame(kbm, bg=PANEL)
-        kbm_map.grid(row=5, column=0, columnspan=2, sticky="w")
+        kbm_map.grid(row=5, column=0, columnspan=2, sticky="ew")
         self._control_map(kbm_map, KBM_MAP)
         self.vars["input_device"].trace_add("write", lambda *_: self._input_device_changed())
         self._input_device_changed()
@@ -781,6 +781,9 @@ class SettingsView(tk.Frame):
         for child in frame.winfo_children():
             child.destroy()
         half = (len(rows) + 1) // 2
+        # Spread over the page's full width: the two action columns take the spare room.
+        for column in (1, 4):
+            frame.columnconfigure(column, weight=1)
         for i, (control, action) in enumerate(rows):
             r, c = i % half, (i // half) * 3
             tk.Label(frame, text=tr(control), font=("Segoe UI", 9, "bold"), fg=FG, bg=PANEL, anchor="w"
