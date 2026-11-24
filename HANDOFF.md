@@ -714,6 +714,11 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    sub_82299178 at 0x821BE8D4, name 0x8201D714). `src/no_multiplayer.cpp` hooks it and returns before the shutdown;
    log "multiplayer: startMultiplayer ignored"; `--allow_multiplayer=true` calls the original. Check: MULTIPLAYER on
    the main menu does nothing and the menu still works (no stuck fade/loading).
+   **Test 1 (19:47):** stuck on LOADING...: the MULTIPLAYER item (CmMainMenu.gfx, game/scaleform) opens screen
+   "splaunchmp", a loading screen that runs exec "startMultiplayer". Now the hook queues `--multiplayer_fallback`
+   (default "disconnect", the pause menu's quit command) with Cbuf_AddText sub_82298750(0, text) to leave it. Not
+   built. If disconnect does nothing on the front end, other ideas: hide the item (its visibleWhen dvar test) or patch
+   the SWF's "splaunchmp" target when the movie loads.
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base
