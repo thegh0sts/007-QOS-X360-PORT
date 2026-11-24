@@ -656,7 +656,8 @@ for the dump run. **Hashes found (texdump6, 19:05):** btn_left 02836603EC40E4E1 
 btn_navigate_h C9B83BD6DF60188B (E), btn_navigate_v 23A5DEDB971F4898 (2; phone W/S, user: W and S scroll the
 cameras), btn_navigate_all FAEF750EA28E92AC (W), btn_nav_up 210B1F6745121A4F (X), btn_nav_down BA4F5117256B7585 (4).
 All in keyboard.txt; not built/tested. 23A5 also showed in texdump4 during tutorials: watch for a hint showing 2.
-Phone detection second try (1e3209c): UI catcher + in a level + not paused; to check in the log.
+**Works (user, 19:27; qos_151):** all hints show their keys. Phone detection works: "phone true" only with the
+phone up (pause menu: paused 1 -> false; main menu: cgameInitialized 0 -> false), keyboard_phone.txt used there.
 
 ## To do, 24 Nov (user, 23:20)
 
