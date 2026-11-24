@@ -823,7 +823,7 @@ slider (10-300 %) is in the keyboard section. The keyboard map reads "W A S D: M
     5 ms in draws, CP idle 11.5 ms, 79 textures streamed in, a takedown), so the game thread was late; vsync on turned
     each ~18 ms frame into 33 ms. Capture a dip with Tracy (built in: TRACY_ON_DEMAND, connect the Tracy app) to see
     the game thread's work (streaming, sound, AI, scripts); if it's decompression it shares item 3's native zlib.
-    Also decide the launcher's V-sync default (DEFAULTS["vsync"] is True; the user plays with it off).
+    Launcher V-sync default now off (user, 24 Nov 21:27).
 8. **Shared prompt pictures** (keyboard prompts, open question above): LS picture (S vs Shift), B picture (BACK / Tab
    / Shift); options: one key, a two-key picture, or pick per hint by hooking the tutorial hint code.
 

@@ -137,7 +137,7 @@ DEFAULTS = {
     "render_threads": "2",
     "brightness": 100,
     "fps": "60",
-    "vsync": True,
+    "vsync": False,  # off: smoother at 60 FPS in heavy scenes (user, 24 Nov)
     "fov": 65,
     "fps_counter": "Off",
     "hide_achievements": False,
