@@ -131,6 +131,13 @@ the cloud, simde headers missing), OWN_PATCHES own20. Cvars: netplay_slot (-1 au
 netplay_trace, user_signin_live (Live menus), user_xuid / user_gamertag (a second instance needs its own XUID).
 Needs tools\build_native.bat (rebuilds the SDK and renderer), then both games rebuilt.
 
+**First System Link match (24 Nov, 22:40, qosmp_010):** netplay up ("netplay: slot 0 at 192.168.1.74"), a System Link
+game loaded and played (one player), ended -> score screen -> process ended ("Execution complete", no crash): XGI
+0x000B0013 (XSessionLeave, 20-byte buffer) was unimplemented -> X_E_FAIL. SDK patch 0021-xgi-session-leave answers it
+(own21). Also: `--user_signin_live=true` makes the game quit 2 s after start on XLIVEBASE 0x00058035 (unimplemented);
+not needed for System Link, left off. Frame times in the match ~31-33 ms wall with CP idle ~29 ms: the game runs at its
+30 FPS cap (no fps_unlock for MP yet).
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/
