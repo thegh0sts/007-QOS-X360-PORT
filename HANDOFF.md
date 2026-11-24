@@ -153,6 +153,13 @@ SP_ONLY_ARGS + --user_gamertag + --user_xuid; log game_mp.log). XUID: "E000" + 1
 load_settings (two PCs must differ). Not yet: the installer building/copying mp/ (qosmp.exe), so the button says
 multiplayer isn't installed.
 
+**MP frame rate and FOV (24 Nov, 23:15), not built:** `mp/src/frame_rate_fov.cpp` = single player's fps_unlock.cpp +
+fov.cpp at MP addresses: Com_Frame sub_8225E8B8 (com_maxfps dvar ptr 0x83A678D0, registered 30 at 0x8225E0E0),
+Dvar_RegisterInt sub_822BBEB8, Dvar_RegisterFloat sub_822BBF00 (cg_fov at 0x82184F20), D3D swap sub_820F2188 (same
+as SP). Launcher: mp_args now passes --frame_rate/--fov too (SP_ONLY_ARGS: achievement_popups, pad_prompts,
+mouse_sensitivity, mouse_invert); renderer env (render scale, AA, filtering, render threads) was already shared;
+Clear and rebuild clears Documents\\qosmp\\cache\\native too.
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/

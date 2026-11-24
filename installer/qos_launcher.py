@@ -474,8 +474,7 @@ def game_args(s, screen=None):
 
 
 # qos.exe's own settings (src/), which qosmp.exe doesn't have: left out of multiplayer's command line.
-SP_ONLY_ARGS = ("--frame_rate", "--fov", "--achievement_popups", "--pad_prompts", "--mouse_sensitivity",
-                "--mouse_invert")
+SP_ONLY_ARGS = ("--achievement_popups", "--pad_prompts", "--mouse_sensitivity", "--mouse_invert")
 
 
 def mp_args(s, screen=None):
@@ -505,6 +504,11 @@ def game_env(s):
 def shader_cache_dir(info) -> Path:
     """The native renderer's pipeline cache (built at the first start from the game's files, native patch 0027)."""
     return user_data_dir(info) / "cache" / "native"
+
+
+def mp_shader_cache_dir() -> Path:
+    """Multiplayer's (qosmp.exe keeps its own user data: Documents\\qosmp)."""
+    return (documents_dir() or Path.home() / "Documents") / "qosmp" / "cache" / "native"
 
 
 # --------------------------------------------------------------------------
@@ -991,15 +995,16 @@ class SettingsView(tk.Frame):
     def clear_shader_cache(self):
         """Deletes the native renderer's pipeline cache: the next start builds it again from the game's files."""
         import shutil
-        folder = shader_cache_dir(self.info)
-        if not folder.is_dir():
+        folders = [f for f in (shader_cache_dir(self.info), mp_shader_cache_dir()) if f.is_dir()]
+        if not folders:
             self.status.set(tr("The shader cache is already empty: it's built at the next start."))
             return
         if not messagebox.askyesno(tr("Shader cache"), tr("Delete the shader cache? The next start builds it again "
                                                           "(a few seconds longer).")):
             return
         try:
-            shutil.rmtree(folder)
+            for folder in folders:  # single player's and multiplayer's
+                shutil.rmtree(folder)
         except OSError as e:
             messagebox.showerror(tr("Shader cache"), tr("Couldn't delete {folder}: {error}\nIs the game still "
                                                         "running?", folder=folder, error=e))

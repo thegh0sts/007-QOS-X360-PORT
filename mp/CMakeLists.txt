@@ -16,6 +16,7 @@ set(QOS_SP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 set(QOS_MP_SOURCES
     src/main.cpp
     src/relaunch_log.cpp
+    src/frame_rate_fov.cpp
     ${QOS_SP_DIR}/src/crash_win.cpp
 )
 
