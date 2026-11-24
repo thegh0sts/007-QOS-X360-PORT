@@ -725,7 +725,8 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    one per-frame rewritten texture) and 435-685 in the level-load windows. Texture time per frame 0.46 -> 0.30 ms;
    gameplay windows' frames > 20 ms per 10 s: 7-26 (avg ~16) -> 1-23 (avg ~9) (different walks, so rough). Level-
    start stalls unchanged (game side: CP idle 50-98 ms; a 127-129 ms frame in both). Startup frame 1 has one 75-90 ms
-   texture (1x1 format 6 tiled) in both. No 2-thread run on the new DLL yet. Launcher default stays 2.
+   texture (1x1 format 6 tiled) in both. No 2-thread run on the new DLL yet. User: no visual issues (21:23). Launcher
+   default stays 2 for now.
    Earlier plan:  (user, 23:47: worth trying despite the risk). Off by default, one switch per duty, e.g.
    `BOTS_GFX_WORKER=textures,hash` (duties: `hash` unchanged-texture checks, `textures` loads/untiling/decompression
    and per-frame reloads, `uploads` vertex/constant copies, `parse` PM4 + register writes, maybe its own thread, i.e.
