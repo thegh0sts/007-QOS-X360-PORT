@@ -75,7 +75,9 @@ def main():
     kk.key("CTRL", str(out / "k_ctrl.png"), kk.HUD, width=80)
     kk.key("CTRL", str(out / "km_ctrl_sq.png"), kk.MENU)
     kk.key("1", str(out / "km_1.png"), kk.MENU)
-    kk.key("ESC", str(out / "km_esc_sq.png"), kk.MENU)  # square: menus' back (Esc goes back in menus)  # square: "replace" stretches to the 64x64 texture
+    kk.key("ESC", str(out / "km_esc_sq.png"), kk.MENU)
+    for t in ("W", "2", "X", "4"):  # reworded hints: sprint W, weapons 2, fire mode X, silencer 4
+        kk.key(t, str(out / f"km_{t.lower()}.png"), kk.MENU)  # square: menus' back (Esc goes back in menus)  # square: "replace" stretches to the 64x64 texture
     for m in ("left", "right"):
         kk.mouse(m, str(out / f"km_mouse_{m}.png"), kk.MENU)
 

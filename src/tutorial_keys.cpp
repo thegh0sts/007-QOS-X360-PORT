@@ -19,6 +19,16 @@
 //   +dash   -> btn_left   (Ctrl: sprint)
 //   +stance -> btn_right  (C: stance)
 //   +cover  -> btn_navigate_h (E: cover; the menus' A picture, btn_accept, then shows Enter like the title screen)
+//   +cover  -> btn_navigate_h (E)
+// Some hints are reworded for keyboard too (user, 24 Nov), in sub_823D5480's call of sub_822C7298
+// (SEH_LocalizeTextMessage: localized text for the string id; hooked only while sub_823D5480 runs):
+//   "Click [[{+dash}]] while pushing forward to sprint"  -> "Holding [[{+dash}]] while pressing [[{kbm_w}]] to sprint"
+//   "Press [[{weapnext}]] to switch weapons"              -> "Press [[{weapnext}]] / [[{kbm_2}]] to switch weapons"
+//   "Press up on the D-Pad to change the fire mode"       -> "Press [[{nextfiretype}]] to change the fire mode"
+//   "Press Down on the D-Pad to attach/remove ..."        -> "Press [[{togglesilencer}]] to attach/remove ..."
+// with more pictures from the library: kbm_w -> btn_navigate_all (W), kbm_2 -> btn_y (2), nextfiretype ->
+// btn_nav_up (X), togglesilencer -> btn_nav_down (4). btn_navigate_v is left alone: the phone's cameras screen
+// shows it (scroll cameras). English text only.
 // Every command it sees is logged once ("tutorial keys: ..."), to find more.
 
 #include "generated/default/qos_pch.h"
@@ -28,6 +38,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 #include <rex/cvar.h>
 #include <rex/logging.h>
@@ -37,6 +48,8 @@ REXCVAR_DEFINE_BOOL(tutorial_keys, true, "Input",
                     "Keyboard prompts: give sprint, stance and cover their own pictures in tutorial text");
 
 REX_EXTERN(__imp__sub_823D4580);  // command -> button image name (wide string)
+REX_EXTERN(__imp__sub_823D5480);  // hint text -> Scaleform HTML with button images
+REX_EXTERN(__imp__sub_822C7298);  // SEH_LocalizeTextMessage
 
 namespace qos::pad_prompts {
 bool Keyboard();
@@ -49,7 +62,29 @@ struct Swap {
   const char* image;
   uint32_t guest = 0;  // the image name as a wide (UTF-16BE) string in guest memory
 };
-Swap g_swaps[] = {{"+dash", "btn_left"}, {"+stance", "btn_right"}, {"+cover", "btn_navigate_h"}};
+Swap g_swaps[] = {{"+dash", "btn_left"},          {"+stance", "btn_right"},        {"+cover", "btn_navigate_h"},
+                  {"kbm_w", "btn_navigate_all"},   {"kbm_2", "btn_y"},              {"nextfiretype", "btn_nav_up"},
+                  {"togglesilencer", "btn_nav_down"}};
+
+struct Reword {
+  const char* find;
+  const char* replace;
+};
+constexpr Reword kRewords[] = {
+    {"Click [[{+dash}]] while pushing forward to sprint", "Holding [[{+dash}]] while pressing [[{kbm_w}]] to sprint"},
+    {"Press [[{weapnext}]] to switch weapons", "Press [[{weapnext}]] / [[{kbm_2}]] to switch weapons"},
+    {"Press up on the D-Pad to change the fire mode", "Press [[{nextfiretype}]] to change the fire mode"},
+    {"Press Down on the D-Pad to attach/remove", "Press [[{togglesilencer}]] to attach/remove"},
+};
+thread_local bool t_in_hint = false;  // inside sub_823D5480 (hint text with [[{cmd}]] tokens)
+std::unordered_map<std::string, uint32_t> g_reworded;  // original text -> reworded copy in guest memory
+int g_reworded_logged = 0;
+
+uint32_t GuestText(uint8_t* base, const std::string& text) {
+  const uint32_t a = rex::system::kernel_state()->memory()->SystemHeapAlloc(uint32_t(text.size() + 1));
+  if (a) std::memcpy(base + a, text.c_str(), text.size() + 1);
+  return a;
+}
 std::mutex g_mutex;
 std::set<std::string> g_logged;
 
@@ -91,4 +126,32 @@ extern "C" REX_FUNC(sub_823D4580) {
     return;
   }
   __imp__sub_823D4580(ctx, base);
+}
+
+extern "C" REX_FUNC(sub_823D5480) {
+  t_in_hint = true;
+  __imp__sub_823D5480(ctx, base);
+  t_in_hint = false;
+}
+
+extern "C" REX_FUNC(sub_822C7298) {
+  __imp__sub_822C7298(ctx, base);
+  if (!t_in_hint || !ctx.r3.u32 || !REXCVAR_GET(tutorial_keys) || !qos::pad_prompts::Keyboard()) return;
+  const std::string text(reinterpret_cast<const char*>(base + ctx.r3.u32));
+  std::lock_guard<std::mutex> lock(g_mutex);
+  auto it = g_reworded.find(text);
+  if (it == g_reworded.end()) {
+    std::string out = text;
+    for (const Reword& r : kRewords) {
+      const size_t at = out.find(r.find);
+      if (at != std::string::npos) out.replace(at, std::strlen(r.find), r.replace);
+    }
+    const uint32_t guest = out == text ? 0 : GuestText(base, out);
+    it = g_reworded.emplace(text, guest).first;
+    if (guest && g_reworded_logged < 16) {
+      ++g_reworded_logged;
+      REXLOG_INFO("tutorial keys: \"{}\" -> \"{}\"", text, out);
+    }
+  }
+  if (it->second) ctx.r3.u64 = it->second;
 }

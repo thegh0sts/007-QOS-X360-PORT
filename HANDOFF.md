@@ -629,6 +629,17 @@ r_phoneRenderMode (0x84055D08), logged on change ("menu keys: phone ..."; check 
 + keyboard -> pad_prompts_active 3; native 0098 (revised: build_native) reads `prompts/keyboard_phone.txt` first, then
 keyboard.txt: btn_back -> km_tab on the phone.
 
+**Hint rewording + more library pictures (24 Nov, 18:20, user's list 05-10), written, not built:** `tutorial_keys.cpp`
+also hooks sub_823D5480 (hint text -> Scaleform HTML) and, only inside it, sub_822C7298 (SEH_LocalizeTextMessage,
+returns the localized text): in keyboard mode it rewrites sprint ("Holding [[{+dash}]] while pressing [[{kbm_w}]]
+to sprint"), weapons ("Press [[{weapnext}]] / [[{kbm_2}]] ..."), fire mode (plain text "Press up on the D-Pad..." ->
+[[{nextfiretype}]]) and silencer (Opera: "Press Down on the D-Pad to attach/remove" -> [[{togglesilencer}]]); copies
+in SystemHeapAlloc memory, logged. Pictures: +dash btn_left (Ctrl), +stance btn_right (C), +cover btn_navigate_h (E),
+kbm_w btn_navigate_all (W), kbm_2 btn_y (2), nextfiretype btn_nav_up (X), togglesilencer btn_nav_down (4).
+btn_navigate_v not used (the phone's cameras screen shows it). In the user's 17:31-18:09 screenshots btn_left and
+btn_right both drew the same arrows icon (maybe one texture) and btn_navigate_h a D-pad left/right icon. Next: the
+dump run (BOTS_GFX_DUMP_TEXTURES=texdump6), find the seven 64x64 hashes, fill keyboard.txt's placeholder lines.
+
 ## To do, 24 Nov (user, 23:20)
 
 Test like the launcher: `--vsync=false` (the 23 Nov dev run had vsync on: 18 ms frames became 33 ms, so the intro

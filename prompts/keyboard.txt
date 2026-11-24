@@ -26,13 +26,20 @@ replace tutorial_back 64 64 92F008A6E5D310A6 kbm/km_tab
 replace tutorial_ls   64 64 748B7606A1F93C3C kbm/km_s
 replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/km_q
 
-# Sprint, stance and cover in tutorial text get pictures of their own (src/tutorial_keys.cpp: [[{+dash}]] ->
-# btn_left, [[{+stance}]] -> btn_right, [[{+cover}]] -> btn_navigate_h, from the shared platform library), so the
-# menus' A picture (btn_accept) can show Enter, as the title screen does (user, 24 Nov 17:38). Their texture hashes aren't known yet: take them
-# from a texture dump of the sprint and "Hold ... to stay low" hints, then:
-#   replace btn_left       64 64 <hash> kbm/km_ctrl_sq
-#   replace btn_right      64 64 <hash> kbm/km_c
-#   replace btn_navigate_h 64 64 <hash> kbm/km_e     ([[{+cover}]]: "Press E to take cover")
+# Hint pictures of their own (src/tutorial_keys.cpp): in keyboard mode some hint commands get spare pictures from the
+# shared platform library, and some hints are reworded (sprint, switch weapons, fire mode, silencer):
+#   [[{+dash}]] -> btn_left (Ctrl), [[{+stance}]] -> btn_right (C), [[{+cover}]] -> btn_navigate_h (E),
+#   [[{kbm_w}]] -> btn_navigate_all (W), [[{kbm_2}]] -> btn_y (2), [[{nextfiretype}]] -> btn_nav_up (X),
+#   [[{togglesilencer}]] -> btn_nav_down (4).
+# So the menus' A picture (btn_accept) can show Enter, as the title screen does. Texture hashes still to come from a
+# texture dump (BOTS_GFX_DUMP_TEXTURES) of those hints:
+#   replace btn_left         64 64 <hash> kbm/km_ctrl_sq
+#   replace btn_right        64 64 <hash> kbm/km_c
+#   replace btn_navigate_h   64 64 <hash> kbm/km_e
+#   replace btn_navigate_all 64 64 <hash> kbm/km_w
+#   replace btn_y            64 64 <hash> kbm/km_2
+#   replace btn_nav_up       64 64 <hash> kbm/km_x
+#   replace btn_nav_down     64 64 <hash> kbm/km_4
 
 # Takedowns (50 px discs): the game's colours and shape, the key that answers them in place of the pad's letter
 # (src/takedown_keys.cpp: W A S D press Y X A B during a takedown).
