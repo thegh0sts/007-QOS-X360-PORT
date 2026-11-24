@@ -144,7 +144,7 @@ not needed for System Link, left off. Frame times in the match ~31-33 ms wall wi
 ReXGlue: the process ends. mp/src/relaunch_log.cpp logs "game relaunch: ...; Sys_Error message: ...". Both runs
 (leaving a match; opening System Link's join menu): "Failed to recvfrom() socket, error WSAECONNRESET" = Windows
 reporting ICMP port-unreachable on UDP. SDK patch 0022-udp-no-connreset (own22): SIO_UDP_CONNRESET/NETRESET off on
-every datagram socket. Later: make the relaunch real (restart the process, or reset and pass the launch data) so
+every datagram socket. **Works (user, 22:59):** a match ends back at the menu; join menu opens. Later: make the relaunch real (restart the process, or reset and pass the launch data) so
 Sys_Error shows its message as on the console, and single player <-> multiplayer switching.
 
 ## Resume here
