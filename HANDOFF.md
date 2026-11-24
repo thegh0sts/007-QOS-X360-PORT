@@ -168,6 +168,14 @@ SDK patch 0023-xnet-qos-lookup (own23): answers at once, 1 ms / 100 Mbit/s, no d
 mp/src/console_log.cpp logs the game's console (Com_PrintMessage sub_8225CE50) as "game[channel]: ..."
 (--game_console_log, default on).
 
+**Join list still empty after 0023 (23:21, qosmp_022/023):** XNetQosLookup is never called, so Guest drops the reply
+before that. infoResponse handler = sub_821CB0E0 (from CL_ConnectionlessPacket sub_821C8690): silent exits on
+"protocol" (info key) != debug_protocol dvar or 48, on a flag at 0x82C34CC8+3720, or a duplicate xnaddr in the
+16-entry list (208 bytes each at +392). Suspect: Host replies from its VDP socket (proto 254, port 1000) and the
+322 bytes may start with VDP's 2-byte game-data length, so Guest's UDP socket (1001) sees no FF FF FF FF
+connectionless prefix. SDK patch 0024-netplay-trace-bytes (own24) logs the first 24 bytes of each traced packet to
+check.
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/

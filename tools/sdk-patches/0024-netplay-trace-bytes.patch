@@ -1,0 +1,56 @@
+# netplay_trace: the first 24 bytes of each traced packet in hex (send, broadcast, recv), to see what the game sends.
+# After 0020.
+diff --git a/src/system/xsocket.cpp b/src/system/xsocket.cpp
+index c1bfb25..27ddc1b 100644
+--- a/src/system/xsocket.cpp
++++ b/src/system/xsocket.cpp
+@@ -421,6 +421,18 @@ std::string Fmt(uint32_t ip, uint16_t port) {
+          std::to_string(port);
+ }
+ 
++// The first bytes of a traced packet, in hex.
++std::string HexHead(const uint8_t* p, size_t len) {
++  static const char* kDigits = "0123456789ABCDEF";
++  std::string out;
++  for (size_t i = 0; i < len && i < 24; ++i) {
++    if (i) out += ' ';
++    out += kDigits[p[i] >> 4];
++    out += kDigits[p[i] & 15];
++  }
++  return out;
++}
++
+ // Traces the first 40 packets of each socket, then every 500th.
+ bool TracePacket(uint64_t& count) {
+   ++count;
+@@ -795,8 +807,9 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADD
+     }
+     std::memcpy(buf, payload, std::min<size_t>(size_t(len), buf_len));
+     if (TracePacket(trace_count_)) {
+-      REXLOG_INFO("netplay: socket {:X} recv {} bytes from {} as {}", handle(), len,
+-                  Fmt(src_ip, src_port), Fmt(guest_ip, guest_port));
++      REXLOG_INFO("netplay: socket {:X} recv {} bytes from {} as {}: {}", handle(), len,
++                  Fmt(src_ip, src_port), Fmt(guest_ip, guest_port),
++                  HexHead(buf, std::min<size_t>(size_t(len), buf_len)));
+     }
+     if (from) {
+       from->sin_family = X_AF_INET;
+@@ -867,14 +880,14 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_
+     ret = send_one(ip, HostPort(dst_port, slot));
+     KeepError keep;
+     if (TracePacket(trace_count_)) {
+-      REXLOG_INFO("netplay: socket {:X} send {} bytes to {} -> {}{}", handle(), buf_len,
++      REXLOG_INFO("netplay: socket {:X} send {} bytes to {} -> {}{}: {}", handle(), buf_len,
+                   Fmt(dst_ip, dst_port), Fmt(ip, HostPort(dst_port, slot)),
+-                  ret < 0 ? " failed " + std::to_string(keep.e) : "");
++                  ret < 0 ? " failed " + std::to_string(keep.e) : "", HexHead(buf, buf_len));
+     }
+   }
+   if (netplay::IsBroadcast(dst_ip) && TracePacket(trace_count_)) {
+-    REXLOG_INFO("netplay: socket {:X} broadcast {} bytes to guest port {}", handle(), buf_len,
+-                dst_port);
++    REXLOG_INFO("netplay: socket {:X} broadcast {} bytes to guest port {}: {}", handle(), buf_len,
++                dst_port, HexHead(buf, buf_len));
+   }
+   return ret < 0 ? ret : int(buf_len);
+ }
