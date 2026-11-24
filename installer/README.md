@@ -29,6 +29,7 @@ Nothing from the game ships with it. Running the installer again resumes where i
 | Controls | Mouse sensitivity, Invert mouse (keyboard and mouse only) | `--mouse_sensitivity`, `--mouse_invert` (`src/mouse_look.cpp`) |
 | Controls | Extra stick dead zone | `--left_stick_deadzone_percentage`, `--right_stick_deadzone_percentage` (the SDK's) |
 | Controls | Vibration | `--vibration=false` when off |
+| Multiplayer | Gamertag; Play multiplayer | starts `qosmp.exe` (beside qos.exe; not in the installer yet) with `--user_gamertag` (letters, digits, spaces, 15 at most) and `--user_xuid` (an offline XUID `E000...` made once and kept in settings.json, so two PCs differ: SDK patch 0020), plus game_args without qos.exe's own settings (frame rate, FOV, prompts, mouse look); log `game_mp.log` |
 | Game files | Game language | `--user_language` (English, French: the disc's two) |
 | Game files | Shader cache, Clear and rebuild | deletes `Documents\qos\cache\native` (native patch 0027 builds it again at the next start) |
 

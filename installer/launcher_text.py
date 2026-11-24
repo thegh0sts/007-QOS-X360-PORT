@@ -1745,4 +1745,34 @@ TEXT = {
         'Équilibre',
         'Mantener el equilibrio',
         'Equilibrio'),
+    'Multiplayer': (
+        'Mehrspieler',
+        'Multijoueur',
+        'Multijugador',
+        'Multigiocatore'),
+    'Gamertag': (
+        'Gamertag',
+        'Gamertag',
+        'Gamertag',
+        'Gamertag'),
+    'Your name in System Link games: letters, digits and spaces, up to 15 characters. Every player in a game needs a different one.': (
+        'Dein Name in System-Link-Spielen: Buchstaben, Ziffern und Leerzeichen, bis zu 15 Zeichen. Jeder Spieler in einem Spiel braucht einen anderen.',
+        'Votre nom dans les parties en System Link : lettres, chiffres et espaces, 15 caractères au plus. Chaque joueur d\'une partie doit avoir un nom différent.',
+        'Tu nombre en las partidas de System Link: letras, números y espacios, hasta 15 caracteres. Cada jugador de una partida necesita uno distinto.',
+        'Il tuo nome nelle partite in System Link: lettere, cifre e spazi, fino a 15 caratteri. Ogni giocatore di una partita deve averne uno diverso.'),
+    'Play multiplayer': (
+        'Mehrspieler spielen',
+        'Jouer en multijoueur',
+        'Jugar multijugador',
+        'Gioca in multigiocatore'),
+    'System Link over your local network. Display and controller settings are shared with single player.': (
+        'System Link über dein lokales Netzwerk. Anzeige- und Controller-Einstellungen gelten auch für den Einzelspieler.',
+        'System Link sur votre réseau local. Les réglages d\'affichage et de manette sont communs avec le mode solo.',
+        'System Link por tu red local. Los ajustes de pantalla y de mando son los mismos que en un jugador.',
+        'System Link sulla tua rete locale. Le impostazioni di schermo e controller sono le stesse del giocatore singolo.'),
+    "Multiplayer (qosmp.exe) isn't in this install yet.": (
+        'Der Mehrspieler (qosmp.exe) ist in dieser Installation noch nicht enthalten.',
+        'Le multijoueur (qosmp.exe) n\'est pas encore dans cette installation.',
+        'El multijugador (qosmp.exe) aún no está en esta instalación.',
+        'Il multigiocatore (qosmp.exe) non è ancora in questa installazione.'),
 }

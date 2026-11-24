@@ -40,7 +40,7 @@ SETTINGS_PATH = LAUNCHER_HOME / "settings.json"
 PANEL = "#1a1d21"
 ACCENT_HOVER = "#e0bd6a"
 
-TABS = ("Game files", "Display", "Graphics", "Controls", "Saves", "Achievements")
+TABS = ("Game files", "Display", "Graphics", "Controls", "Multiplayer", "Saves", "Achievements")
 # The game's languages (english\, french\ on the disc) -> XLanguage ids (--user_language).
 LANGUAGES = {"English": 1, "French": 4}
 
@@ -152,6 +152,10 @@ DEFAULTS = {
     "close_on_play": True,
     # The launcher's own language (launcher_text.py): "same" as the game's, or en / de / fr / es / it.
     "launcher_language": "same",
+    # Multiplayer (qosmp.exe, mp/): the profile's name in System Link games (the SDK's --user_gamertag, 15
+    # characters at most) and its XUID, made once per install (load_settings): every player in a game needs their own.
+    "gamertag": "Player",
+    "xuid": "",
 }
 
 
@@ -225,7 +229,17 @@ def load_settings():
             s[key] = min(hi, max(lo, int(s[key])))
         except (TypeError, ValueError):
             s[key] = DEFAULTS[key]
+    s["gamertag"] = clean_gamertag(s.get("gamertag"))
+    if not re.fullmatch(r"E[0-9A-F]{15}", str(s.get("xuid", ""))):
+        # An offline profile's XUID (E000...), random so two PCs don't share one.
+        s["xuid"] = "E000" + os.urandom(6).hex().upper()
     return s
+
+
+def clean_gamertag(name):
+    """A gamertag the game can show: letters, digits and spaces, 15 characters at most."""
+    name = re.sub(r"[^A-Za-z0-9 ]", "", str(name or "")).strip()[:15].strip()
+    return name or DEFAULTS["gamertag"]
 
 
 def save_settings(s):
@@ -459,6 +473,18 @@ def game_args(s, screen=None):
     return args
 
 
+# qos.exe's own settings (src/), which qosmp.exe doesn't have: left out of multiplayer's command line.
+SP_ONLY_ARGS = ("--frame_rate", "--fov", "--achievement_popups", "--pad_prompts", "--mouse_sensitivity",
+                "--mouse_invert")
+
+
+def mp_args(s, screen=None):
+    """ReXGlue command-line settings for qosmp.exe: the display and controller ones from game_args, plus the
+    multiplayer profile."""
+    args = [a for a in game_args(s, screen) if not a.startswith(SP_ONLY_ARGS)]
+    return args + [f"--user_gamertag={clean_gamertag(s.get('gamertag'))}", f"--user_xuid={s['xuid']}"]
+
+
 def game_env(s):
     """The native renderer's settings, read from the environment: render resolution, FXAA, texture filtering.
     (qos.exe sets BOTS_GFX_NESTED_DRAWS itself, src/qos_app.h; it's here too for builds from before that.)"""
@@ -637,6 +663,17 @@ class SettingsView(tk.Frame):
         self._control_map(kbm_map, KBM_MAP)
         self.vars["input_device"].trace_add("write", lambda *_: self._input_device_changed())
         self._input_device_changed()
+
+        box = self._page("Multiplayer")
+        tk.Label(box, text=tr("Gamertag"), font=("Segoe UI", 10), fg=FG, bg=PANEL).grid(row=0, column=0, sticky="w")
+        v = self.vars["gamertag"] = tk.StringVar(value=self.s["gamertag"])
+        ttk.Entry(box, textvariable=v, width=24).grid(row=0, column=1, sticky="e", pady=2)
+        note(box, 1, "Your name in System Link games: letters, digits and spaces, up to 15 characters. Every player "
+                     "in a game needs a different one.")
+        self._link(box, tr("Play multiplayer"), lambda: self.play(multiplayer=True)
+                   ).grid(row=2, column=0, sticky="w", pady=(10, 0))
+        note(box, 3, "System Link over your local network. Display and controller settings are shared with single "
+                     "player.")
 
         box = self._page("Saves")
         line = tk.Frame(box, bg=PANEL)
@@ -1125,23 +1162,34 @@ class SettingsView(tk.Frame):
         if self.confirm_close():
             self.winfo_toplevel().destroy()
 
-    def play(self):
+    def play(self, multiplayer=False):
         if self.needs_rebuild and not messagebox.askyesno(
                 tr("Play"), tr("The game hasn't been rebuilt for {version} yet, so this version's changes aren't "
                                "in it, and its new settings may not work.\n\nPlay anyway? (Reinstall now to rebuild "
                                "it.)", version=VERSION)):
             return
         s = self.collect()
+        s["gamertag"] = clean_gamertag(s.get("gamertag"))
+        if "gamertag" in self.vars:
+            self.vars["gamertag"].set(s["gamertag"])
         save_settings(s)
         self.saved = self._snapshot()
         exe, game = Path(self.info["exe"]), Path(self.info["game"])
+        if multiplayer:
+            exe = exe.with_name("qosmp.exe")
+            if not exe.is_file():
+                messagebox.showerror(tr("Play multiplayer"), tr("Multiplayer (qosmp.exe) isn't in this install yet."))
+                return
         if not any(exe.parent.glob("rexgpu-native*.dll")):
             messagebox.showerror(tr("Play"), tr("The native renderer (rexgpu-native) isn't next to qos.exe. "
                                                 "Reinstall to rebuild the game."))
             return
         log = logs_dir(self.info) / "game.log"
+        screen = (self.winfo_screenwidth(), self.winfo_screenheight())
+        if multiplayer:
+            log = logs_dir(self.info) / "game_mp.log"
         args = [str(exe), "--game_data_root", str(game)] + \
-            game_args(s, (self.winfo_screenwidth(), self.winfo_screenheight())) + ["--log_file", str(log)]
+            (mp_args(s, screen) if multiplayer else game_args(s, screen)) + ["--log_file", str(log)]
         try:
             # The working folder is the exe's: the renderer finds its files there (hints\, prompts\, pipelines\).
             start_game(args, exe.parent, game_env(s))
