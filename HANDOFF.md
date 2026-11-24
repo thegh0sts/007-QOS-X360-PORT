@@ -182,6 +182,12 @@ by Guest's UDP socket. SDK patch 0025-netplay-vdp-to-udp (own25): VDP sends set 
 version byte; a non-VDP socket receiving one strips the 2-byte length and cuts to the game data. **Works (user,
 23:39):** two instances on one PC, System Link: Host listed in Guest's join list and the join worked.
 
+**Installer builds multiplayer (25 Nov, 09:05), not run yet:** build_installer.bat copies mp\ (manifest, function
+tomls, CMake files, src, generated\rexglue.cmake) into payload\project\mp; the installer points qosmp_manifest.toml at
+../../game, runs codegen + configure + build in project\mp after single player (progress 0.80-0.98; failure logged,
+install continues), copies the renderer DLLs if missing, and writes "mp_exe" into launcher.json; the launcher's Play
+multiplayer uses it. Existing installs: Game files -> Reinstall.
+
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
 1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer).

@@ -300,6 +300,9 @@ class Installer:
         self.sdk_dir = root / "rexglue-sdk"
         self.log_path = root / "install.log"
         self.exe = self.project / "out" / "build" / PRESET / "qos.exe"
+        # Multiplayer (default_mp.xex), its own project in project\mp.
+        self.mp_project = self.project / "mp"
+        self.mp_exe = self.mp_project / "out" / "build" / PRESET / "qosmp.exe"
 
     # helpers ------------------------------------------------------------
     def log(self, msg):
@@ -544,7 +547,13 @@ class Installer:
         text = re.sub(r'(?m)^game_root\s*=.*$', 'game_root = "../game"', text)
         text = re.sub(r'(?m)^file_path\s*=.*$', 'file_path = "../game/default.xex"', text)
         man.write_text(text, encoding="utf-8")
-        self.log("Project files copied; manifest points at ../game")
+        mp_man = self.mp_project / "qosmp_manifest.toml"
+        if mp_man.is_file():
+            text = mp_man.read_text(encoding="utf-8")
+            text = re.sub(r'(?m)^game_root\s*=.*$', 'game_root = "../../game"', text)
+            text = re.sub(r'(?m)^file_path\s*=.*$', 'file_path = "../../game/default_mp.xex"', text)
+            mp_man.write_text(text, encoding="utf-8")
+        self.log("Project files copied; manifests point at the extracted game")
 
     def build(self, vcvars: Path, sdk: Path):
         prefix = str(sdk).replace("\\", "/")
@@ -602,7 +611,7 @@ class Installer:
         self.run_logged(base + f'cmake --fresh --preset {PRESET} {compilers}-DCMAKE_PREFIX_PATH="{prefix}" '
                                f'-Drexglue_DIR="{prefix}/lib/cmake/rexglue"')
         self.status(tr("Building the game (compiling: this takes a while)..."))
-        prog = self.stage(0.56, 0.98)
+        prog = self.stage(0.56, 0.80)
 
         def p(frac):
             prog(frac)
@@ -610,15 +619,19 @@ class Installer:
         self.run_logged(base + f'cmake --build out\\build\\{PRESET}', p)
         if not self.exe.exists():
             raise InstallError(tr("The build finished but qos.exe wasn't produced. Click \"Open log\" for details."))
+        self.build_multiplayer(base, rexglue, compilers, prefix)
         # Graphics plugins: Skullburglar's native Vulkan renderer (the default) and ReXGlue's
         # Xenos. The game's build copies them from the SDK; this catches a build that didn't.
-        for name in ("rexgpu-nativerd.dll", "rexgpu-xenosrd.dll"):
-            plugin = self.exe.parent / name
-            if not plugin.exists():
-                for cand in sdk.rglob(name):
-                    shutil.copy2(cand, plugin)
-                    self.log(f"Copied graphics plugin from {cand}")
-                    break
+        for exe in (self.exe, self.mp_exe):
+            if not exe.exists():
+                continue
+            for name in ("rexgpu-nativerd.dll", "rexgpu-xenosrd.dll"):
+                plugin = exe.parent / name
+                if not plugin.exists():
+                    for cand in sdk.rglob(name):
+                        shutil.copy2(cand, plugin)
+                        self.log(f"Copied graphics plugin from {cand}")
+                        break
         if default_plugin(self.exe) != "native":
             self.log("The native renderer isn't in this SDK; choose Xenos in the launcher.")
         # Third-party licences (Skullburglar's for the native renderer, among others).
@@ -628,6 +641,38 @@ class Installer:
             dest.mkdir(parents=True, exist_ok=True)
             for f in lic.glob("*.txt"):
                 shutil.copy2(f, dest / f.name)
+
+    def build_multiplayer(self, base, rexglue, compilers, prefix):
+        """Multiplayer (qosmp.exe) after single player. A failure here doesn't stop the install: single player
+        works without it, and the launcher's Play multiplayer says it isn't installed."""
+        if not (self.mp_project / "qosmp_manifest.toml").is_file():
+            self.log("No multiplayer project in this installer; skipping qosmp.exe.")
+            return
+        if not (self.game / "default_mp.xex").is_file():
+            self.log("The game has no default_mp.xex; skipping multiplayer.")
+            return
+        mp_base = base.replace(f'cd /d "{self.project}"', f'cd /d "{self.mp_project}"')
+        try:
+            self.status(tr("Recompiling the multiplayer code..."))
+            self.ui.put(("progress", 0.80))
+            self.run_logged(mp_base + f'"{rexglue}" codegen qosmp_manifest.toml')
+            if not (self.mp_project / "generated" / "default" / "sources.cmake").exists():
+                raise InstallError("multiplayer code generation produced no sources")
+            self.run_logged(mp_base + f'cmake --fresh --preset {PRESET} {compilers}-DCMAKE_PREFIX_PATH="{prefix}" '
+                                      f'-Drexglue_DIR="{prefix}/lib/cmake/rexglue"')
+            prog = self.stage(0.82, 0.98)
+
+            def p(frac):
+                prog(frac)
+                self.status(tr("Building multiplayer... {percent}%", percent=f"{frac * 100:.0f}"))
+            self.run_logged(mp_base + f'cmake --build out\\build\\{PRESET}', p)
+        except InstallError as e:
+            self.log(f"Multiplayer build failed (single player is fine): {e}")
+            return
+        if self.mp_exe.exists():
+            self.log(f"Multiplayer built: {self.mp_exe}")
+        else:
+            self.log("The multiplayer build finished but qosmp.exe wasn't produced.")
 
     def make_launchers(self):
         bat = self.root / "Play.bat"
@@ -641,6 +686,8 @@ class Installer:
             shutil.copy2(src_icon, icon)
         # Remember the install so the launcher can find it.
         info = {"root": str(self.root), "exe": str(self.exe), "game": str(self.game)}
+        if self.mp_exe.exists():
+            info["mp_exe"] = str(self.mp_exe)
         LAUNCHER_HOME.mkdir(parents=True, exist_ok=True)
         (LAUNCHER_HOME / "launcher.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
         # When running as the packaged launcher, keep a copy next to the game and point the shortcut at it,

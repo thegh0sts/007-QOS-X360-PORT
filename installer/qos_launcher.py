@@ -1197,7 +1197,7 @@ class SettingsView(tk.Frame):
         self.saved = self._snapshot()
         exe, game = Path(self.info["exe"]), Path(self.info["game"])
         if multiplayer:
-            exe = exe.with_name("qosmp.exe")
+            exe = Path(self.info.get("mp_exe") or exe.with_name("qosmp.exe"))
             if not exe.is_file():
                 messagebox.showerror(tr("Play multiplayer"), tr("Multiplayer (qosmp.exe) isn't in this install yet."))
                 return

@@ -36,6 +36,12 @@ for %%D in (hints prompts pipelines thirdparty) do (
   mkdir payload\project\%%D
   xcopy /e /i /q /y ..\%%D payload\project\%%D >nul || goto :missing
 )
+rem Multiplayer (mp\: default_mp.xex, built as qosmp.exe beside single player's build; it uses ..\src's crash
+rem handler and ..\prompts, ..\pipelines).
+mkdir payload\project\mp\src payload\project\mp\generated
+for %%F in (qosmp_manifest.toml mp_functions.toml mp_functions_scan.toml CMakeLists.txt CMakePresets.json) do copy /y "..\mp\%%F" payload\project\mp\ >nul || goto :missing
+copy /y ..\mp\src\*.* payload\project\mp\src\ >nul || goto :missing
+copy /y ..\mp\generated\rexglue.cmake payload\project\mp\generated\ >nul || goto :missing
 mkdir payload\licenses
 copy /y ..\licenses\*.txt payload\licenses\ >nul || goto :missing
 

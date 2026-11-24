@@ -1785,4 +1785,14 @@ TEXT = {
         "L'identifiant de votre profil, créé pour cette installation. Le jeu distingue les joueurs grâce à lui.",
         'El identificador de tu perfil, creado para esta instalación. El juego distingue a los jugadores por él.',
         "L'ID del tuo profilo, creato per questa installazione. Il gioco distingue i giocatori in base a esso."),
+    'Recompiling the multiplayer code...': (
+        'Kompiliere den Mehrspieler-Code neu...',
+        'Recompilation du code multijoueur...',
+        'Recompilando el código multijugador...',
+        'Ricompilazione del codice multigiocatore...'),
+    'Building multiplayer... {percent}%': (
+        'Erstelle den Mehrspieler... {percent} %',
+        'Compilation du multijoueur... {percent} %',
+        'Compilando el multijugador... {percent} %',
+        'Compilazione del multigiocatore... {percent}%'),
 }
