@@ -658,6 +658,13 @@ cameras), btn_navigate_all FAEF750EA28E92AC (W), btn_nav_up 210B1F6745121A4F (X)
 All in keyboard.txt; not built/tested. 23A5 also showed in texdump4 during tutorials: watch for a hint showing 2.
 **Works (user, 19:27; qos_151):** all hints show their keys. Phone detection works: "phone true" only with the
 phone up (pause menu: paused 1 -> false; main menu: cgameInitialized 0 -> false), keyboard_phone.txt used there.
+**Silencer hint (19:28, user screenshot, Opera):** not reworded: that long box ("An Elite squad will deploy ... Press
+Down on the D-Pad to attach/remove your weapon's silencer.") never reaches sub_823D5480. Its text field holds "@KEY"
+and the Scaleform translator sub_823D3A08 (r4 result string, r5 wide key; calls sub_822C7298, UTF-8 -> wide
+sub_822C7AE8, sets the result with sub_8245AAD0) localizes it. tutorial_keys.cpp now hooks sub_823D3A08 too and, in
+keyboard mode, swaps "Press Down/Up on the D-Pad" for "Press <img src=btn_nav_down|up ...>" (tutorial_keys_html,
+default on) or "Press 4 / X" (off). Unknown whether that text field takes HTML: if the raw tag shows, default the cvar
+off. Log "tutorial keys (box): ...". Not built.
 
 ## To do, 24 Nov (user, 23:20)
 

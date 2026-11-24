@@ -54,6 +54,15 @@ REXCVAR_DEFINE_BOOL(tutorial_keys_test, false, "Input",
 REX_EXTERN(__imp__sub_823D4580);  // command -> button image name (wide string)
 REX_EXTERN(__imp__sub_823D5480);  // hint text -> Scaleform HTML with button images
 REX_EXTERN(__imp__sub_822C7298);  // SEH_LocalizeTextMessage
+REX_EXTERN(__imp__sub_823D3A08);  // Scaleform translator: "@KEY" text fields -> localized text (no [[{cmd}]] tokens)
+
+// The long tutorial boxes (e.g. Opera's "An Elite squad will deploy ... Press Down on the D-Pad to attach/remove your
+// weapon's silencer.") don't go through sub_823D5480: their text fields hold "@KEY" and the Scaleform translator
+// sub_823D3A08 (r4 = result string, r5 = wide key) localizes them with sub_822C7298 and sets the result as is. So
+// there's no [[{cmd}]] -> picture step; in keyboard mode the D-pad wording is replaced by the same <img> tag
+// sub_823D5480 writes (tutorial_keys_html, if the text field takes HTML) or by the key's name.
+REXCVAR_DEFINE_BOOL(tutorial_keys_html, true, "Input",
+                    "Keyboard prompts: long tutorial boxes get key pictures (HTML img); off: the key's name");
 
 namespace qos::pad_prompts {
 bool Keyboard();
@@ -86,6 +95,18 @@ constexpr Reword kRewords[] = {
     {"Press [[{weapnext}]] to switch weapons", "Press [[{weapnext}]] / [[{kbm_2}]] to switch weapons"},
     {"Press up on the D-Pad to change the fire mode", "Press [[{nextfiretype}]] to change the fire mode"},
     {"Press Down on the D-Pad to attach/remove", "Press [[{togglesilencer}]] to attach/remove"},
+};
+thread_local bool t_in_translate = false;  // inside sub_823D3A08
+struct TranslateReword {
+  const char* find;
+  const char* image;  // library picture (keyboard.txt shows it as the key)
+  const char* key;
+};
+constexpr TranslateReword kTranslateRewords[] = {
+    {"Press Down on the D-Pad", "btn_nav_down", "4"},
+    {"Press down on the D-Pad", "btn_nav_down", "4"},
+    {"Press Up on the D-Pad", "btn_nav_up", "X"},
+    {"Press up on the D-Pad", "btn_nav_up", "X"},
 };
 thread_local bool t_in_hint = false;  // inside sub_823D5480 (hint text with [[{cmd}]] tokens)
 std::unordered_map<std::string, uint32_t> g_reworded;  // original text -> reworded copy in guest memory
@@ -145,8 +166,47 @@ extern "C" REX_FUNC(sub_823D5480) {
   t_in_hint = false;
 }
 
+extern "C" REX_FUNC(sub_823D3A08) {
+  t_in_translate = true;
+  __imp__sub_823D3A08(ctx, base);
+  t_in_translate = false;
+}
+
+namespace {
+void TranslateLocalized(PPCContext& ctx, uint8_t* base) {
+  const std::string text(reinterpret_cast<const char*>(base + ctx.r3.u32));
+  if (text.find("D-Pad") == std::string::npos) return;
+  const bool html = REXCVAR_GET(tutorial_keys_html);
+  std::lock_guard<std::mutex> lock(g_mutex);
+  const std::string cache_key = (html ? "H|" : "T|") + text;
+  auto it = g_reworded.find(cache_key);
+  if (it == g_reworded.end()) {
+    std::string out = text;
+    for (const TranslateReword& r : kTranslateRewords) {
+      const size_t at = out.find(r.find);
+      if (at == std::string::npos) continue;
+      const std::string with = html ? std::string("Press <img src=\"") + r.image +
+                                          "\" width=\"42\" height=\"42\" vspace=\"-20\">"
+                                    : std::string("Press ") + r.key;
+      out.replace(at, std::strlen(r.find), with);
+    }
+    const uint32_t guest = out == text ? 0 : GuestText(base, out);
+    it = g_reworded.emplace(cache_key, guest).first;
+    if (g_reworded_logged < 16) {
+      ++g_reworded_logged;
+      REXLOG_INFO("tutorial keys (box): \"{}\" -> \"{}\"", text, out);
+    }
+  }
+  if (it->second) ctx.r3.u64 = it->second;
+}
+}  // namespace
+
 extern "C" REX_FUNC(sub_822C7298) {
   __imp__sub_822C7298(ctx, base);
+  if (t_in_translate && ctx.r3.u32 && REXCVAR_GET(tutorial_keys) && qos::pad_prompts::Keyboard()) {
+    TranslateLocalized(ctx, base);
+    return;
+  }
   if (!t_in_hint || !ctx.r3.u32 || !REXCVAR_GET(tutorial_keys) || !qos::pad_prompts::Keyboard()) return;
   const std::string text(reinterpret_cast<const char*>(base + ctx.r3.u32));
   std::lock_guard<std::mutex> lock(g_mutex);
