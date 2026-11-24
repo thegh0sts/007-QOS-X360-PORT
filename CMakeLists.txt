@@ -28,6 +28,9 @@ set(QOS_SOURCES
     src/menu_keys.cpp
     src/tutorial_keys.cpp
     src/no_multiplayer.cpp
+    src/native_inflate.cpp
+    thirdparty/miniz/miniz.c
+    thirdparty/miniz/miniz_tinfl.c
     src/version_log.cpp
     src/achievement_list.cpp
 )
@@ -39,6 +42,13 @@ else()
 endif()
 
 rexglue_setup_target(qos GPU_PLUGINS xenos)
+
+# miniz (native inflate for fastfiles and menu movies, src/native_inflate.cpp): its C files built as C++ (the project
+# is C++ only), inflate side only, without the precompiled header.
+set(QOS_MINIZ_DEFS MINIZ_NO_ZLIB_COMPATIBLE_NAMES MINIZ_NO_DEFLATE_APIS MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME)
+set_source_files_properties(thirdparty/miniz/miniz.c thirdparty/miniz/miniz_tinfl.c PROPERTIES
+    LANGUAGE CXX SKIP_PRECOMPILE_HEADERS ON COMPILE_DEFINITIONS "${QOS_MINIZ_DEFS}")
+target_include_directories(qos PRIVATE ${CMAKE_SOURCE_DIR}/thirdparty/miniz)
 target_compile_definitions(qos PRIVATE QOS_VERSION="${QOS_RELEASE}")
 
 # The "B QUIT" title-screen hint images (hints/, tools/make_quit_hint.py) and the PlayStation button pictures with

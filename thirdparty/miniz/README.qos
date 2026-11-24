@@ -1,0 +1,2 @@
+miniz 2c50092 (https://github.com/richgel999/miniz), MIT licence (LICENSE). Only the inflate side is built
+(src/native_inflate.cpp); files copied unchanged, miniz_export.h written by hand.

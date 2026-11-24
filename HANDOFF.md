@@ -684,7 +684,15 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
 2. **Level-start stall:** `BOTS_HITCH_MS=20` from a checkpoint load; CP idle (game) vs textures (renderer). Worst frame
    500 ms in the dev build vs ~130 ms in 0.1.1: A/B the dev build without `--mnk_mode=true --mnk_mouse=true` (0098's
    prompt lookups) to see whether tonight's code adds to it.
-3. **Faster loads:** hook the game's fastfile inflate (recompiled PPC zlib) and use host zlib (a whites_estate load
+3. **Faster loads — written 24 Nov 20:15, not built:** `src/native_inflate.cpp` + `thirdparty/miniz` (miniz 2c50092,
+   MIT, inflate only, its .c built as C++ without the PCH). The game's zlib 1.1.4 copy: inflateInit_ sub_8230BA70
+   (-> inflateInit2_ sub_8230B930, wbits 15), inflate sub_8230BA80, inflateReset sub_8230B818, inflateEnd sub_8230B898;
+   users: fastfile reader sub_821C1E10 (Z_SYNC_FLUSH; init 0x821C217C, end 0x821C1FF8) and Scaleform (0x82470130,
+   0x824A99E4 ...). Hooks keep the guest init/end, add a host mz_stream per guest z_stream, and run mz_inflate on guest
+   memory, writing next_in/avail_in/total_in/next_out/avail_out/total_out/adler back (BE). Cloud test: ui.ff streamed
+   in 256 KB/1 MB chunks through the same wrapper = byte-identical to Python zlib, 71 MB in 321 ms. Log "inflate: ...
+   native" per stream >= 1 MB; `--native_inflate=false` logs the recompiled time ("recompiled") for A/B. The
+   multiplayer inflate-patch try was removed from no_multiplayer.cpp (same hook). Was:  hook the game's fastfile inflate (recompiled PPC zlib) and use host zlib (a whites_estate load
    ~5 s, 23:13:19.7-23:13:25.0 in 0.1.1's game.log). Find the inflate routine first (zlib strings / the fastfile
    loader).
 4. **Unchanged-texture check by written pages:** hash only the 4 KB pages the tracker saw written (now XXH3 of the
