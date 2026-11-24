@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 #include <memory>
+#include <string>
 
 #include <rex/cvar.h>
 #include <rex/rex_app.h>
@@ -29,6 +30,10 @@ class QosMpApp : public rex::ReXApp {
   }
 
   void OnPostInitLogging() override { qos::crash::Install(); }
+
+  // The runtime loads game:\default.xex (single player) unless told otherwise: the first run started single
+  // player's entry point (0x82425F18), which isn't in this recompilation ("No function registered at 82425F18").
+  void OnLoadXexImage(std::string& xex_image) override { xex_image = "game:\\default_mp.xex"; }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
     if (config.gpu_plugin.empty()) config.gpu_plugin = "xenos";
