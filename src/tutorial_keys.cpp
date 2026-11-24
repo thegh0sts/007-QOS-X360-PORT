@@ -18,7 +18,6 @@
 // which keyboard.txt then shows as the right key:
 //   +dash   -> btn_left   (Ctrl: sprint)
 //   +stance -> btn_right  (C: stance)
-//   +cover  -> btn_navigate_h (E: cover; the menus' A picture, btn_accept, then shows Enter like the title screen)
 // Every command it sees is logged once ("tutorial keys: ..."), to find more.
 
 #include "generated/default/qos_pch.h"
@@ -34,7 +33,7 @@
 #include <rex/system/kernel_state.h>
 
 REXCVAR_DEFINE_BOOL(tutorial_keys, true, "Input",
-                    "Keyboard prompts: give sprint, stance and cover their own pictures in tutorial text");
+                    "Keyboard prompts: give sprint and stance their own pictures in tutorial text");
 
 REX_EXTERN(__imp__sub_823D4580);  // command -> button image name (wide string)
 
@@ -49,7 +48,7 @@ struct Swap {
   const char* image;
   uint32_t guest = 0;  // the image name as a wide (UTF-16BE) string in guest memory
 };
-Swap g_swaps[] = {{"+dash", "btn_left"}, {"+stance", "btn_right"}, {"+cover", "btn_navigate_h"}};
+Swap g_swaps[] = {{"+dash", "btn_left"}, {"+stance", "btn_right"}};
 std::mutex g_mutex;
 std::set<std::string> g_logged;
 

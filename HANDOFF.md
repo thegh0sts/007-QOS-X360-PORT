@@ -618,7 +618,7 @@ btn_back, 3 btn_refresh, 4 btn_y, 5 bumper_left, 6 bumper_right, 15 button_back,
 trigger_left, 19 trigger_right, 20 btn_nav_up, 21 btn_nav_down). Library: scaleform/CmSharedPlatform.gfx (also
 btn_left, btn_right, btn_navigate_h/v/all). Texture hash = FNV-1a 64 of the 16 KiB tiled guest texture (64x64 DXT5,
 pitch 4); ui.ff's copy isn't byte-identical (couldn't hash offline). `src/tutorial_keys.cpp` hooks sub_823D4580: in
-keyboard mode +dash -> btn_left, +stance -> btn_right, +cover -> btn_navigate_h (menus A then Enter) (wide names in SystemHeapAlloc memory); logs each command once.
+keyboard mode +dash -> btn_left, +stance -> btn_right (wide names in SystemHeapAlloc memory); logs each command once.
 Next: a texture dump (BOTS_GFX_DUMP_TEXTURES) of the sprint and stay-low hints to get btn_left/btn_right's hashes,
 then `replace` lines (placeholders in keyboard.txt) -> km_ctrl_sq / km_c.
 **User's fixes (24 Nov, 16:57, screenshots from the build before the hook):** stay-low hint C + S (hook: C once
