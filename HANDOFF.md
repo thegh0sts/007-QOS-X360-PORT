@@ -741,6 +741,7 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    controllers handle 38/40/37/39/8; Enter 13 in other classes). Disassembly dumps: cloud /tmp/all.txt (not kept).
    Next: find which controller handles Enter on the main menu list and how it opens the item's screen; then patch that
    item (e.g. make its click a no-op).
+   **Parked (user, 20:01: "move on").** Selecting MULTIPLAYER still leaves the LOADING... screen; don't pick it.
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base
