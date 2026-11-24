@@ -73,6 +73,10 @@ INPUT_DEVICES = ["Auto", "Keyboard and mouse", "Xbox controller", "PlayStation c
 INPUT_PROMPTS = {"Auto": "auto", "Keyboard and mouse": "keyboard", "Xbox controller": "xbox",
                  "PlayStation controller": "playstation"}
 # Settings from before the input device choice (launcher 0.1.1: "pad_prompts").
+# Render threads (Graphics tab): 1 = the renderer alone (original), 2 = plus the draw-recording thread (native patch
+# 0093, BOTS_GFX_RECORD_THREAD), 3 = plus the texture worker (native patch 0099, BOTS_GFX_WORKER). Each includes the
+# ones before it.
+RENDER_THREADS = ["1 (original)", "2", "3"]
 OLD_PAD_PROMPTS = {"Keyboard only": "Keyboard and mouse", "Xbox only": "Xbox controller",
                    "PlayStation only": "PlayStation controller"}
 
@@ -84,8 +88,9 @@ DEFAULTS = {
     "aa": "Off",
     "upscaling": UPSCALING[0],
     "texture_filtering": "Game's own",
-    # Draw commands recorded on a second thread (native patch 0093): ~2 ms a frame faster in busy scenes.
-    "render_thread": True,
+    # Draw commands recorded on a second thread (native patch 0093): ~2 ms a frame faster in busy scenes. The third
+    # (texture worker, 0099) is new: off by default until tested.
+    "render_threads": "2",
     "brightness": 100,
     "fps": "60",
     "vsync": True,
@@ -161,11 +166,14 @@ def load_settings():
         s.update(json.loads(SETTINGS_PATH.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         pass
+    if "render_threads" not in s and "render_thread" in s:  # launcher 0.1.1: a "Second render thread" checkbox
+        s["render_threads"] = "2" if s.get("render_thread") else RENDER_THREADS[0]
     if "input_device" not in s or s.get("input_device") not in INPUT_DEVICES:
         s["input_device"] = OLD_PAD_PROMPTS.get(s.get("pad_prompts"), "Auto")
     for key, values in (("resolution", RESOLUTIONS), ("render_scale", SCALES), ("aa", AA), ("upscaling", UPSCALING),
                         ("texture_filtering", TEXTURE_FILTERING), ("fps", FPS), ("fps_counter", FPS_COUNTER),
-                        ("input_device", INPUT_DEVICES), ("language", list(LANGUAGES))):
+                        ("input_device", INPUT_DEVICES), ("render_threads", RENDER_THREADS),
+                        ("language", list(LANGUAGES))):
         if s.get(key) not in values:
             s[key] = DEFAULTS[key]
     for key, lo, hi in (("brightness", 50, 200), ("deadzone", 0, 40), ("fov", 65, 110)):
@@ -418,7 +426,9 @@ def game_env(s):
     aniso = ANISOTROPY.get(s.get("texture_filtering"), 0)
     if aniso:
         env["BOTS_GFX_FORCE_ANISO"] = str(aniso)
-    env["BOTS_GFX_RECORD_THREAD"] = "1" if s.get("render_thread", True) else "0"
+    threads = RENDER_THREADS.index(s.get("render_threads")) + 1 if s.get("render_threads") in RENDER_THREADS else 2
+    env["BOTS_GFX_RECORD_THREAD"] = "1" if threads >= 2 else "0"
+    env["BOTS_GFX_WORKER"] = "1" if threads >= 3 else "0"
     return env
 
 
@@ -550,8 +560,10 @@ class SettingsView(tk.Frame):
         note(box, 1, "Black and white stay as they are.")
         self._combo(box, 2, "texture_filtering", "Texture filtering", TEXTURE_FILTERING)
         note(box, 3, "Keeps floors and walls sharp at an angle. The HUD and text keep the game's own filtering.")
-        self._check(box, 4, "render_thread", "Second render thread")
-        note(box, 5, "Faster in busy scenes. Turn it off if the picture flickers or objects go missing.")
+        self._combo(box, 4, "render_threads", "Render threads", RENDER_THREADS)
+        note(box, 5, "2 records the drawing on a second thread: faster in busy scenes. 3 also copies textures on a "
+                     "third thread, for fewer hitches when areas load. Go back to 1 if the picture flickers or objects "
+                     "go missing.")
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)

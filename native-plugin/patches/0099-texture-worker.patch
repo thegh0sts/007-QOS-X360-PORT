@@ -1,0 +1,206 @@
+qos: a third render thread for texture work (BOTS_GFX_WORKER=1; the launcher's "Render threads: 3").
+
+Texture levels of 64 KB or more of guest data are copied in two halves at once: the render thread untiles,
+byte-swaps and BC-decodes the first half of the level's block rows, the worker (texture_worker.h) the second half;
+the render thread waits for it, then records the upload as before. Counted in the textures log line ("levels
+copied with the texture worker").
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 2087c89..e57f5ca 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -265,14 +265,16 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         }
+         ReportFrameTimes(frames_ - last_.frames);
+         REXLOG_INFO("gfx native: textures {} held, {:.0f} MB (budget {}); over {} frames: {} loaded ({} of them "
+-                    "evicted earlier), {} reloaded after CPU writes ({} more kept: written but unchanged), {} evicted",
++                    "evicted earlier), {} reloaded after CPU writes ({} more kept: written but unchanged), {} evicted, {} "
++                    "levels copied with the texture worker",
+                     renderer_->texture_count(), renderer_->texture_bytes() / 1048576.0,
+                     renderer_->texture_budget() ? fmt::format("{:.0f} MB", renderer_->texture_budget() / 1048576.0)
+                                                 : std::string("none, evicted by age"),
+                     frames_ - last_.frames, st.texture_loads - last_.texture_loads,
+                     st.texture_loads_evicted - last_.texture_loads_evicted, st.texture_reloads - last_.texture_reloads,
+                     st.texture_reloads_skipped - last_.texture_reloads_skipped,
+-                    st.texture_evictions - last_.texture_evictions);
++                    st.texture_evictions - last_.texture_evictions,
++                    st.texture_levels_split - last_.texture_levels_split);
+         RequestHostReport(now);
+       }
+       REXLOG_INFO("gfx native: memory: {}", renderer_->TakeMemoryReport());
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index cb50776..2d00a19 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -247,6 +247,11 @@ bool Renderer::InitDrawing() {
+     recorder_ = std::make_unique<Recorder>();
+     REXLOG_INFO("gfx native: draws recorded on a worker thread (BOTS_GFX_RECORD_THREAD=1)");
+   }
++  if (const char* v = std::getenv("BOTS_GFX_WORKER"); v && *v && *v != '0') {
++    texture_worker_ = std::make_unique<TextureWorker>();
++    REXLOG_INFO("gfx native: texture worker thread on (BOTS_GFX_WORKER): texture levels of 64 KB or more are copied "
++                "in two halves at once");
++  }
+   if (const char* v = std::getenv("BOTS_GFX_MAX_ANISO"); v && *v) max_anisotropy_ = uint32_t(std::atoi(v));
+   if (const char* v = std::getenv("BOTS_GFX_FORCE_ANISO"); v && *v) force_anisotropy_ = uint32_t(std::atoi(v));
+   if (force_anisotropy_) REXLOG_INFO("gfx native: anisotropic filtering at least {}x on 3D textures", force_anisotropy_);
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index 69008a6..dff58f2 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -37,6 +37,7 @@
+ 
+ #include "../pm4.h"
+ #include "recorder.h"
++#include "texture_worker.h"
+ #include "shaders.h"
+ #include "vk_api.h"
+ 
+@@ -186,6 +187,7 @@ class Renderer : public Pm4Sink {
+     uint64_t index_heap_hits = 0, index_heap_resets = 0, texture_memo_hits = 0, index_heap_requests = 0;
+     uint64_t sampler_memo_hits = 0, set_binds_skipped = 0;  // qos (0092)
+     uint64_t texture_reloads_skipped = 0;  // qos (0095): dirty textures kept, their bytes unchanged
++    uint64_t texture_levels_split = 0;     // qos (0099): texture levels copied half on the texture worker
+     uint64_t index_bytes_converted = 0, index_expanded = 0;  // qos (0094): DMA index bytes converted; draws whose indices were rebuilt on the CPU (quads, fans, other)
+     uint64_t pending_draws = 0;  // live: skipped while their shaders or pipeline were still being made
+     // Live: draws dropped because their pipeline failed to build (the driver refused it; every frame it's drawn).
+@@ -722,6 +724,8 @@ class Renderer : public Pm4Sink {
+   // command buffer for recording here and now: it first waits for the worker to finish what it was handed. Rec(f)
+   // hands f(cmd) to the worker (or runs it here without one); f must capture by value.
+   std::unique_ptr<Recorder> recorder_;
++  // qos (patch 0099): BOTS_GFX_WORKER=1, a third thread that copies half of each big texture level (texture_worker.h).
++  std::unique_ptr<TextureWorker> texture_worker_;
+   void RecBeginRendering(const VkRenderingInfo& info);  // vkCmdBeginRendering with the info copied (Rec)
+  public:
+   uint64_t recorder_packets() const { return recorder_ ? recorder_->pushed() : 0; }
+diff --git a/src/gfx/vk/texture.cpp b/src/gfx/vk/texture.cpp
+index 81b755c..3d38802 100644
+--- a/src/gfx/vk/texture.cpp
++++ b/src/gfx/vk/texture.cpp
+@@ -687,10 +687,20 @@ void Renderer::LoadTexture(const rg::xenos::xe_gpu_texture_fetch_t& fetch, Guest
+         runs_3d = it->second;
+       }
+     }
+-    for (uint32_t layer = 0; layer < layers; ++layer) {
+-      const uint8_t* source = memory_(level_address + layer * guest.array_slice_stride_bytes);
+-      for (uint32_t z = 0; z < level_depth; ++z) {
+-        for (uint32_t y = 0; y < blocks_y; ++y) {
++    // qos (0099): the level's block rows (all layers and slices back to back) are independent: rows [r0, r1) are
++    // copied to out_base + r0 * row bytes, then BC-decoded or shuffled in place. With the texture worker the second
++    // half runs there while the render thread does the first.
++    const size_t row_out = size_t(blocks_x) * bpb;
++    const uint32_t rows = blocks_y * level_depth * layers;
++    uint8_t* const out_base = out;
++    auto copy_rows = [&, out_base](uint32_t r0, uint32_t r1) {
++      uint8_t* out = out_base + size_t(r0) * row_out;
++      for (uint32_t r = r0; r < r1; ++r) {
++        const uint32_t layer = r / (blocks_y * level_depth);
++        const uint32_t z = (r / blocks_y) % level_depth;
++        const uint32_t y = r % blocks_y;
++        const uint8_t* source = memory_(level_address + layer * guest.array_slice_stride_bytes);
++        {
+           const int32_t by = int32_t(y + offset_y), bz = int32_t(z + offset_z);
+           if (!fetch.tiled) {
+             const int32_t at = (bz * int32_t(guest.z_slice_stride_block_rows) + by) * int32_t(guest.row_pitch_bytes) +
+@@ -718,11 +728,22 @@ void Renderer::LoadTexture(const rg::xenos::xe_gpu_texture_fetch_t& fetch, Guest
+           }
+         }
+       }
+-    }
+-    if (decode != BcDecode::kNone) {
+-      DecodeBcBlocks(decode, pack_bc1_, blocks.data(), blocks_x, blocks_y * level_depth * layers, staging);
++      if (decode != BcDecode::kNone) {
++        const size_t decoded_row = size_t(blocks_x) * 4 * 4 * decoded_bpp;  // one block row: 4 texel rows
++        DecodeBcBlocks(decode, pack_bc1_, out_base + size_t(r0) * row_out, blocks_x, r1 - r0,
++                       staging + size_t(r0) * decoded_row);
++      } else {
++        ApplyShuffle(host.shuffle, staging + size_t(r0) * row_out, size_t(r1 - r0) * row_out);
++      }
++    };
++    if (texture_worker_ && rows >= 2 && bytes >= 64 * 1024) {
++      const uint32_t mid = rows / 2;
++      texture_worker_->Start([&copy_rows, mid, rows] { copy_rows(mid, rows); });
++      copy_rows(0, mid);
++      texture_worker_->Wait();
++      ++stats_.texture_levels_split;
+     } else {
+-      ApplyShuffle(host.shuffle, staging, bytes);
++      copy_rows(0, rows);
+     }
+     VkBufferImageCopy region{};
+     region.bufferOffset = offset;
+diff --git a/src/gfx/vk/texture_worker.h b/src/gfx/vk/texture_worker.h
+new file mode 100644
+index 0000000..e85cdd7
+--- /dev/null
++++ b/src/gfx/vk/texture_worker.h
+@@ -0,0 +1,69 @@
++// qos (patch 0099): a third render thread for texture work. BOTS_GFX_WORKER=1 (the launcher's "Render threads: 3")
++// starts it. A texture level big enough (>= 64 KB of guest data) is copied out of guest memory in two halves: the
++// render thread untiles / byte-swaps / BC-decodes the first half of its rows, this worker the second half, at the same
++// time; the render thread then waits for the worker and records the upload as before. Nothing is kept between
++// textures, so the worst case is the same time as without it.
++#pragma once
++
++#include <condition_variable>
++#include <functional>
++#include <mutex>
++#include <thread>
++
++namespace bots::gfx::vk {
++
++class TextureWorker {
++ public:
++  TextureWorker() : thread_([this] { Run(); }) {}
++  ~TextureWorker() {
++    {
++      std::lock_guard<std::mutex> lock(mutex_);
++      quit_ = true;
++    }
++    cv_.notify_all();
++    thread_.join();
++  }
++  TextureWorker(const TextureWorker&) = delete;
++  TextureWorker& operator=(const TextureWorker&) = delete;
++
++  // Hands job to the worker; Wait() returns once it has run. One job at a time.
++  void Start(std::function<void()> job) {
++    {
++      std::lock_guard<std::mutex> lock(mutex_);
++      job_ = std::move(job);
++      busy_ = true;
++    }
++    cv_.notify_all();
++  }
++  void Wait() {
++    std::unique_lock<std::mutex> lock(mutex_);
++    done_cv_.wait(lock, [this] { return !busy_; });
++  }
++  uint64_t jobs() const { return jobs_; }
++
++ private:
++  void Run() {
++    std::unique_lock<std::mutex> lock(mutex_);
++    for (;;) {
++      cv_.wait(lock, [this] { return quit_ || (busy_ && job_); });
++      if (quit_) return;
++      std::function<void()> job = std::move(job_);
++      job_ = nullptr;
++      lock.unlock();
++      job();
++      lock.lock();
++      busy_ = false;
++      ++jobs_;
++      done_cv_.notify_all();
++    }
++  }
++
++  std::mutex mutex_;
++  std::condition_variable cv_, done_cv_;
++  std::function<void()> job_;
++  bool busy_ = false, quit_ = false;
++  uint64_t jobs_ = 0;
++  std::thread thread_;
++};
++
++}  // namespace bots::gfx::vk

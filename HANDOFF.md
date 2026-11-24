@@ -709,7 +709,18 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
 5. **Draw CPU ideas** (from the profile): tracker memo by page stamps / lock-free "pages unwritten" fast path
    (60M memory sync requests, 3.7M took the lock, 23 Nov), descriptor reuse or push descriptors, setup from register
    dirty bits, constants by changed ranges.
-6. **A third render thread** (user, 23:47: worth trying despite the risk). Off by default, one switch per duty, e.g.
+6. **Third render thread — written 24 Nov 20:55, not built:** native patch `0099-texture-worker.patch`
+   (`src/gfx/vk/texture_worker.h`): BOTS_GFX_WORKER=1 starts one worker thread; in LoadTexture each level of >= 64 KB
+   guest data has its block rows (all layers/slices back to back) split in two: the render thread copies/untiles/
+   byte-swaps and BC-decodes/shuffles rows [0, mid), the worker [mid, rows), at once; the render thread waits, then
+   records the upload as before. Textures log line adds "N levels copied with the texture worker". Checked: applies
+   after 0001-0098 (cloud Skullburglar tree /home/claude/sk/base, commits per patch), texture.cpp/draw.cpp syntax-check
+   against the cloud SDK apart from its known ext_EXT_external_memory_host mismatch. Launcher: Graphics "Render
+   threads" dropdown 1 (original) / 2 / 3 (user: 2 = 1+2, 3 = all three): BOTS_GFX_RECORD_THREAD 0/1/1,
+   BOTS_GFX_WORKER 0/0/1; default 2; old render_thread checkbox migrates. SDK bundle name qos5. Not yet moved: the
+   unchanged-texture hash checks (they run at the draw that finds the texture dirty; an early hash could miss later
+   writes). Test: build_native + game build; A/B a level start and a streaming walk with BOTS_GFX_WORKER=1 vs 0,
+   BOTS_HITCH_MS=20. Earlier plan:  (user, 23:47: worth trying despite the risk). Off by default, one switch per duty, e.g.
    `BOTS_GFX_WORKER=textures,hash` (duties: `hash` unchanged-texture checks, `textures` loads/untiling/decompression
    and per-frame reloads, `uploads` vertex/constant copies, `parse` PM4 + register writes, maybe its own thread, i.e.
    a 4th). **Agreed start (user, 23:48): `hash` + `textures`** (the dips are texture-write/streaming bursts; the worker

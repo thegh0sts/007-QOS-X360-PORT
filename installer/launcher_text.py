@@ -1550,4 +1550,19 @@ TEXT = {
         "Auto joue avec une manette, avec les boutons Xbox ou PlayStation de la manette branchée.",
         'Automático juega con un mando, con botones de Xbox o PlayStation según el mando conectado.',
         'Automatico gioca con un controller, con i tasti Xbox o PlayStation del controller collegato.'),
+    'Render threads': (
+        'Render-Threads',
+        'Threads de rendu',
+        'Hilos de renderizado',
+        'Thread di rendering'),
+    '1 (original)': (
+        '1 (Original)',
+        '1 (original)',
+        '1 (original)',
+        '1 (originale)'),
+    '2 records the drawing on a second thread: faster in busy scenes. 3 also copies textures on a third thread, for fewer hitches when areas load. Go back to 1 if the picture flickers or objects go missing.': (
+        '2 zeichnet die Befehle in einem zweiten Thread auf: schneller in vollen Szenen. 3 kopiert zusätzlich Texturen in einem dritten Thread, für weniger Ruckler beim Laden von Bereichen. Zurück auf 1, wenn das Bild flackert oder Objekte fehlen.',
+        "2 enregistre le rendu sur un deuxième thread : plus rapide dans les scènes chargées. 3 copie aussi les textures sur un troisième thread, pour moins d'à-coups au chargement des zones. Revenez à 1 si l'image scintille ou si des objets disparaissent.",
+        '2 graba el dibujado en un segundo hilo: más rápido en escenas cargadas. 3 también copia las texturas en un tercer hilo, para menos tirones al cargar zonas. Vuelve a 1 si la imagen parpadea o faltan objetos.',
+        '2 registra il disegno su un secondo thread: più veloce nelle scene affollate. 3 copia anche le texture su un terzo thread, per meno scatti quando si caricano le zone. Torna a 1 se l\'immagine sfarfalla o mancano oggetti.'),
 }
