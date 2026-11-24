@@ -9,3 +9,6 @@ setjmp_address = 0x8250B6C0
 longjmp_address = 0x8250B3A0
 
 [functions]
+# First codegen run: "b 0x82100460 from 0x82120CFC - target not in any function". A C++ this-adjust thunk
+# (addi r3,r3,4; b ...) reached only by that tail branch.
+0x82100460 = { name = "sub_82100460" }
