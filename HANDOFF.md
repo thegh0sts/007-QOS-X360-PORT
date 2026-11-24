@@ -179,7 +179,8 @@ check.
 **VDP header confirmed (23:29, qosmp_024/025):** getinfo = "FF FF FF FF getinfo xxx" (UDP 1001 broadcast); the answer
 from Host's VDP socket is "01 40 FF FF FF FF infoResponse\\n..." (VDP game-data length 0x140 first), received as-is
 by Guest's UDP socket. SDK patch 0025-netplay-vdp-to-udp (own25): VDP sends set kViaVdp (0x40) in the prefix's
-version byte; a non-VDP socket receiving one strips the 2-byte length and cuts to the game data.
+version byte; a non-VDP socket receiving one strips the 2-byte length and cuts to the game data. **Works (user,
+23:39):** two instances on one PC, System Link: Host listed in Guest's join list and the join worked.
 
 ## Resume here
 
