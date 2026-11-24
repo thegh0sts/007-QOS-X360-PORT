@@ -176,6 +176,11 @@ before that. infoResponse handler = sub_821CB0E0 (from CL_ConnectionlessPacket s
 connectionless prefix. SDK patch 0024-netplay-trace-bytes (own24) logs the first 24 bytes of each traced packet to
 check.
 
+**VDP header confirmed (23:29, qosmp_024/025):** getinfo = "FF FF FF FF getinfo xxx" (UDP 1001 broadcast); the answer
+from Host's VDP socket is "01 40 FF FF FF FF infoResponse\\n..." (VDP game-data length 0x140 first), received as-is
+by Guest's UDP socket. SDK patch 0025-netplay-vdp-to-udp (own25): VDP sends set kViaVdp (0x40) in the prefix's
+version byte; a non-VDP socket receiving one strips the 2-byte length and cuts to the game data.
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/

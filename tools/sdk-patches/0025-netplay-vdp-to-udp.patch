@@ -1,0 +1,55 @@
+# netplay: packets sent from a VDP socket are flagged (kViaVdp in the prefix's version byte); a plain UDP socket that
+# receives one gets the game data only (VDP's 16-bit length dropped, voice data cut). 007 multiplayer answers System
+# Link "getinfo" (from a UDP socket, port 1001) from its VDP socket (1000): the join list ignored the "01 40 FF FF FF FF
+# infoResponse" answers. After 0020 and 0024.
+diff --git a/src/system/xsocket.cpp b/src/system/xsocket.cpp
+index 27ddc1b..cef337b 100644
+--- a/src/system/xsocket.cpp
++++ b/src/system/xsocket.cpp
+@@ -72,6 +72,11 @@ constexpr uint8_t kMagic0 = 0x58, kMagic1 = 0x4E, kVersion = 1;
+ // loopback copy instead (it doesn't depend on the host stack looping broadcasts back, or on a
+ // network being up), so they drop flagged packets from a local address.
+ constexpr uint8_t kViaBroadcast = 0x80;
++// Version-byte flag: sent from a VDP socket, so the payload starts with VDP's big-endian 16-bit game data
++// length (then the game data, then any voice data). A VDP packet that reaches a plain UDP socket is unwrapped
++// to the game data (007 multiplayer answers a System Link "getinfo", which comes from a UDP socket, from its
++// VDP socket: with the length still in front, the join list ignored every answer).
++constexpr uint8_t kViaVdp = 0x40;
+ constexpr size_t kHeader = 4;
+ // Synthetic peer addresses: 169.254.250.0/24 + n.
+ constexpr uint32_t kSecureBase = 0xA9FEFA00;
+@@ -804,6 +809,11 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADD
+       guest_port = GuestPort(src_port, slot);
+       payload += netplay::kHeader;
+       len -= int(netplay::kHeader);
++      if ((tmp[2] & netplay::kViaVdp) && proto_ != X_IPPROTO_VDP && len >= 2) {
++        const int game_len = int(payload[0]) << 8 | int(payload[1]);
++        payload += 2;
++        len = std::min(len - 2, game_len);
++      }
+     }
+     std::memcpy(buf, payload, std::min<size_t>(size_t(len), buf_len));
+     if (TracePacket(trace_count_)) {
+@@ -843,7 +853,8 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_
+   std::vector<uint8_t> pkt(size_t(buf_len) + netplay::kHeader);
+   pkt[0] = netplay::kMagic0;
+   pkt[1] = netplay::kMagic1;
+-  pkt[2] = netplay::kVersion;
++  const uint8_t version = netplay::kVersion | (proto_ == X_IPPROTO_VDP ? netplay::kViaVdp : 0);
++  pkt[2] = version;
+   pkt[3] = uint8_t(netplay::Slot());
+   std::memcpy(pkt.data() + netplay::kHeader, buf, buf_len);
+ 
+@@ -860,10 +871,10 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_
+     ret = -1;
+     for (uint32_t s = 0; s < netplay::kMaxSlots; ++s) {
+       uint16_t port = HostPort(dst_port, s);
+-      pkt[2] = netplay::kVersion | netplay::kViaBroadcast;
++      pkt[2] = version | netplay::kViaBroadcast;
+       int r = send_one(netplay::broadcast_ip_, port);
+       for (uint32_t ip : netplay::extra_peers_) send_one(ip, port);
+-      pkt[2] = netplay::kVersion;
++      pkt[2] = version;
+       if (s != netplay::Slot()) {
+         int l = send_one(0x7F000001, port);
+         if (r < 0) r = l;
