@@ -1775,4 +1775,14 @@ TEXT = {
         'Le multijoueur (qosmp.exe) n\'est pas encore dans cette installation.',
         'El multijugador (qosmp.exe) aún no está en esta instalación.',
         'Il multigiocatore (qosmp.exe) non è ancora in questa installazione.'),
+    'XUID': (
+        'XUID',
+        'XUID',
+        'XUID',
+        'XUID'),
+    "Your profile's ID, made for this install. The game tells players apart by it.": (
+        'Die ID deines Profils, für diese Installation erstellt. Das Spiel unterscheidet Spieler daran.',
+        "L'identifiant de votre profil, créé pour cette installation. Le jeu distingue les joueurs grâce à lui.",
+        'El identificador de tu perfil, creado para esta instalación. El juego distingue a los jugadores por él.',
+        "L'ID del tuo profilo, creato per questa installazione. Il gioco distingue i giocatori in base a esso."),
 }
