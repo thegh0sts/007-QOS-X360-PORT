@@ -202,6 +202,14 @@ version byte; a non-VDP socket receiving one strips the 2-byte length and cuts t
    (name from the package header) with Remove.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
+6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
+   Live calls (XSessionCreate/Search/join/leave, the XLIVEBASE messages such as 0x00058035) talk to Xenia Web
+   Services (AdrianCassar's REST API for Xenia Canary Netplay; public server or self-hosted) instead of the LAN
+   broadcast: a real server list in the Xbox LIVE menu. Real QoS probes for Live (System Link keeps the 1 ms
+   answer); router ports via UPnP / forwarding / VPN; launcher: server address setting. XUID rule (user, 25 Nov
+   08:39): one active XUID per player: the launcher's E000 offline one until the player first connects, then the
+   server's online (0009...) one for both Live and System Link, kept from then on (never switch per mode: MP
+   unlocks may be stored per XUID); the launcher keeps one read-only XUID box, maybe "(online)/(offline)".
 - **Dropped (user, 25 Nov 00:26): headless server.** QoS hosts as a listen server: the host's own client 0 takes a
   slot and counts toward the minimum players while not playing, so a headless host costs a player slot. Notes kept
   in git history (commit 7186ac0's HANDOFF.md). Players host from the game as on the console.
