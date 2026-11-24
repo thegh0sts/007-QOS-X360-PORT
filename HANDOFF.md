@@ -184,7 +184,7 @@ version byte; a non-VDP socket receiving one strips the 2-byte length and cuts t
 
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
-1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer and the server tab).
+1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer).
 2. (needs qosmp.exe installed beside qos.exe) **Single player <-> multiplayer switching:** SP's MULTIPLAYER item (startMultiplayer, sub_821BCD08 -> title
    launch sub_82423D78("default_mp.xex")) starts qosmp.exe; MP's way back (sub_821C5598 -> sub_82372B60("default.xex"))
    starts qos.exe; a launch of its own name (Sys_Error, relaunch_log.cpp) restarts qosmp.exe so the error shows.
@@ -192,25 +192,15 @@ version byte; a non-VDP socket receiving one strips the 2-byte length and cuts t
 3. (needed before players get instructions; independent of the rest) **Keyboard/mouse and button prompts in multiplayer:** single player's kbm_binds, mouse_look, pad_prompts,
    menu_keys, takedown/tutorial hooks at MP addresses (mouse look: CL_MouseMove etc. are CoD4 code, likely in MP
    too); MP's own binds file is buttons_default_mp.cfg; prompts/ textures may differ in ui_mp.ff.
-4. (the server rotation and the instructions depend on it) **DLC support:** the Camille Map Pack (Canals, Bags, Dam, Cisterns; Xbox Live 30 Jun 2009). Every player needs the
+4. (the instructions depend on it) **DLC support:** the Camille Map Pack (Canals, Bags, Dam, Cisterns; Xbox Live 30 Jun 2009). Every player needs the
    maps (each game loads them from its own files; the lobby tracks owned packs with party_mappacks). Find how the
    SDK installs content packages (STFS) for the title and whether qosmp's content enumeration finds them; test a
    System Link match on a DLC map with both instances; launcher/installer: a way to add the pack.
-5. (needs the installer (2) and DLC (5) for its rotation) **Headless server:** `qosmp.exe --server --server_config=server.cfg`: no window/sound, the local player kept
-   out of the match (spectator or hidden), config run through the game's command buffer (sv_hostname,
-   sv_maxclients, party_minplayers, g_gametype, sv_mapRotation, map_rotate), console window for live commands
-   (map, kick, map_rotate). Find the internal mode names (menus: Deathmatch, Team Deathmatch, Assassination, King of
-   the Hill, Bond Evasion, Bond Versus, Arcade; default "dm") and score/time limit dvars. Maps in the executable:
-   mp_barge, casino, constructionsite, docks, ecohotel, embassy, facility, height, italia, ladder,
-   medievalvillage, miamiconcourse, offices, rooftop(s), sauna, sciencecenter, shantytown, siena, slowdown,
-   spread, step, venice (+ test maps; not all may be playable). Then a launcher "Host a server" tab (name, max/min
-   players, rotation list of mode + map, limits, VPN peers, Start/Stop, status).
-   The host's own client 0 is a player (listen server): it takes a slot and counts toward party_minplayers (the
-   two-instance test: Host alone showed "Waiting for min players (1/2)"). Plan: (a) spectator at every map start,
-   min players +1, try sv_maxclients 13; (b) then hide it from scoreboard/player counts if needed; (c) a true
-   no-client server (CoD4 PC's dedicated path) is mostly cut from the 360 build: last resort.
-6. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
-   VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC, hosting a server.
+5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
+   VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
+- **Dropped (user, 25 Nov 00:26): headless server.** QoS hosts as a listen server: the host's own client 0 takes a
+  slot and counts toward the minimum players while not playing, so a headless host costs a player slot. Notes kept
+  in git history (commit 7186ac0's HANDOFF.md). Players host from the game as on the console.
 - No two-PC test: the user has no second PC. Two instances on one PC (24 Nov 23:39) stand in for it; LAN and VPN
   paths (broadcast to other machines, netplay_peers) stay untested until a user reports.
 
