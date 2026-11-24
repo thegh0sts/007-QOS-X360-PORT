@@ -719,6 +719,14 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    (default "disconnect", the pause menu's quit command) with Cbuf_AddText sub_82298750(0, text) to leave it. Not
    built. If disconnect does nothing on the front end, other ideas: hide the item (its visibleWhen dvar test) or patch
    the SWF's "splaunchmp" target when the movie loads.
+   **Test 2 (19:51, qos_155):** hook ran, "disconnect" did nothing (still LOADING...). **Now (not built):** the item is
+   greyed out instead: the menu movies (game/scaleform/*.gfx, CFX = zlib SWF; CmMainMenu, CmFrontEnd, SPMainMenu,
+   Sp_ig_PmMain share the menu definitions) build it as `menus.splaunchmp = new frontend.datatypes.LoadingScreen(
+   "@UI_MULTIPLAYER", r1.NORMAL, 'exec "startMultiplayer";')`; no_multiplayer.cpp hooks the two zlib inflate copies
+   (sub_8230BA80 Scaleform's, sub_82408B78) and in their output changes that push's constant 20 "NORMAL" to 23
+   "FLAG_INACTIVE" (pattern 96 0a 00 09 n 01 09 n+1 01 04 01 08 14 4e 96 0a 00 09 n+2 01 07 03 00 00 00, n 0x35/0x36/
+   0x39). Log "multiplayer: menu item greyed out ...". `--multiplayer_menu_inactive=false` off; multiplayer_fallback
+   now empty by default. Tools: cloud /home/claude/tools2/swfas.py (AS1 action/constant-pool reader).
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base
