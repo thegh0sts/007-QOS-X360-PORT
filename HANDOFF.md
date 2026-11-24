@@ -124,9 +124,9 @@ a System Link match alone (party/host on one PC; addtestclient bots if reachable
 
 **System Link needs networking (24 Nov, 22:27):** every MP mode (Xbox LIVE, System Link, Customize Equipment) said
 "No network connection detected": the stock SDK's XNetGetEthernetLinkStatus returns 0 and XNet is stubbed. Added SDK
-patch `tools/sdk-patches/0019-netplay-system-link.patch` (Skullburglar's 0018 rebased onto 007's stack, only the
+patch `tools/sdk-patches/0020-netplay-system-link.patch` (needs Skullburglar's 0020-xam-local-users, added as own 0019: user_profile(index), ResolveGameUserContentPath(profile); the first build without it failed) (Skullburglar's 0018 rebased onto 007's stack, only the
 XSocket::Initialize hunk redone; checked: applies on v0.10.1 + Skullburglar subset + own 0001-0018; not compiled in
-the cloud, simde headers missing), OWN_PATCHES own19. Cvars: netplay_slot (-1 auto; guest port P = host P + 10000 +
+the cloud, simde headers missing), OWN_PATCHES own20. Cvars: netplay_slot (-1 auto; guest port P = host P + 10000 +
 16*slot, so several instances per PC), netplay_address, netplay_peers (hosts for VPNs that drop broadcast),
 netplay_trace, user_signin_live (Live menus), user_xuid / user_gamertag (a second instance needs its own XUID).
 Needs tools\build_native.bat (rebuilds the SDK and renderer), then both games rebuilt.
