@@ -727,6 +727,20 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    "FLAG_INACTIVE" (pattern 96 0a 00 09 n 01 09 n+1 01 04 01 08 14 4e 96 0a 00 09 n+2 01 07 03 00 00 00, n 0x35/0x36/
    0x39). Log "multiplayer: menu item greyed out ...". `--multiplayer_menu_inactive=false` off; multiplayer_fallback
    now empty by default. Tools: cloud /home/claude/tools2/swfas.py (AS1 action/constant-pool reader).
+   **Test 3 (19:55, qos_156):** patch applied (5 movies) but FLAG_INACTIVE is a *screen* flag (credits, popups use
+   it), not "item disabled": MULTIPLAYER still opened splaunchmp, now black. multiplayer_menu_inactive now defaults
+   off. **User wants MULTIPLAYER visible but Accept doing nothing (19:57).** Findings so far: LoadingScreen
+   (DoInitAction tag 0xf828 in CmMainMenu) = MenuItem subclass, ctor (title, flags, command) adds LOADING_SCREEN to
+   _screenFlags, movie "cmloading"; its onEnterScreen calls as.frontend.<root>.shutdown() and then
+   getURL("FSCommand:run_game_script", command), so the whole front end is gone before the game sees the command:
+   the "does nothing" has to happen in the menu's ActionScript (stop the click on that item / never enter the screen).
+   Main menu array: menus.cmmainmenu built with [menus.spmainmenu, menus.spmainmenu_savenotreadable,
+   menus.splaunchmp] (bytes at CmMainMenu 0xd996). Game side: sub_823D2098 picks the start screen (cmmainmenu /
+   cmpressstart ...) when the front end starts (called from sub_823D2740); "as.frontend.GlobalFunctions.JumpToScreen"
+   is invoked by the game at 0x823D2490. Key input reaches AS as Key codes (KeyHandler class, tag 0x11f07; list
+   controllers handle 38/40/37/39/8; Enter 13 in other classes). Disassembly dumps: cloud /tmp/all.txt (not kept).
+   Next: find which controller handles Enter on the main menu list and how it opens the item's screen; then patch that
+   item (e.g. make its click a no-op).
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base

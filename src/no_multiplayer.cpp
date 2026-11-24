@@ -34,7 +34,7 @@ REXCVAR_DEFINE_BOOL(allow_multiplayer, false, "Game",
                     "Let the main menu's MULTIPLAYER relaunch the title as default_mp.xex (not recompiled: the game "
                     "closes)");
 
-REXCVAR_DEFINE_BOOL(multiplayer_menu_inactive, true, "Game",
+REXCVAR_DEFINE_BOOL(multiplayer_menu_inactive, false, "Game",
                     "Grey out the main menu's MULTIPLAYER (patches the menu movies as they're decompressed)");
 REXCVAR_DEFINE_STRING(multiplayer_fallback, "", "Game",
                       "Console command run in place of startMultiplayer (none by default)");
