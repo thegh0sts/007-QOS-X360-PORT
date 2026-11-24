@@ -30,8 +30,9 @@ for %%F in (qos_manifest.toml default_functions.toml default_functions_scan.toml
 copy /y ..\src\*.* payload\project\src\ >nul || goto :missing
 copy /y ..\generated\rexglue.cmake payload\project\generated\ >nul || goto :missing
 rem Read by the native renderer from beside qos.exe (the game's build copies them there): the menu hint
-rem pictures, the PlayStation button pictures and their texture list, and the shader refs.
-for %%D in (hints prompts pipelines) do (
+rem pictures, the PlayStation button pictures and their texture list, and the shader refs; thirdparty\ (miniz, built
+rem into qos.exe).
+for %%D in (hints prompts pipelines thirdparty) do (
   mkdir payload\project\%%D
   xcopy /e /i /q /y ..\%%D payload\project\%%D >nul || goto :missing
 )
