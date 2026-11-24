@@ -1735,11 +1735,11 @@ TEXT = {
         'Triangle',
         'Triángulo',
         'Triangolo'),
-    'Takedowns and lockpicking': (
-        'Ausschalten und Schlossknacken',
-        'Neutralisations et crochetage',
-        'Derribos y forzar cerraduras',
-        'Abbattimenti e scasso'),
+    'Move / Takedowns / Lockpicking': (
+        'Bewegen / Ausschalten / Schlossknacken',
+        'Se déplacer / Neutralisations / Crochetage',
+        'Moverse / Derribos / Forzar cerraduras',
+        'Muoversi / Abbattimenti / Scasso'),
     'Balancing': (
         'Balancieren',
         'Équilibre',

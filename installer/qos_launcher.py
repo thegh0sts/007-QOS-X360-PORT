@@ -95,7 +95,7 @@ PAD_MAP = [
     ("Start", "Options", "Pause"),
 ]
 KBM_MAP = [
-    ("W A S D", "Move"),
+    ("W A S D", "Move / Takedowns / Lockpicking"),
     ("Mouse", "Look"),
     ("Left click", "Fire"),
     ("Right click", "Aim"),
@@ -114,7 +114,6 @@ KBM_MAP = [
     ("3", "Grenade type"),
     ("Tab", "Phone"),
     ("Esc", "Pause / back"),
-    ("W A S D", "Takedowns and lockpicking"),
     ("A / D", "Balancing"),
 ]
 # Settings from before the input device choice (launcher 0.1.1: "pad_prompts").
