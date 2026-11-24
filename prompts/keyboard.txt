@@ -32,14 +32,14 @@ replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/km_q
 #   [[{kbm_w}]] -> btn_navigate_all (W), [[{kbm_2}]] -> btn_navigate_v (2; phone: W/S), [[{nextfiretype}]] -> btn_nav_up (X),
 #   [[{togglesilencer}]] -> btn_nav_down (4).
 # So the menus' A picture (btn_accept) can show Enter, as the title screen does. Texture hashes still to come from a
-# texture dump (BOTS_GFX_DUMP_TEXTURES) of those hints (texdump6, 24 Nov; three still to find):
+# texture dump (BOTS_GFX_DUMP_TEXTURES) of those hints (texdump6, 24 Nov):
 replace btn_left         64 64 02836603EC40E4E1 kbm/km_ctrl_sq
 replace btn_right        64 64 63408C2EDB77A49B kbm/km_c
-#   replace btn_navigate_h   64 64 <hash> kbm/km_e
-#   replace btn_navigate_all 64 64 <hash> kbm/km_w
+replace btn_navigate_h   64 64 C9B83BD6DF60188B kbm/km_e
+replace btn_navigate_all 64 64 FAEF750EA28E92AC kbm/km_w
 replace btn_navigate_v   64 64 23A5DEDB971F4898 kbm/km_2
 replace btn_nav_up       64 64 210B1F6745121A4F kbm/km_x
-#   replace btn_nav_down     64 64 <hash> kbm/km_4
+replace btn_nav_down     64 64 BA4F5117256B7585 kbm/km_4
 
 # Takedowns (50 px discs): the game's colours and shape, the key that answers them in place of the pad's letter
 # (src/takedown_keys.cpp: W A S D press Y X A B during a takedown).

@@ -652,8 +652,11 @@ Y button's own picture, Space on keyboard): kbm_2 (weapons "2") now uses btn_nav
 btn_navigate_v a W/S picture (km_ws; user: W and S scroll the cameras) on the phone's cameras screen. `--tutorial_keys_test=true` makes
 every hint show the seven pictures 1-7 (btn_left, btn_right, btn_navigate_h, btn_navigate_v, btn_navigate_all,
 btn_nav_up, btn_nav_down)
-for the dump run. Hashes to fill: btn_left, btn_right, btn_navigate_h, btn_navigate_v, btn_navigate_all, btn_nav_up,
-btn_nav_down.
+for the dump run. **Hashes found (texdump6, 19:05):** btn_left 02836603EC40E4E1 (Ctrl), btn_right 63408C2EDB77A49B (C),
+btn_navigate_h C9B83BD6DF60188B (E), btn_navigate_v 23A5DEDB971F4898 (2; phone W/S, user: W and S scroll the
+cameras), btn_navigate_all FAEF750EA28E92AC (W), btn_nav_up 210B1F6745121A4F (X), btn_nav_down BA4F5117256B7585 (4).
+All in keyboard.txt; not built/tested. 23A5 also showed in texdump4 during tutorials: watch for a hint showing 2.
+Phone detection second try (1e3209c): UI catcher + in a level + not paused; to check in the log.
 
 ## To do, 24 Nov (user, 23:20)
 
