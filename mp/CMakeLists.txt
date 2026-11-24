@@ -17,6 +17,7 @@ set(QOS_MP_SOURCES
     src/main.cpp
     src/relaunch_log.cpp
     src/frame_rate_fov.cpp
+    src/console_log.cpp
     ${QOS_SP_DIR}/src/crash_win.cpp
 )
 
