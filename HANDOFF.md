@@ -628,6 +628,12 @@ so `menu_keys.cpp` tells it apart by hud_phoneObjectives (ptr 0x827CBC08), hud_p
 r_phoneRenderMode (0x84055D08), logged on change ("menu keys: phone ..."; check the cameras and data screens). Phone up
 + keyboard -> pad_prompts_active 3; native 0098 (revised: build_native) reads `prompts/keyboard_phone.txt` first, then
 keyboard.txt: btn_back -> km_tab on the phone.
+**Phone detection, second try (18:50):** qos_149 (cameras screen up) had hud_phoneObjectives, hud_phoneMap and
+r_phoneRenderMode all 0, so EXIT still showed ESC. togglephone (sub_821AB7B0) refuses while cl_paused is set (the
+pause menu sets it; the phone doesn't pause), so `menu_keys.cpp` now says phone = UI catcher and (in a level, i.e.
+clientUIActive.cgameInitialized byte 0x82809ADA, and not paused, or any of the old dvars). Log line "menu keys:
+phone true|false (... paused N clientUIActive a b c d)": check main menu (should be false), pause menu (false), phone
+(true). sub_823011A8 (the client's "phonemode N") is an empty stub.
 
 **Hint rewording + more library pictures (24 Nov, 18:20, user's list 05-10), written, not built:** `tutorial_keys.cpp`
 also hooks sub_823D5480 (hint text -> Scaleform HTML) and, only inside it, sub_822C7298 (SEH_LocalizeTextMessage,

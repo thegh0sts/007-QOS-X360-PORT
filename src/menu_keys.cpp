@@ -39,6 +39,12 @@ namespace {
 constexpr uint32_t kKeyCatchers = 0x82809ADC;
 constexpr uint32_t kKeyCatchUi = 0x10;
 constexpr uint32_t kHudPhoneObjectives = 0x827CBC08, kHudPhoneMap = 0x827CBC10, kPhoneRenderMode = 0x84055D08;
+// Second try (24 Nov 18:45, qos_149: those dvars stayed 0 with the cameras screen up). The phone doesn't pause the
+// game: togglephone (sub_821AB7B0, from the client command handler sub_82191A08) refuses while cl_paused is set
+// (dvar ptr 0x82770100, int at +12), and the pause menu (sub_822CE670) sets it. So phone up = the UI catcher, not
+// paused, and in a level: clientUIActive (0x82809AD8: bytes active, isRunning, cgameInitialized, cgameInitCalled,
+// then keyCatchers) has cgameInitialized set, which the main menu (no level) shouldn't. All logged to check.
+constexpr uint32_t kClPaused = 0x82770100, kClientUIActive = 0x82809AD8;
 bool g_menu = false;
 std::atomic<bool> g_phone{false};
 int g_phone_logged = 0;
@@ -66,13 +72,21 @@ void OnFrame(uint8_t* base) {
     const uint32_t render = Be32(base + kPhoneRenderMode);
     const uint32_t o = objectives ? base[objectives + 12] : 0, m = map ? base[map + 12] : 0;
     const uint32_t r = render ? Be32(base + render + 12) : 0;
-    const uint32_t key = o | m << 1 | (r & 0xFF) << 2 | ((catchers & kKeyCatchUi) ? 1u << 10 : 0);
-    if (key != g_phone_last && g_phone_logged < 48) {
+    const uint32_t paused_dvar = Be32(base + kClPaused);
+    const uint32_t paused = paused_dvar ? Be32(base + paused_dvar + 12) : 0;
+    const uint8_t* ui = base + kClientUIActive;
+    const bool in_level = ui[2] != 0;  // cgameInitialized
+    const bool ui_up = (catchers & kKeyCatchUi) != 0;
+    const uint32_t key = o | m << 1 | (r & 0xFF) << 2 | (ui_up ? 1u << 10 : 0) | (paused ? 1u << 11 : 0) |
+                         uint32_t(ui[0]) << 12 | uint32_t(ui[1]) << 16 | uint32_t(ui[2]) << 20 | uint32_t(ui[3]) << 24;
+    const bool phone = ui_up && ((in_level && !paused) || o || m || r);
+    if (key != g_phone_last && g_phone_logged < 64) {
       ++g_phone_logged;
-      REXLOG_INFO("menu keys: phone objectives {} map {} render mode {} ui {}", o, m, r, (catchers & kKeyCatchUi) != 0);
+      REXLOG_INFO("menu keys: phone {} (objectives {} map {} render mode {} ui {} paused {} clientUIActive {} {} {} {})",
+                  phone, o, m, r, ui_up, paused, ui[0], ui[1], ui[2], ui[3]);
     }
     g_phone_last = key;
-    g_phone.store((catchers & kKeyCatchUi) != 0 && (o || m || r), std::memory_order_relaxed);
+    g_phone.store(phone, std::memory_order_relaxed);
   }
   if (menu != g_menu) {
     g_menu = menu;
