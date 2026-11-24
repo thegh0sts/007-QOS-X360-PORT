@@ -692,7 +692,16 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    memory, writing next_in/avail_in/total_in/next_out/avail_out/total_out/adler back (BE). Cloud test: ui.ff streamed
    in 256 KB/1 MB chunks through the same wrapper = byte-identical to Python zlib, 71 MB in 321 ms. Log "inflate: ...
    native" per stream >= 1 MB; `--native_inflate=false` logs the recompiled time ("recompiled") for A/B. The
-   multiplayer inflate-patch try was removed from no_multiplayer.cpp (same hook). Was:  hook the game's fastfile inflate (recompiled PPC zlib) and use host zlib (a whites_estate load
+   multiplayer inflate-patch try was removed from no_multiplayer.cpp (same hook).
+   **Test (20:12-20:17):** recompiled times (qos_158, native off): 5.0 MB 47 ms, 54.9 MB 656 ms, 68.1 MB 655 ms
+   (84-107 MB/s), so ~1.3 s of a level load. That run then crashed in the menus (crash-15880: sub_823DFC58 reading
+   0x30, chain 823E4DF8 <- 823E5578 <- 823E55E0 <- 822D8D90 <- 822D90C8 <- 822CF050 <- 821C0060; Scaleform/UI;
+   probably unrelated, first seen). Native on: stalls before the first frame, twice: "Win32FileHandle::Read(...,
+   0x1282af8c2, 0x20000) returned ERROR_NOACCESS. Read-only memory?" on the first fastfile read, no frames, display
+   standby. **native_inflate now defaults off.** To find: what 0x282AF8C2 is (read destination, unaligned) and why
+   its page is read-only only in native mode (guest zlib state never advanced? DB reader at 0x828A1870 uses next_in
+   == ring end (r31+96) -> ring start (r31+92) wrap; reads issued by sub_821C1C40 / sub_821BF390).
+   Was:  hook the game's fastfile inflate (recompiled PPC zlib) and use host zlib (a whites_estate load
    ~5 s, 23:13:19.7-23:13:25.0 in 0.1.1's game.log). Find the inflate routine first (zlib strings / the fastfile
    loader).
 4. **Unchanged-texture check by written pages:** hash only the 4 KB pages the tracker saw written (now XXH3 of the

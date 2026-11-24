@@ -13,7 +13,9 @@
 // big-endian: next_in 0, avail_in 4, total_in 8, next_out 12, avail_out 16, total_out 20, msg 24, state 28, ...,
 // adler 48). The guest's own init still runs (its state stays allocated and is freed by its own inflateEnd), so the
 // game sees a normal stream. Return codes and flush values are the same in zlib 1.1 and miniz.
-// --native_inflate=false keeps the recompiled inflate. Each finished stream of 1 MB or more is logged with its size
+// **Off by default (24 Nov 20:17):** with it on, the game stalls before the first frame, twice (qos_159 + a rerun):
+// the first fastfile read fails ("Win32FileHandle::Read(..., guest 0x282AF8C2, 0x20000) returned ERROR_NOACCESS"),
+// never seen before. Cause not found yet. --native_inflate=true turns it on. Each finished stream of 1 MB or more is logged with its size
 // and time ("inflate: ..."), to compare the two.
 
 #include "generated/default/qos_pch.h"
@@ -34,7 +36,7 @@
 #define MINIZ_NO_TIME
 #include "miniz.h"
 
-REXCVAR_DEFINE_BOOL(native_inflate, true, "Game",
+REXCVAR_DEFINE_BOOL(native_inflate, false, "Game",
                     "Decompress fastfiles and menu movies with native zlib (miniz) instead of the recompiled one");
 
 REX_EXTERN(__imp__sub_8230BA70);  // inflateInit_(strm, version, stream_size)
