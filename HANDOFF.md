@@ -182,6 +182,26 @@ by Guest's UDP socket. SDK patch 0025-netplay-vdp-to-udp (own25): VDP sends set 
 version byte; a non-VDP socket receiving one strips the 2-byte length and cuts to the game data. **Works (user,
 23:39):** two instances on one PC, System Link: Host listed in Guest's join list and the join worked.
 
+## Multiplayer to-do (user, 24 Nov 23:46)
+
+1. **DLC support:** the Camille Map Pack (Canals, Bags, Dam, Cisterns; Xbox Live 30 Jun 2009). Every player needs the
+   maps (each game loads them from its own files; the lobby tracks owned packs with party_mappacks). Find how the
+   SDK installs content packages (STFS) for the title and whether qosmp's content enumeration finds them; test a
+   System Link match on a DLC map with both instances; launcher/installer: a way to add the pack.
+2. **Headless server:** `qosmp.exe --server --server_config=server.cfg`: no window/sound, the local player kept
+   out of the match (spectator or hidden), config run through the game's command buffer (sv_hostname,
+   sv_maxclients, party_minplayers, g_gametype, sv_mapRotation, map_rotate), console window for live commands
+   (map, kick, map_rotate). Find the internal mode names (menus: Deathmatch, Team Deathmatch, Assassination, King of
+   the Hill, Bond Evasion, Bond Versus, Arcade; default "dm") and score/time limit dvars. Maps in the executable:
+   mp_barge, casino, constructionsite, docks, ecohotel, embassy, facility, height, italia, ladder,
+   medievalvillage, miamiconcourse, offices, rooftop(s), sauna, sciencecenter, shantytown, siena, slowdown,
+   spread, step, venice (+ test maps; not all may be playable). Then a launcher "Host a server" tab (name, max/min
+   players, rotation list of mode + map, limits, VPN peers, Start/Stop, status).
+3. **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
+   VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC, hosting a server.
+4. Earlier list: two-PC test; installer builds/copies qosmp.exe; SP MULTIPLAYER item -> qosmp.exe and back
+   (also makes Sys_Error's relaunch real); keyboard/mouse and prompts in MP.
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/
