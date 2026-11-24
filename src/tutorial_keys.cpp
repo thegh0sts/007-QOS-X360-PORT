@@ -29,7 +29,7 @@
 // with more pictures from the library: kbm_w -> btn_navigate_all (W), kbm_2 -> btn_navigate_v (2), nextfiretype ->
 // btn_nav_up (X), togglesilencer -> btn_nav_down (4). btn_y is not spare (the Y button's own picture).
 // btn_navigate_v is also the phone's cameras screen's "scroll cameras": prompts/keyboard_phone.txt gives it the
-// arrow keys there. English text only.
+// W/S key there (W and S scroll the cameras). English text only.
 // Every command it sees is logged once ("tutorial keys: ..."), to find more.
 
 #include "generated/default/qos_pch.h"
