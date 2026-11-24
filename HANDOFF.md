@@ -182,13 +182,23 @@ by Guest's UDP socket. SDK patch 0025-netplay-vdp-to-udp (own25): VDP sends set 
 version byte; a non-VDP socket receiving one strips the 2-byte length and cuts to the game data. **Works (user,
 23:39):** two instances on one PC, System Link: Host listed in Guest's join list and the join worked.
 
-## Multiplayer to-do (user, 24 Nov 23:46)
+## Multiplayer to-do (user, 24 Nov 23:46), easiest first
 
-1. **DLC support:** the Camille Map Pack (Canals, Bags, Dam, Cisterns; Xbox Live 30 Jun 2009). Every player needs the
+1. [easy (writing; after the features exist)] **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
+   VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC, hosting a server.
+2. [easy] Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer and the server tab).
+3. [medium] **Single player <-> multiplayer switching:** SP's MULTIPLAYER item (startMultiplayer, sub_821BCD08 -> title
+   launch sub_82423D78("default_mp.xex")) starts qosmp.exe; MP's way back (sub_821C5598 -> sub_82372B60("default.xex"))
+   starts qos.exe; a launch of its own name (Sys_Error, relaunch_log.cpp) restarts qosmp.exe so the error shows.
+   Pass the launch data (MP's 984-byte block at 0x84E8D7D0) along.
+4. [medium-hard (many addresses to port)] **Keyboard/mouse and button prompts in multiplayer:** single player's kbm_binds, mouse_look, pad_prompts,
+   menu_keys, takedown/tutorial hooks at MP addresses (mouse look: CL_MouseMove etc. are CoD4 code, likely in MP
+   too); MP's own binds file is buttons_default_mp.cfg; prompts/ textures may differ in ui_mp.ff.
+5. [hard (unknown SDK content support)] **DLC support:** the Camille Map Pack (Canals, Bags, Dam, Cisterns; Xbox Live 30 Jun 2009). Every player needs the
    maps (each game loads them from its own files; the lobby tracks owned packs with party_mappacks). Find how the
    SDK installs content packages (STFS) for the title and whether qosmp's content enumeration finds them; test a
    System Link match on a DLC map with both instances; launcher/installer: a way to add the pack.
-2. **Headless server:** `qosmp.exe --server --server_config=server.cfg`: no window/sound, the local player kept
+6. [hardest] **Headless server:** `qosmp.exe --server --server_config=server.cfg`: no window/sound, the local player kept
    out of the match (spectator or hidden), config run through the game's command buffer (sv_hostname,
    sv_maxclients, party_minplayers, g_gametype, sv_mapRotation, map_rotate), console window for live commands
    (map, kick, map_rotate). Find the internal mode names (menus: Deathmatch, Team Deathmatch, Assassination, King of
@@ -197,16 +207,6 @@ version byte; a non-VDP socket receiving one strips the 2-byte length and cuts t
    medievalvillage, miamiconcourse, offices, rooftop(s), sauna, sciencecenter, shantytown, siena, slowdown,
    spread, step, venice (+ test maps; not all may be playable). Then a launcher "Host a server" tab (name, max/min
    players, rotation list of mode + map, limits, VPN peers, Start/Stop, status).
-3. **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
-   VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC, hosting a server.
-4. **Single player <-> multiplayer switching:** SP's MULTIPLAYER item (startMultiplayer, sub_821BCD08 -> title
-   launch sub_82423D78("default_mp.xex")) starts qosmp.exe; MP's way back (sub_821C5598 -> sub_82372B60("default.xex"))
-   starts qos.exe; a launch of its own name (Sys_Error, relaunch_log.cpp) restarts qosmp.exe so the error shows.
-   Pass the launch data (MP's 984-byte block at 0x84E8D7D0) along.
-5. **Keyboard/mouse and button prompts in multiplayer:** single player's kbm_binds, mouse_look, pad_prompts,
-   menu_keys, takedown/tutorial hooks at MP addresses (mouse look: CL_MouseMove etc. are CoD4 code, likely in MP
-   too); MP's own binds file is buttons_default_mp.cfg; prompts/ textures may differ in ui_mp.ff.
-6. Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer and the server tab).
 - No two-PC test: the user has no second PC. Two instances on one PC (24 Nov 23:39) stand in for it; LAN and VPN
   paths (broadcast to other machines, netplay_peers) stay untested until a user reports.
 
