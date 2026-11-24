@@ -160,6 +160,14 @@ as SP). Launcher: mp_args now passes --frame_rate/--fov too (SP_ONLY_ARGS: achie
 mouse_sensitivity, mouse_invert); renderer env (render scale, AA, filtering, render threads) was already shared;
 Clear and rebuild clears Documents\\qosmp\\cache\\native too.
 
+**System Link join list empty (24 Nov, 23:10-23:15, qosmp_018-021, two instances on one PC):** the exchange works
+(Guest broadcasts a 15-byte "getinfo" to port 1001, Host answers 322 bytes, Guest receives it), but the list fills only
+after XNetQosLookup completes for the server (result handler sub_822E0180 -> sub_821D1FE8 checks rtt against
+minping/maxping and bandwidth > 0; "Throwing out server ... ping" otherwise). The SDK had XNetQosLookup as a stub.
+SDK patch 0023-xnet-qos-lookup (own23): answers at once, 1 ms / 100 Mbit/s, no data. Also new:
+mp/src/console_log.cpp logs the game's console (Com_PrintMessage sub_8225CE50) as "game[channel]: ..."
+(--game_console_log, default on).
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/
