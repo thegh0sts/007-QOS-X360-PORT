@@ -706,7 +706,18 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    loader).
 4. **Unchanged-texture check by written pages:** hash only the 4 KB pages the tracker saw written (now XXH3 of the
    whole texture, 0095). Helps the level-start burst (~2,100 checks in 10 s) and steady play (~600 reloads a minute).
-5. **Draw CPU ideas** (from the profile): tracker memo by page stamps / lock-free "pages unwritten" fast path
+5. **Memory tracking / uploads (24 Nov 21:30-21:36):** the "tracker" phase (1.4-1.8 ms) is not the lock-free page
+   check (that's cheap) but ~235 real re-uploads a frame of vertex data the game rewrites each frame (memory sync:
+   ~5% of requests take the SDK lock, nearly all of those upload). Each upload (Renderer::UploadGuestMemory) takes the
+   global lock, copies, re-protects the pages and calls EndRendering("upload"): it splits the render pass. A/B with
+   BOTS_DRAW_PROFILE=1 + 3 threads: qos_166 copies (passes ~300-340/frame at 5-6k draws, tracker 1.6-1.8 ms) vs
+   qos_167 BOTS_GFX_ZERO_COPY=1 ("the GPU reads guest memory in place"): **25 render passes/frame at 8,900 draws**,
+   tracker still ~1.3 ms (lock/protect remain), but **the whole screen glitched** (user): the game rewrites dynamic
+   vertex memory while the GPU, running further behind than on the 360, still reads it; copies are needed. Next idea
+   (not started, 1-2 sessions): hoist each upload to before the current render pass when no earlier draw of that pass
+   read those pages (copy the data now, record the copy ahead of the pass), so uploads stop splitting passes.
+   Earlier ideas:
+   **Draw CPU ideas** (from the profile): tracker memo by page stamps / lock-free "pages unwritten" fast path
    (60M memory sync requests, 3.7M took the lock, 23 Nov), descriptor reuse or push descriptors, setup from register
    dirty bits, constants by changed ranges.
 6. **Third render thread — written 24 Nov 20:55, not built:** native patch `0099-texture-worker.patch`
