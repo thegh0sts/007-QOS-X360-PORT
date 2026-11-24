@@ -6,7 +6,7 @@ the render thread waits for it, then records the upload as before. Counted in th
 copied with the texture worker").
 
 diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
-index 2087c89..e57f5ca 100644
+index 2087c89..0407870 100644
 --- a/src/gfx/native.cpp
 +++ b/src/gfx/native.cpp
 @@ -265,14 +265,16 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
@@ -28,6 +28,22 @@ index 2087c89..e57f5ca 100644
          RequestHostReport(now);
        }
        REXLOG_INFO("gfx native: memory: {}", renderer_->TakeMemoryReport());
+@@ -290,6 +292,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+       last_.texture_loads = st.texture_loads, last_.texture_loads_evicted = st.texture_loads_evicted;
+       last_.texture_reloads = st.texture_reloads, last_.texture_evictions = st.texture_evictions;
+       last_.texture_reloads_skipped = st.texture_reloads_skipped;
++      last_.texture_levels_split = st.texture_levels_split;
+       renderer_->SavePipelineCache();  // runs are often killed rather than shut down
+       std::copy(std::begin(st.gpu_ns), std::end(st.gpu_ns), last_.gpu_ns);
+       std::copy(std::begin(st.draw_phase_ns), std::end(st.draw_phase_ns), last_.draw_phase_ns);
+@@ -1165,6 +1168,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     uint64_t sampler_memo_hits = 0, set_binds_skipped = 0, index_bytes_converted = 0, index_expanded = 0;
+     uint64_t texture_loads = 0, texture_loads_evicted = 0, texture_reloads = 0, texture_evictions = 0;
+     uint64_t texture_reloads_skipped = 0;
++    uint64_t texture_levels_split = 0;  // qos (0099)
+   } last_;
+   // Frame-time diagnostics (issue #12): the interval between swaps on this thread, what each slow one did (a "gfx
+   // hitch" line, at most kHitchLines per stats interval), and a histogram per interval. BOTS_HITCH_MS sets the
 diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
 index cb50776..2d00a19 100644
 --- a/src/gfx/vk/draw.cpp
