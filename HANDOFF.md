@@ -664,7 +664,10 @@ and the Scaleform translator sub_823D3A08 (r4 result string, r5 wide key; calls 
 sub_822C7AE8, sets the result with sub_8245AAD0) localizes it. tutorial_keys.cpp now hooks sub_823D3A08 too and, in
 keyboard mode, swaps "Press Down/Up on the D-Pad" for "Press <img src=btn_nav_down|up ...>" (tutorial_keys_html,
 default on) or "Press 4 / X" (off). Unknown whether that text field takes HTML: if the raw tag shows, default the cvar
-off. Log "tutorial keys (box): ...". Not built.
+off. Log "tutorial keys (box): ...". **Works (qos_152, 19:32):** reworded to the img tag and btn_nav_down drawn as 4.
+**Balance beam hint (19:40-19:44):** has no button picture at all (plain text, no log line). Options put to the user:
+keyboard-only rewording (pads keep the original text) or pictures for every pad style (stick picture; keyboard A/D
+needs a spare picture, all seven used). **User: leave it, keyboard hints done for now; may revisit later.**
 
 ## To do, 24 Nov (user, 23:20)
 
