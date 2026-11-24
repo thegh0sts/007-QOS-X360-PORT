@@ -195,7 +195,11 @@ version byte; a non-VDP socket receiving one strips the 2-byte length and cuts t
 4. (the instructions depend on it) **DLC support:** the Camille Map Pack (Canals, Bags, Dam, Cisterns; Xbox Live 30 Jun 2009). Every player needs the
    maps (each game loads them from its own files; the lobby tracks owned packs with party_mappacks). Find how the
    SDK installs content packages (STFS) for the title and whether qosmp's content enumeration finds them; test a
-   System Link match on a DLC map with both instances; launcher/installer: a way to add the pack.
+   System Link match on a DLC map with both instances. Launcher (user, 25 Nov 00:27): in the Multiplayer tab,
+   a "Map packs" section with a file browser ("Add map pack...") to pick the pack's content file (an Xbox 360 STFS
+   package, e.g. from a console's Content\\0000000000000000\\415607FF\\00000002\\ folder); the launcher checks it is a
+   QoS package (title ID 415607FF in its header), copies it where the SDK looks for DLC, and lists installed packs
+   (name from the package header) with Remove.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 - **Dropped (user, 25 Nov 00:26): headless server.** QoS hosts as a listen server: the host's own client 0 takes a
