@@ -25,6 +25,12 @@ replace tutorial_back 64 64 92F008A6E5D310A6 kbm/km_tab
 replace tutorial_ls   64 64 748B7606A1F93C3C kbm/km_s
 replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/km_q
 
+# Sprint and stance in tutorial text get pictures of their own (src/tutorial_keys.cpp: [[{+dash}]] -> btn_left,
+# [[{+stance}]] -> btn_right, from the shared platform library). Their texture hashes aren't known yet: take them
+# from a texture dump of the sprint and "Hold ... to stay low" hints, then:
+#   replace btn_left  64 64 <hash> kbm/km_ctrl_sq
+#   replace btn_right 64 64 <hash> kbm/km_c
+
 # Takedowns (50 px discs): the game's colours and shape, the key that answers them in place of the pad's letter
 # (src/takedown_keys.cpp: W A S D press Y X A B during a takedown).
 replace qte_y_big 64 64 99FAE00AC5BB2840 kbm/tk_w

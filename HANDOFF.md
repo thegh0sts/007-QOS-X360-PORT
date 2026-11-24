@@ -609,6 +609,19 @@ pause menu and the phone (the phone may not use the UI catcher). `--menu_esc_bac
 low" tutorial) shows ESC (km_esc_sq); the Press Start screen counts as a menu too (menu_quit.cpp OnTitleScreen), so
 Esc is B there and holding it quits; title hint "ENTER SELECT / ESC QUIT (HOLD)". In game B stays on C.
 
+**Tutorial pictures per command (24 Nov, 17:10), written, not built:** the hints are localized strings with command
+tokens ([[{move}]], [[{+dash}]], [[{+stance}]], [[{+cover}]], [[{+usereload}]], [[{weapnext}]], [[{+speed}]],
+[[{fullmap}]], [[{+melee_qk}]]: whites_estate in common.ff, PLATFORM_TUTORIAL_* in code_post_gfx.ff). sub_823D5480
+turns each into `<img src="NAME" width="42" height="42" vspace="-20">`; NAME from sub_823D4580(movie, command): "move"/
+"look" -> stick_left/right, else the bound pad button via the table at 0x8261CCF0 (wide names: 1 btn_accept, 2
+btn_back, 3 btn_refresh, 4 btn_y, 5 bumper_left, 6 bumper_right, 15 button_back, 16 stick_left, 17 stick_right, 18
+trigger_left, 19 trigger_right, 20 btn_nav_up, 21 btn_nav_down). Library: scaleform/CmSharedPlatform.gfx (also
+btn_left, btn_right, btn_navigate_h/v/all). Texture hash = FNV-1a 64 of the 16 KiB tiled guest texture (64x64 DXT5,
+pitch 4); ui.ff's copy isn't byte-identical (couldn't hash offline). `src/tutorial_keys.cpp` hooks sub_823D4580: in
+keyboard mode +dash -> btn_left, +stance -> btn_right (wide names in SystemHeapAlloc memory); logs each command once.
+Next: a texture dump (BOTS_GFX_DUMP_TEXTURES) of the sprint and stay-low hints to get btn_left/btn_right's hashes,
+then `replace` lines (placeholders in keyboard.txt) -> km_ctrl_sq / km_c.
+
 ## To do, 24 Nov (user, 23:20)
 
 Test like the launcher: `--vsync=false` (the 23 Nov dev run had vsync on: 18 ms frames became 33 ms, so the intro
