@@ -791,7 +791,8 @@ fixed (d12282d; miniz licence in licenses\). The launcher only offers "Reinstall
 **Control maps (21:20, user):** Controls shows a "Controller map" (PAD_MAP: buttons_default.cfg layout, Xbox names,
 PlayStation names when PlayStation controller is picked) under the controller settings and a "Keyboard and mouse map"
 (KBM_MAP: kbm_binds.cpp) under the keyboard settings, each two columns of control / action; the mouse sensitivity
-slider (10-300 %) is in the keyboard section. Display only, no remapping. Strings translated in launcher_text.py.
+slider (10-300 %) is in the keyboard section. The keyboard map also says takedowns and lockpicking use W A S D and
+balancing A / D (user, 21:17). Display only, no remapping. Strings translated in launcher_text.py.
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base

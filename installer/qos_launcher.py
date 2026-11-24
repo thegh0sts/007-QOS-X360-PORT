@@ -108,12 +108,14 @@ KBM_MAP = [
     ("Space", "Jump / climb"),
     ("Ctrl", "Sprint"),
     ("Shift", "Walk"),
-    ("Q", "Take down (then W A S D)"),
+    ("Q", "Take down"),
     ("X", "Fire mode"),
     ("4", "Silencer"),
     ("3", "Grenade type"),
     ("Tab", "Phone"),
     ("Esc", "Pause / back"),
+    ("W A S D", "Takedowns and lockpicking"),
+    ("A / D", "Balancing"),
 ]
 # Settings from before the input device choice (launcher 0.1.1: "pad_prompts").
 # Render threads (Graphics tab): 1 = the renderer alone (original), 2 = plus the draw-recording thread (native patch
