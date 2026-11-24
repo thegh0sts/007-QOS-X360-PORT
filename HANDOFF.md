@@ -147,6 +147,12 @@ reporting ICMP port-unreachable on UDP. SDK patch 0022-udp-no-connreset (own22):
 every datagram socket. **Works (user, 22:59):** a match ends back at the menu; join menu opens. Later: make the relaunch real (restart the process, or reset and pass the launch data) so
 Sys_Error shows its message as on the console, and single player <-> multiplayer switching.
 
+**Launcher Multiplayer tab (24 Nov, 23:05), not run yet:** "Gamertag" entry (clean_gamertag: letters/digits/spaces,
+15 max, default "Player") and "Play multiplayer" (starts qosmp.exe beside qos.exe with mp_args = game_args minus
+SP_ONLY_ARGS + --user_gamertag + --user_xuid; log game_mp.log). XUID: "E000" + 12 random hex made once in
+load_settings (two PCs must differ). Not yet: the installer building/copying mp/ (qosmp.exe), so the button says
+multiplayer isn't installed.
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/
