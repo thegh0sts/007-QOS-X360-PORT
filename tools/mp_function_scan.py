@@ -1,8 +1,10 @@
 import struct, json, re, glob, sys
-img=open('/home/claude/xex/mp/default_mp.img','rb').read()
+# Usage: mp_function_scan.py DECRYPTED_IMAGE GENERATED_DIR OUT.txt (image: default_mp.xex decrypted, loaded at
+# 0x82000000; GENERATED_DIR: mp/generated/default after a codegen run). Writes 'ADDRESS [data]' lines.
+img=open(sys.argv[1],'rb').read()
 B=0x82000000; CODE_LO=0x820E0000; CODE_HI=0x82535754
 def w(a): return struct.unpack('>I',img[a-B:a-B+4])[0]
-gen='/mnt/user-data/uploads/007qol/mp/generated/default'
+gen=sys.argv[2]
 part=json.load(open(gen+'/codegen.partition.json'))['assignments']
 F=set(int(k,16) for k in part)
 L=set(); 
@@ -34,6 +36,5 @@ for a in range(CODE_LO+4,CODE_HI,4):
     if (x>>26)==0: continue
     out.append(a)
 print(len(out), sum(1 for a in out if a in datarefs), file=sys.stderr)
-print('0x8211E898' , 0x8211E898 in out, file=sys.stderr)
-with open('/home/claude/mpscan/list.txt','w') as f:
+with open(sys.argv[3],'w') as f:
     for a in out: f.write('%08X %s\n'%(a,'data' if a in datarefs else ''))
