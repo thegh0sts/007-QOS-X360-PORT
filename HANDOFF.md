@@ -110,6 +110,18 @@ Commands (Windows, from the repo):
     cmake --preset win-amd64-relwithdebinfo
     cmake --build out\build\win-amd64-relwithdebinfo
 
+**First boot to the MP menu (24 Nov, 22:24):** after four fixes qosmp.exe reaches the multiplayer main menu (Xbox
+LIVE / SYSTEM LINK / OPTIONS / CUSTOMIZE EQUIPMENT), native renderer, pad. Fixes: (1) the runtime loads
+game:\\default.xex unless OnLoadXexImage says otherwise (qosmp_app.h); (2) 0x82100460 function start (this-adjust
+thunk); (3) the asset-type size switch sub_821E1168 (bctr 0x821E117C, table 0x82547D80, 39 entries; entry 16 points at
+a far shared "return 4" 0x822F49D0, so the analyzer stopped at 16): full table as [[switch_tables]] in
+mp_functions.toml; (4) 78 pointer-reached function starts (mp/mp_functions_scan.toml, made by
+tools/mp_function_scan.py IMAGE GENERATED_DIR OUT, as single player's scan; first crash was the audio callback
+0x8211E898). Import stubs start at 0x8252516C. Note: git pull once silently didn't happen on the PC: check the
+files arrived before rebuilding. Next: walk the menus (options, customize equipment, System Link create game), try
+a System Link match alone (party/host on one PC; addtestclient bots if reachable), then networking (Skullburglar
+0018-netplay-system-link), SP<->MP switching, and MP versions of the hooks (KBM, FPS, prompts).
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/
