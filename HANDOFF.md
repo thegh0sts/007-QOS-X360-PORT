@@ -621,6 +621,13 @@ pitch 4); ui.ff's copy isn't byte-identical (couldn't hash offline). `src/tutori
 keyboard mode +dash -> btn_left, +stance -> btn_right (wide names in SystemHeapAlloc memory); logs each command once.
 Next: a texture dump (BOTS_GFX_DUMP_TEXTURES) of the sprint and stay-low hints to get btn_left/btn_right's hashes,
 then `replace` lines (placeholders in keyboard.txt) -> km_ctrl_sq / km_c.
+**User's fixes (24 Nov, 16:57, screenshots from the build before the hook):** stay-low hint C + S (hook: C once
+btn_right's hash is known), reload hint R (tutorial X picture btn_refresh 82C5 -> km_r; HUD X glyphs stay F), phone
+EXIT Tab (not Esc), sprint hint Ctrl (hook). Phone: qos_144 shows the phone sets the UI key catcher (0x10) like menus,
+so `menu_keys.cpp` tells it apart by hud_phoneObjectives (ptr 0x827CBC08), hud_phoneMap (0x827CBC10),
+r_phoneRenderMode (0x84055D08), logged on change ("menu keys: phone ..."; check the cameras and data screens). Phone up
++ keyboard -> pad_prompts_active 3; native 0098 (revised: build_native) reads `prompts/keyboard_phone.txt` first, then
+keyboard.txt: btn_back -> km_tab on the phone.
 
 ## To do, 24 Nov (user, 23:20)
 

@@ -13,6 +13,7 @@
 
 #include "generated/default/qos_pch.h"
 
+#include <atomic>
 #include <cstdint>
 
 #include <rex/cvar.h>
@@ -25,15 +26,30 @@ namespace qos::menu_quit {
 bool OnTitleScreen();
 }  // namespace qos::menu_quit
 
+// The phone (24 Nov): it sets the UI key catcher like the menus, so it's told apart by the dvars its screens set
+// (dvar pointers from their registrations): hud_phoneObjectives (bool, "Signals the phone objectives list to draw",
+// ptr 0x827CBC08), hud_phoneMap (bool, ptr 0x827CBC10) and r_phoneRenderMode (int, "Sets the phone render mode",
+// ptr 0x84055D08; set to 0 by sub_82262158). Phone up = the UI catcher and any of them. Their changes are logged
+// (first 48) to check the cameras and data screens. With keyboard prompts, pad_prompts.cpp then uses mode 3
+// (prompts/keyboard_phone.txt over keyboard.txt): the phone's EXIT (the B picture) shows Tab.
+
 namespace qos::menu_keys {
 
 namespace {
 constexpr uint32_t kKeyCatchers = 0x82809ADC;
 constexpr uint32_t kKeyCatchUi = 0x10;
+constexpr uint32_t kHudPhoneObjectives = 0x827CBC08, kHudPhoneMap = 0x827CBC10, kPhoneRenderMode = 0x84055D08;
 bool g_menu = false;
+std::atomic<bool> g_phone{false};
+int g_phone_logged = 0;
+uint32_t g_phone_last = 0xFFFFFFFF;
+
+uint32_t Be32(const uint8_t* p) { return uint32_t(p[0]) << 24 | uint32_t(p[1]) << 16 | uint32_t(p[2]) << 8 | p[3]; }
 int g_logged = 0;
 uint32_t g_last = 0xFFFFFFFF;
 }  // namespace
+
+bool PhoneUp() { return g_phone.load(std::memory_order_relaxed); }
 
 void OnFrame(uint8_t* base) {
   const uint8_t* p = base + kKeyCatchers;
@@ -45,6 +61,19 @@ void OnFrame(uint8_t* base) {
   g_last = catchers;
   const bool menu =
       REXCVAR_GET(menu_esc_back) && ((catchers & kKeyCatchUi) != 0 || qos::menu_quit::OnTitleScreen());
+  {
+    const uint32_t objectives = Be32(base + kHudPhoneObjectives), map = Be32(base + kHudPhoneMap);
+    const uint32_t render = Be32(base + kPhoneRenderMode);
+    const uint32_t o = objectives ? base[objectives + 12] : 0, m = map ? base[map + 12] : 0;
+    const uint32_t r = render ? Be32(base + render + 12) : 0;
+    const uint32_t key = o | m << 1 | (r & 0xFF) << 2 | ((catchers & kKeyCatchUi) ? 1u << 10 : 0);
+    if (key != g_phone_last && g_phone_logged < 48) {
+      ++g_phone_logged;
+      REXLOG_INFO("menu keys: phone objectives {} map {} render mode {} ui {}", o, m, r, (catchers & kKeyCatchUi) != 0);
+    }
+    g_phone_last = key;
+    g_phone.store((catchers & kKeyCatchUi) != 0 && (o || m || r), std::memory_order_relaxed);
+  }
   if (menu != g_menu) {
     g_menu = menu;
     rex::input::mnk::SetStartKeysAsBack(menu);

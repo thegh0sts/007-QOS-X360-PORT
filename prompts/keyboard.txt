@@ -3,7 +3,8 @@
 # thing player 1 used (src/pad_prompts.cpp). Same syntax as playstation.txt. The keys are 007's default binds
 # (src/kbm_binds.cpp, as the PC game's manual): A E (cover), B C (stance), X F (use; R reloads too), Y Space, LB 1,
 # RB G, LT right mouse button, RT left mouse button, LS Ctrl (sprint), RS Q (take down), START Esc, BACK Tab. A bind
-# changed on the Rebind screen still shows its default key here.
+# changed on the Rebind screen still shows its default key here. The tutorial X picture (btn_refresh) shows R: its
+# hint is "Press [[{+usereload}]] to reload" (user, 24 Nov); the HUD's X glyphs stay F (use).
 # The pictures are our own art: tools/make_kbm_keys.py (k_ HUD style, kt_ tutorial style, km_ menu style) and
 # tools/make_kbm_prompts.py (the takedown discs tk_, km_backspace, k_space_sq).
 
@@ -16,7 +17,7 @@ replace btn_back   64 64 09784A4CD20751E1 kbm/km_esc_sq
 
 # Tutorial boxes (64x64 DXT5): light grey keys like every other prompt (user: no mix of light and dark, 23 Nov).
 # The LS picture means the stick there ("pull away from cover with LS"), so it shows S (pulling back), not Shift.
-replace qte_x         64 64 82C5D2A286CB4ABC kbm/km_f
+replace qte_x         64 64 82C5D2A286CB4ABC kbm/km_r
 replace tutorial_lb   64 64 FFE4445869FD3106 kbm/km_1
 replace tutorial_lt   64 64 DC83034FD7B78B60 kbm/km_mouse_right
 replace tutorial_rt   64 64 30044CB9F07E3F81 kbm/km_mouse_left

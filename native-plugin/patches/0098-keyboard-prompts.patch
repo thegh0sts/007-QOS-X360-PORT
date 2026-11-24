@@ -1,24 +1,29 @@
 qos: keyboard and mouse prompts (prompts/keyboard.txt), a second prompt list beside playstation.txt.
 
-pad_prompts_active 2 shows the keyboard list, same syntax as playstation.txt (texture/draw, replace).
-A texture any list changes is marked in every mode, so it is reloaded when the mode changes; each mode
-then changes only what its own list names.
+pad_prompts_active 2 shows the keyboard list, same syntax as playstation.txt (texture/draw, replace);
+3 the keyboard list with the phone up: keyboard_phone.txt's lines first (the first match wins), then
+keyboard.txt's. A texture any list changes is marked in every mode, so it is reloaded when the mode
+changes; each mode then changes only what its own list names.
 
 diff --git a/src/gfx/prompt_atlas.cpp b/src/gfx/prompt_atlas.cpp
-index 1b1d04e..f23db15 100644
+index 1b1d04e..37fefbd 100644
 --- a/src/gfx/prompt_atlas.cpp
 +++ b/src/gfx/prompt_atlas.cpp
-@@ -312,11 +312,15 @@ std::vector<std::filesystem::path> PromptDirs() {
+@@ -312,11 +312,19 @@ std::vector<std::filesystem::path> PromptDirs() {
    return dirs;
  }
  
 -const PadConfig& Config() {
 -  static const PadConfig config = [] {
-+// qos: one list per prompt mode: 1 PlayStation (playstation.txt), 2 keyboard and mouse (keyboard.txt).
-+const char* ListFile(int mode) { return mode == 2 ? "keyboard.txt" : "playstation.txt"; }
++// qos: one list per prompt mode: 1 PlayStation (playstation.txt), 2 keyboard and mouse (keyboard.txt), 3 keyboard
++// and mouse with the phone up: keyboard_phone.txt's lines first (they win: the first match counts), then
++// keyboard.txt's.
++const char* ListFile(int mode) {
++  return mode == 3 ? "keyboard_phone.txt + keyboard.txt" : mode == 2 ? "keyboard.txt" : "playstation.txt";
++}
++constexpr int kModes = 3;
 +
-+PadConfig LoadConfig(int mode) {
-+  const char* list_file = ListFile(mode);
++PadConfig LoadConfigFile(const char* list_file) {
 +  {
      PadConfig c;
      for (const std::filesystem::path& dir : PromptDirs()) {
@@ -27,7 +32,7 @@ index 1b1d04e..f23db15 100644
        if (!file) continue;
        std::string line;
        while (std::getline(file, line)) {
-@@ -389,13 +393,27 @@ const PadConfig& Config() {
+@@ -389,13 +397,37 @@ const PadConfig& Config() {
            }
          }
        }
@@ -42,9 +47,19 @@ index 1b1d04e..f23db15 100644
 +  }
 +}
 +
++PadConfig LoadConfig(int mode) {
++  if (mode != 3) return LoadConfigFile(mode == 2 ? "keyboard.txt" : "playstation.txt");
++  PadConfig c = LoadConfigFile("keyboard_phone.txt");
++  PadConfig k = LoadConfigFile("keyboard.txt");
++  for (auto& [name, image] : k.images) c.images.emplace(name, std::move(image));
++  for (auto& sheet : k.sheets) c.sheets.push_back(std::move(sheet));
++  for (auto& r : k.replacements) c.replacements.push_back(std::move(r));
++  return c;
++}
++
 +const PadConfig& Config(int mode) {
-+  static const PadConfig playstation = LoadConfig(1), keyboard = LoadConfig(2);
-+  return mode == 2 ? keyboard : playstation;
++  static const PadConfig playstation = LoadConfig(1), keyboard = LoadConfig(2), phone = LoadConfig(3);
++  return mode == 3 ? phone : mode == 2 ? keyboard : playstation;
 +}
 +
 +// Mode 0 (the game's own buttons) asks about every list: a texture any of them changes must be reloaded when the
@@ -52,19 +67,19 @@ index 1b1d04e..f23db15 100644
 +template <typename F>
 +int FirstMatch(int mode, F&& find) {
 +  if (mode != 0) return find(Config(mode));
-+  for (int m = 1; m <= 2; ++m)
++  for (int m = 1; m <= kModes; ++m)
 +    if (find(Config(m)) >= 0) return 0;
 +  return -1;
  }
  
  // Byte offset of texel (x, y) in a tiled 2D texture, pitch in texels (a multiple of 32), 2^log2_bpp bytes a texel.
-@@ -507,89 +525,97 @@ std::vector<uint8_t> UntileDxt5(const uint8_t* guest, uint32_t width, uint32_t h
+@@ -507,89 +539,97 @@ std::vector<uint8_t> UntileDxt5(const uint8_t* guest, uint32_t width, uint32_t h
  }  // namespace
  
  bool PadSheetSize(uint32_t width, uint32_t height) {
 -  for (const PadSheet& s : Config().sheets)
 -    if (!s.dxt5 && s.width == width && s.height == height) return true;
-+  for (int m = 1; m <= 2; ++m)
++  for (int m = 1; m <= kModes; ++m)
 +    for (const PadSheet& s : Config(m).sheets)
 +      if (!s.dxt5 && s.width == width && s.height == height) return true;
    return false;
@@ -115,7 +130,7 @@ index 1b1d04e..f23db15 100644
  bool ReplaceSize(uint32_t width, uint32_t height) {
 -  for (const Replacement& r : Config().replacements)
 -    if (r.width == width && r.height == height) return true;
-+  for (int m = 1; m <= 2; ++m)
++  for (int m = 1; m <= kModes; ++m)
 +    for (const Replacement& r : Config(m).replacements)
 +      if (r.width == width && r.height == height) return true;
    return false;
@@ -156,7 +171,7 @@ index 1b1d04e..f23db15 100644
  bool DxtSheetSize(uint32_t width, uint32_t height) {
 -  for (const PadSheet& s : Config().sheets)
 -    if (s.dxt5 && s.width == width && s.height == height) return true;
-+  for (int m = 1; m <= 2; ++m)
++  for (int m = 1; m <= kModes; ++m)
 +    for (const PadSheet& s : Config(m).sheets)
 +      if (s.dxt5 && s.width == width && s.height == height) return true;
    return false;
@@ -196,10 +211,10 @@ index 1b1d04e..f23db15 100644
    return out;
  }
 diff --git a/src/gfx/prompt_atlas.h b/src/gfx/prompt_atlas.h
-index 1bc2bf8..c43c49c 100644
+index 1bc2bf8..76b07b9 100644
 --- a/src/gfx/prompt_atlas.h
 +++ b/src/gfx/prompt_atlas.h
-@@ -37,25 +37,29 @@ std::vector<uint8_t> BuildButtonAtlas(PromptDevice device);
+@@ -37,25 +37,30 @@ std::vector<uint8_t> BuildButtonAtlas(PromptDevice device);
  // int cvar pad_prompts_active (0 Xbox, 1 PlayStation), read by native.cpp each frame.
  bool PadSheetSize(uint32_t width, uint32_t height);  // a described texture has this size
  // The described texture whose base level (tiled, width x height x 4 bytes at guest) matches, or -1.
@@ -223,7 +238,8 @@ index 1bc2bf8..c43c49c 100644
  // qos: "texture <name> <w> <h> <hash> dxt5": a tiled DXT5 texture (007's font, whose atlas holds the button glyphs),
  // hashed like "replace" (its base level as the guest has it), decoded and painted on like the ARGB sheets.
 +// qos: every Find/Build/ReplacementPixels takes the prompt mode (pad_prompts_active): 1 PlayStation, from
-+// playstation.txt; 2 keyboard and mouse, from keyboard.txt (same syntax). A Find with mode 0 says whether any list
++// playstation.txt; 2 keyboard and mouse, from keyboard.txt (same syntax); 3 the same with the phone up
++// (keyboard_phone.txt first, then keyboard.txt). A Find with mode 0 says whether any list
 +// has the texture (>= 0), so it is reloaded when the mode changes; a Find with mode 1 or 2 gives the index in that
 +// mode's list, or -1 when that list leaves the texture as it is.
  bool DxtSheetSize(uint32_t width, uint32_t height);

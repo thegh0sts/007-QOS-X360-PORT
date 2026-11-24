@@ -1,0 +1,7 @@
+# Keyboard prompts while the phone is up (pad_prompts_active 3: src/menu_keys.cpp PhoneUp, src/pad_prompts.cpp).
+# Read before prompts/keyboard.txt by the native renderer (patch 0098), so a line here wins over the same texture
+# there; everything else comes from keyboard.txt. Same syntax.
+
+# The phone's EXIT uses the B picture, which the menus use for BACK (ESC there): on the phone it shows Tab, the
+# key that opens and closes it (user, 24 Nov).
+replace btn_back 64 64 09784A4CD20751E1 kbm/km_tab

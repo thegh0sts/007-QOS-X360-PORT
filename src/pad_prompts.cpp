@@ -32,7 +32,11 @@ REXCVAR_DEFINE_STRING(pad_prompts, "auto", "Input",
                       "Button prompts: auto (PlayStation buttons with a PlayStation pad, keys while keyboard/mouse is in "
                       "use), xbox, playstation, keyboard");
 REXCVAR_DEFINE_INT32(pad_prompts_active, 0, "Input",
-                     "The buttons the prompts show now, 0 Xbox, 1 PlayStation, 2 keyboard; set by the game for the renderer");
+                     "The buttons the prompts show now, 0 Xbox, 1 PlayStation, 2 keyboard, 3 keyboard with the phone up; set by the game for the renderer");
+
+namespace qos::menu_keys {
+bool PhoneUp();
+}  // namespace qos::menu_keys
 
 namespace qos::pad_prompts {
 
@@ -43,14 +47,17 @@ void Update() {
   const std::string mode = REXCVAR_GET(pad_prompts);
   const bool keys = mode == "keyboard" || (mode != "xbox" && mode != "playstation" && rex::input::KeyboardMouseActive());
   const bool ps = mode == "playstation" || (mode == "auto" && last_pad == rex::input::PadStyle::kPlayStation);
-  const int32_t active = keys ? 2 : ps ? 1 : 0;
+  const int32_t active = keys ? (qos::menu_keys::PhoneUp() ? 3 : 2) : ps ? 1 : 0;
   if (REXCVAR_GET(pad_prompts_active) != active) {
     REXCVAR_SET(pad_prompts_active, active);
-    REXLOG_INFO("pad_prompts: {}", keys ? "keyboard keys" : ps ? "PlayStation buttons" : "Xbox buttons");
+    REXLOG_INFO("pad_prompts: {}", active == 3 ? "keyboard keys (phone)"
+                                    : keys      ? "keyboard keys"
+                                    : ps        ? "PlayStation buttons"
+                                                : "Xbox buttons");
   }
 }
 
 bool PlayStation() { return REXCVAR_GET(pad_prompts_active) == 1; }
-bool Keyboard() { return REXCVAR_GET(pad_prompts_active) == 2; }
+bool Keyboard() { return REXCVAR_GET(pad_prompts_active) >= 2; }
 
 }  // namespace qos::pad_prompts
