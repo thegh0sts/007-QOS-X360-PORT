@@ -605,6 +605,9 @@ while KEYCATCH_UI (0x10) is set in clientUIActive.keyCatchers at 0x82809ADC (CL_
 called with 16 by the pause menu's open sub_822CE670, which also sets cl_paused 1; cl_paused dvar ptr 0x82770100 /
 0x8337417C). Logs the first 24 key-catcher values ("menu keys: key catchers 0x..."): check main menu, Press Start,
 pause menu and the phone (the phone may not use the UI catcher). `--menu_esc_back` (on). Backspace unbound (B = C).
+**Back on Esc (24 Nov, 16:36, user):** the B prompt picture (btn_back: menus' back, phone exit, the "Hold B ... stay
+low" tutorial) shows ESC (km_esc_sq); the Press Start screen counts as a menu too (menu_quit.cpp OnTitleScreen), so
+Esc is B there and holding it quits; title hint "ENTER SELECT / ESC QUIT (HOLD)". In game B stays on C.
 
 ## To do, 24 Nov (user, 23:20)
 

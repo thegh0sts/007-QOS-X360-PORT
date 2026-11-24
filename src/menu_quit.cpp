@@ -74,6 +74,7 @@ constexpr auto kHold = std::chrono::milliseconds(1000);
 
 using Clock = std::chrono::steady_clock;
 
+std::atomic<bool> g_title_screen{false};  // the Press Start screen is up (menu_keys.cpp: Esc is B there)
 std::atomic<uint32_t> g_reached_iis{0};  // guest address of the ui_reachedIIS dvar, 0 until registered
 
 uint32_t LoadBE32(const uint8_t* p) { return uint32_t(p[0]) << 24 | uint32_t(p[1]) << 16 | uint32_t(p[2]) << 8 | p[3]; }
@@ -107,6 +108,8 @@ void RequestQuit() {
 }  // namespace
 
 namespace qos::menu_quit {
+
+bool OnTitleScreen() { return g_title_screen.load(std::memory_order_relaxed); }
 
 // Every Dvar_RegisterInt: r3 was the name, `dvar` the returned dvar (guest address).
 void OnDvarRegistered(const char* name, uint32_t dvar) {
@@ -148,6 +151,7 @@ void OnPad(uint8_t* base, uint32_t user, uint16_t buttons) {
     if (title != s.title) {
       s.title = title;
       s.since = now;
+      g_title_screen.store(title, std::memory_order_relaxed);
     }
     const bool settled = title && now - s.since >= kSettle && !s.quitting;
     const bool ps = qos::pad_prompts::PlayStation(), keys = qos::pad_prompts::Keyboard();

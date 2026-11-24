@@ -74,7 +74,8 @@ def main():
     # 24 Nov, binds as the PC game's manual: sprint Ctrl (LS), swap weapon 1 (LB), use F (X).
     kk.key("CTRL", str(out / "k_ctrl.png"), kk.HUD, width=80)
     kk.key("CTRL", str(out / "km_ctrl_sq.png"), kk.MENU)
-    kk.key("1", str(out / "km_1.png"), kk.MENU)  # square: "replace" stretches to the 64x64 texture
+    kk.key("1", str(out / "km_1.png"), kk.MENU)
+    kk.key("ESC", str(out / "km_esc_sq.png"), kk.MENU)  # square: menus' back (Esc goes back in menus)  # square: "replace" stretches to the 64x64 texture
     for m in ("left", "right"):
         kk.mouse(m, str(out / f"km_mouse_{m}.png"), kk.MENU)
 

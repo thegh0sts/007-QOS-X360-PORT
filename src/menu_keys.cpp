@@ -7,7 +7,8 @@
 // "A menu has focus" is CoD4's key catcher for the UI: found 2026-11-24 in the decrypted executable. The pause
 // menu's open (sub_822CE670) sets cl_paused 1 and calls sub_821BBED8(0, 16), the engine's CL_SetKeyCatchers, which
 // keeps the console bit (1) and stores the int at 0x82809ADC (clientUIActive.keyCatchers); 16 is KEYCATCH_UI.
-// Each frame (Com_Frame hook) the bit is read and passed on. Logs its first changes, with the whole value, so
+// The Press Start screen counts too (menu_quit.cpp's title detection), so holding Esc there quits like holding B,
+// as its hint says (start_prompts_kbm: ENTER SELECT / ESC QUIT (HOLD)). Each frame (Com_Frame hook) it's passed on. Logs its first changes, with the whole value, so
 // screens that use something else (the phone?) show up.
 
 #include "generated/default/qos_pch.h"
@@ -19,6 +20,10 @@
 #include <rex/logging.h>
 
 REXCVAR_DEFINE_BOOL(menu_esc_back, true, "Input", "Keyboard: Esc (the Start keys) goes back while a menu has focus");
+
+namespace qos::menu_quit {
+bool OnTitleScreen();
+}  // namespace qos::menu_quit
 
 namespace qos::menu_keys {
 
@@ -38,7 +43,8 @@ void OnFrame(uint8_t* base) {
     REXLOG_INFO("menu keys: key catchers {:#x}", catchers);
   }
   g_last = catchers;
-  const bool menu = REXCVAR_GET(menu_esc_back) && (catchers & kKeyCatchUi) != 0;
+  const bool menu =
+      REXCVAR_GET(menu_esc_back) && ((catchers & kKeyCatchUi) != 0 || qos::menu_quit::OnTitleScreen());
   if (menu != g_menu) {
     g_menu = menu;
     rex::input::mnk::SetStartKeysAsBack(menu);

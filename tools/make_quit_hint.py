@@ -166,7 +166,7 @@ if __name__ == "__main__":
     # The title screen's (src/menu_quit.cpp): A SELECT over B QUIT (HOLD), and the PlayStation pair.
     prompts([("A", "SELECT"), ("B", "QUIT (HOLD)")], out + "/start_prompts.png")
     prompts([("X", "SELECT"), ("O", "QUIT (HOLD)")], out + "/start_prompts_ps.png")
-    # Keyboard: Enter selects, C held quits (B is C only since 24 Nov, src/kbm_binds.cpp); the menu-style keys.
+    # Keyboard: Enter selects, Esc held quits (Esc is back in menus: src/menu_keys.cpp); the menu-style keys.
     kbm = (sys.argv[2] if len(sys.argv) > 2 else "prompts/kbm") + "/"
-    key_prompts([(kbm + "km_enter.png", "SELECT"), (kbm + "km_c.png", "QUIT (HOLD)")],
+    key_prompts([(kbm + "km_enter.png", "SELECT"), (kbm + "km_esc_sq.png", "QUIT (HOLD)")],
                 out + "/start_prompts_kbm.png")
