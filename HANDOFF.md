@@ -773,6 +773,10 @@ Xbox / PlayStation = --pad_prompts=xbox|playstation and --mnk_mode=false --mnk_m
 zone, vibration) shown for Auto/Xbox/PlayStation, keyboard settings (binds note, sensitivity, invert) only for Keyboard
 and mouse (two frames, grid_remove). Replaces "Button prompts" and the "Keyboard and mouse" checkbox; old settings'
 pad_prompts migrate. New strings translated in launcher_text.py.
+**Works (user, 20:42)** after a reinstall: the first launcher test ran the old 0.1.1 install (built 23 Nov 23:12,
+no keyboard binds yet), and the reinstall first failed because build_installer.bat didn't copy thirdparty\ (miniz):
+fixed (d12282d; miniz licence in licenses\). The launcher only offers "Reinstall now" when GAME_VERSION changes
+(still 0.1.1): use Game files -> Reinstall to test new builds, or raise the version for a release.
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base
