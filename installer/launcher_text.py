@@ -1520,4 +1520,34 @@ TEXT = {
         'Ajout des éléments C++ manquants à votre Visual Studio (cela peut prendre 10 à 30 minutes)...',
         'Añadiendo los componentes de C++ que faltan a tu Visual Studio (puede tardar entre 10 y 30 minutos)...',
         'Aggiunta delle parti C++ mancanti al tuo Visual Studio (può richiedere 10-30 minuti)...'),
+    'Input device': (
+        'Eingabegerät',
+        "Périphérique d'entrée",
+        'Dispositivo de entrada',
+        'Dispositivo di input'),
+    'Auto': (
+        'Automatisch',
+        'Auto',
+        'Automático',
+        'Automatico'),
+    'Xbox controller': (
+        'Xbox-Controller',
+        'Manette Xbox',
+        'Mando de Xbox',
+        'Controller Xbox'),
+    'PlayStation controller': (
+        'PlayStation-Controller',
+        'Manette PlayStation',
+        'Mando de PlayStation',
+        'Controller PlayStation'),
+    'Controller': (
+        'Controller',
+        'Manette',
+        'Mando',
+        'Controller'),
+    'Auto plays with a controller, with Xbox or PlayStation buttons to match it; the keyboard and mouse still work, and the prompts show keys while you use them.': (
+        'Automatisch spielt mit einem Controller, mit Xbox- oder PlayStation-Tasten passend dazu; Tastatur und Maus funktionieren weiterhin, und die Hinweise zeigen Tasten, solange du sie benutzt.',
+        "Auto joue avec une manette, avec les boutons Xbox ou PlayStation correspondants ; le clavier et la souris fonctionnent toujours, et les indications affichent les touches pendant que vous les utilisez.",
+        'Automático juega con un mando, con botones de Xbox o PlayStation según el mando; el teclado y el ratón siguen funcionando, y las indicaciones muestran teclas mientras los usas.',
+        'Automatico gioca con un controller, con i tasti Xbox o PlayStation adatti; tastiera e mouse funzionano comunque, e i suggerimenti mostrano i tasti mentre li usi.'),
 }

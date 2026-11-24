@@ -763,7 +763,16 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    controllers handle 38/40/37/39/8; Enter 13 in other classes). Disassembly dumps: cloud /tmp/all.txt (not kept).
    Next: find which controller handles Enter on the main menu list and how it opens the item's screen; then patch that
    item (e.g. make its click a no-op).
-   **Parked (user, 20:01: "move on").** Selecting MULTIPLAYER still leaves the LOADING... screen; don't pick it.
+   **Parked (user, 20:01: "move on").** **Reverted (user, 20:22):** src/no_multiplayer.cpp removed, so MULTIPLAYER
+   closes the game again, as before (code in git history, last at commit c0b0a76).
+
+**Launcher: input device (24 Nov 20:25, not tested):** Controls tab "Input device" dropdown: Auto, Keyboard and mouse,
+Xbox controller, PlayStation controller (user). Auto = controllers first (prompts follow the connected pad; keyboard
+and mouse still enabled, prompts switch to keys while used); Keyboard and mouse = --pad_prompts=keyboard, mnk on;
+Xbox / PlayStation = --pad_prompts=xbox|playstation and --mnk_mode=false --mnk_mouse=false. Controller settings (dead
+zone, vibration) shown for Auto/Xbox/PlayStation, keyboard settings (binds note, sensitivity, invert) only for Keyboard
+and mouse (two frames, grid_remove). Replaces "Button prompts" and the "Keyboard and mouse" checkbox; old settings'
+pad_prompts migrate. New strings translated in launcher_text.py.
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base

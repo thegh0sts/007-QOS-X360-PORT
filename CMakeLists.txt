@@ -27,7 +27,6 @@ set(QOS_SOURCES
     src/takedown_keys.cpp
     src/menu_keys.cpp
     src/tutorial_keys.cpp
-    src/no_multiplayer.cpp
     src/native_inflate.cpp
     thirdparty/miniz/miniz.c
     thirdparty/miniz/miniz_tinfl.c

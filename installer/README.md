@@ -25,7 +25,8 @@ Nothing from the game ships with it. Running the installer again resumes where i
 | Display | Hide achievement pop-ups | `--achievement_popups=false` |
 | Graphics | Brightness | `--brightness` (native renderer's last pass) |
 | Graphics | Texture filtering | `BOTS_GFX_FORCE_ANISO` |
-| Controls | Button prompts | `--pad_prompts=auto|playstation|xbox` (`src/pad_prompts.cpp`, native patches 0014, 0021, 0022) |
+| Controls | Input device (Auto, Keyboard and mouse, Xbox controller, PlayStation controller) | `--pad_prompts=auto|keyboard|xbox|playstation` (`src/pad_prompts.cpp`, native patches 0014, 0021, 0022, 0098); keyboard and mouse (`--mnk_mode`, `--mnk_mouse`) on for Auto and Keyboard and mouse, off for the controllers. Only the chosen device's settings are shown |
+| Controls | Mouse sensitivity, Invert mouse (keyboard and mouse only) | `--mouse_sensitivity`, `--mouse_invert` (`src/mouse_look.cpp`) |
 | Controls | Extra stick dead zone | `--left_stick_deadzone_percentage`, `--right_stick_deadzone_percentage` (the SDK's) |
 | Controls | Vibration | `--vibration=false` when off |
 | Game files | Game language | `--user_language` (English, French: the disc's two) |

@@ -66,9 +66,15 @@ ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERIN
 FPS = ["30 (original)", "40", "50", "60"]
 FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60}
 FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
-PAD_PROMPTS = ["Auto", "PlayStation only", "Xbox only", "Keyboard only"]
-PAD_PROMPTS_FLAG = {"Auto": "auto", "PlayStation only": "playstation", "Xbox only": "xbox",
-                    "Keyboard only": "keyboard"}
+# Input device (Controls tab). Auto: controllers first, with Xbox or PlayStation prompts to match the one connected;
+# the keyboard and mouse still work, and the prompts switch to keys while they're used. The others pick one device:
+# keyboard and mouse on or off, and the prompts fixed to it (src/pad_prompts.cpp --pad_prompts).
+INPUT_DEVICES = ["Auto", "Keyboard and mouse", "Xbox controller", "PlayStation controller"]
+INPUT_PROMPTS = {"Auto": "auto", "Keyboard and mouse": "keyboard", "Xbox controller": "xbox",
+                 "PlayStation controller": "playstation"}
+# Settings from before the input device choice (launcher 0.1.1: "pad_prompts").
+OLD_PAD_PROMPTS = {"Keyboard only": "Keyboard and mouse", "Xbox only": "Xbox controller",
+                   "PlayStation only": "PlayStation controller"}
 
 DEFAULTS = {
     "fullscreen": True,
@@ -89,10 +95,9 @@ DEFAULTS = {
     "language": "English",
     "deadzone": 0,
     "vibration": True,
-    "pad_prompts": "Auto",
+    "input_device": "Auto",
     # Keyboard and mouse (the SDK's keyboard/mouse pad; 007's binds in src/kbm_binds.cpp, mouse look in
     # src/mouse_look.cpp). Sensitivity in % of CoD4 PC's default (0.11 degrees a mouse count).
-    "kbm": True,
     "mouse_sensitivity": 100,
     "mouse_invert": False,
     "close_on_play": True,
@@ -156,9 +161,11 @@ def load_settings():
         s.update(json.loads(SETTINGS_PATH.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         pass
+    if "input_device" not in s or s.get("input_device") not in INPUT_DEVICES:
+        s["input_device"] = OLD_PAD_PROMPTS.get(s.get("pad_prompts"), "Auto")
     for key, values in (("resolution", RESOLUTIONS), ("render_scale", SCALES), ("aa", AA), ("upscaling", UPSCALING),
                         ("texture_filtering", TEXTURE_FILTERING), ("fps", FPS), ("fps_counter", FPS_COUNTER),
-                        ("pad_prompts", PAD_PROMPTS), ("language", list(LANGUAGES))):
+                        ("input_device", INPUT_DEVICES), ("language", list(LANGUAGES))):
         if s.get(key) not in values:
             s[key] = DEFAULTS[key]
     for key, lo, hi in (("brightness", 50, 200), ("deadzone", 0, 40), ("fov", 65, 110)):
@@ -380,15 +387,19 @@ def game_args(s, screen=None):
         args.append(f"--present_effect={effect}")
     args.append(f"--user_language={LANGUAGES.get(s.get('language'), 1)}")
     # Controls: an extra dead zone on both sticks (the SDK's, as a fraction; 0 leaves the game's own), rumble
-    # (the runtime's switch) and the button prompts (src/pad_prompts.cpp).
+    # (the runtime's switch), and the input device: keyboard and mouse on or off, and the button prompts
+    # (src/pad_prompts.cpp).
     deadzone = int(s.get("deadzone", 0))
     if deadzone > 0:
         args += [f"--left_stick_deadzone_percentage={deadzone / 100:.2f}",
                  f"--right_stick_deadzone_percentage={deadzone / 100:.2f}"]
     if not s.get("vibration", True):
         args.append("--vibration=false")
-    args.append(f"--pad_prompts={PAD_PROMPTS_FLAG.get(s.get('pad_prompts'), 'auto')}")
-    if s.get("kbm", True):
+    device = s.get("input_device", "Auto")
+    args.append(f"--pad_prompts={INPUT_PROMPTS.get(device, 'auto')}")
+    if device in ("Xbox controller", "PlayStation controller"):
+        args += ["--mnk_mode=false", "--mnk_mouse=false"]
+    else:
         args += ["--mnk_mode=true", "--mnk_mouse=true",
                  f"--mouse_sensitivity={int(s.get('mouse_sensitivity', 100)) / 100:.2f}"]
         if s.get("mouse_invert"):
@@ -543,21 +554,29 @@ class SettingsView(tk.Frame):
         note(box, 5, "Faster in busy scenes. Turn it off if the picture flickers or objects go missing.")
 
         box = self._page("Controls")
-        tk.Label(box, text=tr("Xbox-style controllers and PlayStation controllers, with the game's own button layout."),
-                 font=("Segoe UI", 9), fg=DIM, bg=PANEL, anchor="w").grid(row=0, column=0, columnspan=2, sticky="w",
-                                                                         pady=(0, 8))
-        self._combo(box, 1, "pad_prompts", "Button prompts", PAD_PROMPTS)
-        note(box, 2, "Auto shows PlayStation buttons while a DualShock or DualSense is connected, Xbox buttons "
-                     "otherwise, and keys while you play with the keyboard and mouse.")
-        self._slider(box, 3, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
-        note(box, 4, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
-        self._check(box, 5, "vibration", "Controller vibration")
-        self._check(box, 6, "kbm", "Keyboard and mouse")
-        note(box, 7, "As the PC game: WASD move, Shift walk, Ctrl sprint, mouse look, left click fire, right click aim, "
+        self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)
+        note(box, 1, "Auto plays with a controller, with Xbox or PlayStation buttons to match it; the keyboard and "
+                     "mouse still work, and the prompts show keys while you use them.")
+        # Only the settings of the chosen device are shown: controller ones for Auto, Xbox and PlayStation, keyboard
+        # ones for keyboard and mouse.
+        pad = self.pad_settings = tk.Frame(box, bg=PANEL)
+        pad.columnconfigure(1, weight=1)
+        pad.grid(row=2, column=0, columnspan=2, sticky="ew")
+        self._subheading(pad, 0, "Controller")
+        self._slider(pad, 1, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
+        note(pad, 2, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
+        self._check(pad, 3, "vibration", "Controller vibration")
+        kbm = self.kbm_settings = tk.Frame(box, bg=PANEL)
+        kbm.columnconfigure(1, weight=1)
+        kbm.grid(row=3, column=0, columnspan=2, sticky="ew")
+        self._subheading(kbm, 0, "Keyboard and mouse")
+        note(kbm, 1, "As the PC game: WASD move, Shift walk, Ctrl sprint, mouse look, left click fire, right click aim, "
                      "Space jump, E cover, C stance, R reload, F use, G grenade, 3 grenade type, Q take down, 1/2 weapon, "
                      "4 silencer, X fire rate, Tab phone, Esc pause.")
-        self._slider(box, 8, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
-        self._check(box, 9, "mouse_invert", "Invert mouse up/down")
+        self._slider(kbm, 2, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
+        self._check(kbm, 3, "mouse_invert", "Invert mouse up/down")
+        self.vars["input_device"].trace_add("write", lambda *_: self._input_device_changed())
+        self._input_device_changed()
 
         box = self._page("Saves")
         line = tk.Frame(box, bg=PANEL)
@@ -696,6 +715,15 @@ class SettingsView(tk.Frame):
         self.saved = json.dumps(saved, sort_keys=True, default=str)
         if self.on_language:
             self.after_idle(self.on_language, self.collect(), self.saved)
+
+    def _input_device_changed(self):
+        keyboard = self.vars["input_device"].get() == "Keyboard and mouse"
+        if keyboard:
+            self.pad_settings.grid_remove()
+            self.kbm_settings.grid()
+        else:
+            self.kbm_settings.grid_remove()
+            self.pad_settings.grid()
 
     def _game_language_changed(self):
         if self.vars["launcher_language"].get() == "same" and self.on_language \
