@@ -710,6 +710,10 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    only the recompiled default.xex, so the relaunch ends the process: that's the "close". Fix: hook sub_821BCD08 and
    return before it shuts anything down (the menu should stay as it is; check it doesn't sit in a loading state), or
    hide the menu entry. Playing MP would need default_mp.xex as its own recompilation project (parked).
+   **Done (24 Nov 19:50), not built/tested:** sub_821BCD08 is the console command "startMultiplayer" (Cmd_AddCommand
+   sub_82299178 at 0x821BE8D4, name 0x8201D714). `src/no_multiplayer.cpp` hooks it and returns before the shutdown;
+   log "multiplayer: startMultiplayer ignored"; `--allow_multiplayer=true` calls the original. Check: MULTIPLAYER on
+   the main menu does nothing and the menu still works (no stuck fade/loading).
 
 **Parked: multiplayer (user, 24 Nov 06:57), after single player is done.**
 1. Read Skullburglar's SDK patch `0018-netplay-system-link` (patches/rexglue-sdk in the Skullburglar repo, base

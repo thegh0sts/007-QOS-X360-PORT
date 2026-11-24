@@ -27,6 +27,7 @@ set(QOS_SOURCES
     src/takedown_keys.cpp
     src/menu_keys.cpp
     src/tutorial_keys.cpp
+    src/no_multiplayer.cpp
     src/version_log.cpp
     src/achievement_list.cpp
 )
