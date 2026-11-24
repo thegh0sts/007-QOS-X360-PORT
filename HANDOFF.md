@@ -767,8 +767,8 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    closes the game again, as before (code in git history, last at commit c0b0a76).
 
 **Launcher: input device (24 Nov 20:25, not tested):** Controls tab "Input device" dropdown: Auto, Keyboard and mouse,
-Xbox controller, PlayStation controller (user). Auto = controllers first (prompts follow the connected pad; keyboard
-and mouse still enabled, prompts switch to keys while used); Keyboard and mouse = --pad_prompts=keyboard, mnk on;
+Xbox controller, PlayStation controller (user). Auto = controllers only (prompts follow the connected pad; keyboard
+and mouse off, user 20:26); Keyboard and mouse = --pad_prompts=keyboard, mnk on;
 Xbox / PlayStation = --pad_prompts=xbox|playstation and --mnk_mode=false --mnk_mouse=false. Controller settings (dead
 zone, vibration) shown for Auto/Xbox/PlayStation, keyboard settings (binds note, sensitivity, invert) only for Keyboard
 and mouse (two frames, grid_remove). Replaces "Button prompts" and the "Keyboard and mouse" checkbox; old settings'

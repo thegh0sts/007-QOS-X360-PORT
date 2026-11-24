@@ -66,9 +66,9 @@ ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERIN
 FPS = ["30 (original)", "40", "50", "60"]
 FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60}
 FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
-# Input device (Controls tab). Auto: controllers first, with Xbox or PlayStation prompts to match the one connected;
-# the keyboard and mouse still work, and the prompts switch to keys while they're used. The others pick one device:
-# keyboard and mouse on or off, and the prompts fixed to it (src/pad_prompts.cpp --pad_prompts).
+# Input device (Controls tab). Auto: controllers only, with Xbox or PlayStation prompts to match the one connected
+# (keyboard and mouse off, user 24 Nov). The others pick one device and fix the prompts to it
+# (src/pad_prompts.cpp --pad_prompts); keyboard and mouse is on only for "Keyboard and mouse".
 INPUT_DEVICES = ["Auto", "Keyboard and mouse", "Xbox controller", "PlayStation controller"]
 INPUT_PROMPTS = {"Auto": "auto", "Keyboard and mouse": "keyboard", "Xbox controller": "xbox",
                  "PlayStation controller": "playstation"}
@@ -397,7 +397,7 @@ def game_args(s, screen=None):
         args.append("--vibration=false")
     device = s.get("input_device", "Auto")
     args.append(f"--pad_prompts={INPUT_PROMPTS.get(device, 'auto')}")
-    if device in ("Xbox controller", "PlayStation controller"):
+    if device != "Keyboard and mouse":
         args += ["--mnk_mode=false", "--mnk_mouse=false"]
     else:
         args += ["--mnk_mode=true", "--mnk_mouse=true",
@@ -555,8 +555,7 @@ class SettingsView(tk.Frame):
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)
-        note(box, 1, "Auto plays with a controller, with Xbox or PlayStation buttons to match it; the keyboard and "
-                     "mouse still work, and the prompts show keys while you use them.")
+        note(box, 1, "Auto plays with a controller, with Xbox or PlayStation buttons to match the one connected.")
         # Only the settings of the chosen device are shown: controller ones for Auto, Xbox and PlayStation, keyboard
         # ones for keyboard and mouse.
         pad = self.pad_settings = tk.Frame(box, bg=PANEL)

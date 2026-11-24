@@ -1545,9 +1545,9 @@ TEXT = {
         'Manette',
         'Mando',
         'Controller'),
-    'Auto plays with a controller, with Xbox or PlayStation buttons to match it; the keyboard and mouse still work, and the prompts show keys while you use them.': (
-        'Automatisch spielt mit einem Controller, mit Xbox- oder PlayStation-Tasten passend dazu; Tastatur und Maus funktionieren weiterhin, und die Hinweise zeigen Tasten, solange du sie benutzt.',
-        "Auto joue avec une manette, avec les boutons Xbox ou PlayStation correspondants ; le clavier et la souris fonctionnent toujours, et les indications affichent les touches pendant que vous les utilisez.",
-        'Automático juega con un mando, con botones de Xbox o PlayStation según el mando; el teclado y el ratón siguen funcionando, y las indicaciones muestran teclas mientras los usas.',
-        'Automatico gioca con un controller, con i tasti Xbox o PlayStation adatti; tastiera e mouse funzionano comunque, e i suggerimenti mostrano i tasti mentre li usi.'),
+    'Auto plays with a controller, with Xbox or PlayStation buttons to match the one connected.': (
+        'Automatisch spielt mit einem Controller, mit Xbox- oder PlayStation-Tasten passend zum angeschlossenen.',
+        "Auto joue avec une manette, avec les boutons Xbox ou PlayStation de la manette branchée.",
+        'Automático juega con un mando, con botones de Xbox o PlayStation según el mando conectado.',
+        'Automatico gioca con un controller, con i tasti Xbox o PlayStation del controller collegato.'),
 }
