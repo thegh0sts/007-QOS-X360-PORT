@@ -199,8 +199,16 @@ version byte; a non-VDP socket receiving one strips the 2-byte length and cuts t
    players, rotation list of mode + map, limits, VPN peers, Start/Stop, status).
 3. **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC, hosting a server.
-4. Earlier list: two-PC test; installer builds/copies qosmp.exe; SP MULTIPLAYER item -> qosmp.exe and back
-   (also makes Sys_Error's relaunch real); keyboard/mouse and prompts in MP.
+4. **Single player <-> multiplayer switching:** SP's MULTIPLAYER item (startMultiplayer, sub_821BCD08 -> title
+   launch sub_82423D78("default_mp.xex")) starts qosmp.exe; MP's way back (sub_821C5598 -> sub_82372B60("default.xex"))
+   starts qos.exe; a launch of its own name (Sys_Error, relaunch_log.cpp) restarts qosmp.exe so the error shows.
+   Pass the launch data (MP's 984-byte block at 0x84E8D7D0) along.
+5. **Keyboard/mouse and button prompts in multiplayer:** single player's kbm_binds, mouse_look, pad_prompts,
+   menu_keys, takedown/tutorial hooks at MP addresses (mouse look: CL_MouseMove etc. are CoD4 code, likely in MP
+   too); MP's own binds file is buttons_default_mp.cfg; prompts/ textures may differ in ui_mp.ff.
+6. Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer and the server tab).
+- No two-PC test: the user has no second PC. Two instances on one PC (24 Nov 23:39) stand in for it; LAN and VPN
+  paths (broadcast to other machines, netplay_peers) stay untested until a user reports.
 
 ## Resume here
 
