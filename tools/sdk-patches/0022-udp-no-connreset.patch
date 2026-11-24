@@ -1,0 +1,30 @@
+# Windows UDP sockets: SIO_UDP_CONNRESET/NETRESET off, so an ICMP "port unreachable" is not reported as
+# WSAECONNRESET on recvfrom. 007 multiplayer Sys_Errored on it ("Failed to recvfrom() socket, error
+# WSAECONNRESET") leaving a match and opening System Link's join menu. After 0020 (netplay).
+diff --git a/src/system/xsocket.cpp b/src/system/xsocket.cpp
+index fd76387..c1bfb25 100644
+--- a/src/system/xsocket.cpp
++++ b/src/system/xsocket.cpp
+@@ -460,6 +460,22 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
+ #if REX_PLATFORM_MAC
+   int one = 1;
+   setsockopt(int(native_handle_), SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
++#endif
++#if REX_PLATFORM_WIN32
++  if (type == X_SOCK_DGRAM) {
++    // Windows reports an ICMP "port unreachable" (a datagram sent to a port nobody listens on, e.g.
++    // a system link broadcast or a peer that just left) as WSAECONNRESET on the socket's next
++    // recvfrom. A console never does; 007 multiplayer treats it as fatal ("Failed to recvfrom()
++    // socket, error WSAECONNRESET"). SIO_UDP_CONNRESET / SIO_UDP_NETRESET off (mstcpip.h values).
++    constexpr DWORD kSioUdpConnReset = 0x9800000C;  // _WSAIOW(IOC_VENDOR, 12)
++    constexpr DWORD kSioUdpNetReset = 0x9800000F;   // _WSAIOW(IOC_VENDOR, 15)
++    BOOL off = FALSE;
++    DWORD returned = 0;
++    WSAIoctl(SOCKET(native_handle_), kSioUdpConnReset, &off, sizeof(off), nullptr, 0, &returned,
++             nullptr, nullptr);
++    WSAIoctl(SOCKET(native_handle_), kSioUdpNetReset, &off, sizeof(off), nullptr, 0, &returned,
++             nullptr, nullptr);
++  }
+ #endif
+   if (netplay::Trace()) {
+     REXLOG_INFO("netplay: socket {:X} type {} proto {}", handle(), uint32_t(type), uint32_t(proto_));

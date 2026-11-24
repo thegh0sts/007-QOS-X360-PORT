@@ -138,6 +138,15 @@ game loaded and played (one player), ended -> score screen -> process ended ("Ex
 not needed for System Link, left off. Frame times in the match ~31-33 ms wall with CP idle ~29 ms: the game runs at its
 30 FPS cap (no fps_unlock for MP yet).
 
+**Sys_Error relaunch (24 Nov, 22:51, qosmp_012/013):** multiplayer's Sys_Error (sub_822E14E0) puts the message in a
+984-byte block at 0x84E8D7D0 (+4 text), sets it as launch data (stub 0x8252516C) and relaunches default_mp.xex
+(sub_82372B60(name, flags); sub_821C5598 uses it with "default.xex" to go back to single player). No relaunch in
+ReXGlue: the process ends. mp/src/relaunch_log.cpp logs "game relaunch: ...; Sys_Error message: ...". Both runs
+(leaving a match; opening System Link's join menu): "Failed to recvfrom() socket, error WSAECONNRESET" = Windows
+reporting ICMP port-unreachable on UDP. SDK patch 0022-udp-no-connreset (own22): SIO_UDP_CONNRESET/NETRESET off on
+every datagram socket. Later: make the relaunch real (restart the process, or reset and pass the launch data) so
+Sys_Error shows its message as on the console, and single player <-> multiplayer switching.
+
 ## Resume here
 
 - **Last thing done (20 Nov):** PlayStation menu buttons (A/B -> cross/circle) written: native patch 0021, src/
