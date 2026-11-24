@@ -12,3 +12,19 @@ longjmp_address = 0x8250B3A0
 # First codegen run: "b 0x82100460 from 0x82120CFC - target not in any function". A C++ this-adjust thunk
 # (addi r3,r3,4; b ...) reached only by that tail branch.
 0x82100460 = { name = "sub_82100460" }
+
+# The asset-type size switch (sub_821E1168, single player's sub_821C1B90: "li r3,N; blr" per asset type). Its jump
+# table (0x82547D80, indexed by r3) has 39 entries, but the analyzer stopped at entry 16, which the linker pointed at
+# a far-away shared "return 4" (0x822F49D0), so asset types 16-38 hit the switch's out-of-range trap: the first run
+# crashed with an illegal instruction (0xC000001D) at startup. Entries past 15 that are separate functions
+# (0x821E11E0-0x821E1208, 0x822F49D0) become tail calls; 0 = unused type (trap).
+[[switch_tables]]
+address = 0x821E117C
+register = 3
+labels = [
+  0x821E1180, 0x821E1188, 0x821E1190, 0x821E1198, 0x821E11A0, 0x821E11A8, 0x821E11B0, 0x821E1198,
+  0x821E11B8, 0x821E11C0, 0x821E1180, 0x821E11C8, 0x821E11D0, 0x821E11D0, 0x821E11D8, 0x821E11C0,
+  0x822F49D0, 0x821E1180, 0x821E11E0, 0x821E1198, 0x0, 0x821E11E8, 0x821E1180, 0x821E11F0,
+  0x821E11F8, 0x821E1200, 0x821E11F8, 0x821E1208, 0x821E11F8, 0x0, 0x0, 0x0,
+  0x0, 0x821E1180, 0x821E1198, 0x821E1180, 0x821E1198, 0x821E1208, 0x821E1180,
+]
