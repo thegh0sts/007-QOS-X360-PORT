@@ -1,0 +1,11 @@
+# Manual function starts for default_mp.xex: addresses the analyzer doesn't find on its own. Add more from codegen
+# "Unresolved" messages and from runtime "Call to invalid or unregistered function" crashes.
+
+# MSVC CRT setjmp/longjmp, found by matching single player's (default.xex 0x825ABAE0 / 0x825AB7C0: 126 and 127 of
+# their first 128 instruction words are the same here; setjmp's first two words load a global's address). Codegen
+# replaces calls to them with host ppc_setjmp/ppc_longjmp: the game's error recovery (Com_Error's longjmp back to the
+# frame loop) needs them, as in single player.
+setjmp_address = 0x8250B6C0
+longjmp_address = 0x8250B3A0
+
+[functions]

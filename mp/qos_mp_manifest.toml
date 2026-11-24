@@ -1,0 +1,12 @@
+# 007: Quantum of Solace multiplayer (game/default_mp.xex): a second recompilation, beside the single-player one in
+# the folder above. Same game data folder; built as qos_mp.exe. Started 24 Nov 2026 (HANDOFF.md, "Multiplayer").
+
+[project]
+name = "qos_mp"
+sdk_version = "0.10.1"
+game_root = "../game"
+
+[entrypoint]
+file_path = "../game/default_mp.xex"
+out_directory_path = "generated/default"
+includes = ["mp_functions.toml"]

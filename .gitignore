@@ -44,3 +44,8 @@ win_crash.txt
 *-trace.txt
 *-dump.txt
 spirv/
+
+# Multiplayer recompilation (mp/): generated code and build output
+mp/generated/default/
+mp/out/
+qos_mp.toml
