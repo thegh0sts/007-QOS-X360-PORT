@@ -9,4 +9,4 @@ game_root = "../game"
 [entrypoint]
 file_path = "../game/default_mp.xex"
 out_directory_path = "generated/default"
-includes = ["mp_functions.toml"]
+includes = ["mp_functions.toml", "mp_functions_scan.toml"]

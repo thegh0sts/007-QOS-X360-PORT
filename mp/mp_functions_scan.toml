@@ -1,0 +1,87 @@
+# Function starts found by scanning default_mp.xex, as default_functions_scan.toml does for single player: code
+# right after an unconditional blr/bctr/b that no branch or jump table reaches (no loc_ label in the generated code)
+# and isn't already a function, excluding padding, inline jump tables and the import stubs (0x8252516C on). The
+# analyzer folded these into the function before them; the game reaches them through pointers (vtables,
+# callbacks): the first run crashed at 0x8211E898 ("Call to invalid or unregistered function"; single player's
+# first boot crashed on the same audio callback, 0x8211E798 there). "data ref" = referenced from the data sections.
+# To disable this batch, remove "mp_functions_scan.toml" from includes in qosmp_manifest.toml.
+
+[functions]
+0x820FFBA4 = { name = "sub_820FFBA4" }
+0x82103608 = { name = "sub_82103608" }  # data ref
+0x82103630 = { name = "sub_82103630" }  # data ref
+0x82103640 = { name = "sub_82103640" }  # data ref
+0x82103650 = { name = "sub_82103650" }  # data ref
+0x82108948 = { name = "sub_82108948" }  # data ref
+0x8210CAC0 = { name = "sub_8210CAC0" }  # data ref
+0x8211DCC0 = { name = "sub_8211DCC0" }  # data ref
+0x8211E898 = { name = "sub_8211E898" }  # data ref
+0x8211E8E0 = { name = "sub_8211E8E0" }  # data ref
+0x82120C78 = { name = "sub_82120C78" }  # data ref
+0x82120C98 = { name = "sub_82120C98" }  # data ref
+0x82120CB8 = { name = "sub_82120CB8" }  # data ref
+0x82120CC8 = { name = "sub_82120CC8" }  # data ref
+0x82120CE0 = { name = "sub_82120CE0" }  # data ref
+0x82120CE8 = { name = "sub_82120CE8" }  # data ref
+0x821C0D90 = { name = "sub_821C0D90" }
+0x821F3AD4 = { name = "sub_821F3AD4" }
+0x8225EEEC = { name = "sub_8225EEEC" }
+0x82277110 = { name = "sub_82277110" }
+0x822BFDA8 = { name = "sub_822BFDA8" }
+0x822E8C34 = { name = "sub_822E8C34" }
+0x822E8C80 = { name = "sub_822E8C80" }
+0x8230D858 = { name = "sub_8230D858" }
+0x8230F764 = { name = "sub_8230F764" }
+0x8230F77C = { name = "sub_8230F77C" }
+0x8230F7B0 = { name = "sub_8230F7B0" }
+0x8230F7E8 = { name = "sub_8230F7E8" }
+0x823110A0 = { name = "sub_823110A0" }
+0x82330C18 = { name = "sub_82330C18" }
+0x8234BA8C = { name = "sub_8234BA8C" }
+0x8234ECD0 = { name = "sub_8234ECD0" }
+0x82376ED8 = { name = "sub_82376ED8" }  # data ref
+0x82378654 = { name = "sub_82378654" }  # data ref
+0x823787CC = { name = "sub_823787CC" }  # data ref
+0x823AE1DC = { name = "sub_823AE1DC" }
+0x823B43F8 = { name = "sub_823B43F8" }  # data ref
+0x823B4410 = { name = "sub_823B4410" }  # data ref
+0x823B58DC = { name = "sub_823B58DC" }
+0x823B5BF4 = { name = "sub_823B5BF4" }
+0x823BE9C8 = { name = "sub_823BE9C8" }
+0x823C3458 = { name = "sub_823C3458" }  # data ref
+0x823C3518 = { name = "sub_823C3518" }  # data ref
+0x823C3530 = { name = "sub_823C3530" }  # data ref
+0x823D0390 = { name = "sub_823D0390" }  # data ref
+0x823D03A0 = { name = "sub_823D03A0" }  # data ref
+0x823DD940 = { name = "sub_823DD940" }
+0x823DD968 = { name = "sub_823DD968" }
+0x823DD9A8 = { name = "sub_823DD9A8" }
+0x823ED778 = { name = "sub_823ED778" }
+0x823F9048 = { name = "sub_823F9048" }
+0x823F9088 = { name = "sub_823F9088" }  # data ref
+0x823F9B28 = { name = "sub_823F9B28" }  # data ref
+0x823F9B38 = { name = "sub_823F9B38" }  # data ref
+0x823F9B4C = { name = "sub_823F9B4C" }
+0x82403270 = { name = "sub_82403270" }  # data ref
+0x82403288 = { name = "sub_82403288" }  # data ref
+0x824100C0 = { name = "sub_824100C0" }  # data ref
+0x824208B8 = { name = "sub_824208B8" }  # data ref
+0x824208D0 = { name = "sub_824208D0" }  # data ref
+0x824208E8 = { name = "sub_824208E8" }  # data ref
+0x82420900 = { name = "sub_82420900" }  # data ref
+0x82420918 = { name = "sub_82420918" }  # data ref
+0x82420930 = { name = "sub_82420930" }  # data ref
+0x82420948 = { name = "sub_82420948" }  # data ref
+0x82420960 = { name = "sub_82420960" }  # data ref
+0x8242FA58 = { name = "sub_8242FA58" }  # data ref
+0x82442348 = { name = "sub_82442348" }  # data ref
+0x82442370 = { name = "sub_82442370" }  # data ref
+0x82442398 = { name = "sub_82442398" }  # data ref
+0x82449534 = { name = "sub_82449534" }
+0x824AFF90 = { name = "sub_824AFF90" }
+0x825172B8 = { name = "sub_825172B8" }  # data ref
+0x8251C6E0 = { name = "sub_8251C6E0" }  # data ref
+0x8251C858 = { name = "sub_8251C858" }  # data ref
+0x8251CBCC = { name = "sub_8251CBCC" }  # data ref
+0x8251CD0C = { name = "sub_8251CD0C" }  # data ref
+0x8251D3EC = { name = "sub_8251D3EC" }  # data ref
