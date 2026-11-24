@@ -720,7 +720,13 @@ dipped to 50 FPS; the 0.1.1 launcher run, vsync off, had 1 frame > 25 ms at the 
    BOTS_GFX_WORKER 0/0/1; default 2; old render_thread checkbox migrates. SDK bundle name qos5. Not yet moved: the
    unchanged-texture hash checks (they run at the draw that finds the texture dirty; an early hash could miss later
    writes). Test: build_native + game build; A/B a level start and a streaming walk with BOTS_GFX_WORKER=1 vs 0,
-   BOTS_HITCH_MS=20. Earlier plan:  (user, 23:47: worth trying despite the risk). Off by default, one switch per duty, e.g.
+   BOTS_HITCH_MS=20. **First test (21:13, qos_165, worker on; compared with qos_164, 21:03, same settings but the
+   renderer from before 0099, 2 threads):** worker log line present; it copied ~600-690 levels per 10 s (mostly the
+   one per-frame rewritten texture) and 435-685 in the level-load windows. Texture time per frame 0.46 -> 0.30 ms;
+   gameplay windows' frames > 20 ms per 10 s: 7-26 (avg ~16) -> 1-23 (avg ~9) (different walks, so rough). Level-
+   start stalls unchanged (game side: CP idle 50-98 ms; a 127-129 ms frame in both). Startup frame 1 has one 75-90 ms
+   texture (1x1 format 6 tiled) in both. No 2-thread run on the new DLL yet. Launcher default stays 2.
+   Earlier plan:  (user, 23:47: worth trying despite the risk). Off by default, one switch per duty, e.g.
    `BOTS_GFX_WORKER=textures,hash` (duties: `hash` unchanged-texture checks, `textures` loads/untiling/decompression
    and per-frame reloads, `uploads` vertex/constant copies, `parse` PM4 + register writes, maybe its own thread, i.e.
    a 4th). **Agreed start (user, 23:48): `hash` + `textures`** (the dips are texture-write/streaming bursts; the worker
