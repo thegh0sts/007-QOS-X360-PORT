@@ -26,9 +26,10 @@
 //   "Press [[{weapnext}]] to switch weapons"              -> "Press [[{weapnext}]] / [[{kbm_2}]] to switch weapons"
 //   "Press up on the D-Pad to change the fire mode"       -> "Press [[{nextfiretype}]] to change the fire mode"
 //   "Press Down on the D-Pad to attach/remove ..."        -> "Press [[{togglesilencer}]] to attach/remove ..."
-// with more pictures from the library: kbm_w -> btn_navigate_all (W), kbm_2 -> btn_y (2), nextfiretype ->
-// btn_nav_up (X), togglesilencer -> btn_nav_down (4). btn_navigate_v is left alone: the phone's cameras screen
-// shows it (scroll cameras). English text only.
+// with more pictures from the library: kbm_w -> btn_navigate_all (W), kbm_2 -> btn_navigate_v (2), nextfiretype ->
+// btn_nav_up (X), togglesilencer -> btn_nav_down (4). btn_y is not spare (the Y button's own picture).
+// btn_navigate_v is also the phone's cameras screen's "scroll cameras": prompts/keyboard_phone.txt gives it the
+// arrow keys there. English text only.
 // Every command it sees is logged once ("tutorial keys: ..."), to find more.
 
 #include "generated/default/qos_pch.h"
@@ -66,7 +67,7 @@ struct Swap {
   uint32_t guest = 0;  // the image name as a wide (UTF-16BE) string in guest memory
 };
 Swap g_swaps[] = {{"+dash", "btn_left"},          {"+stance", "btn_right"},        {"+cover", "btn_navigate_h"},
-                  {"kbm_w", "btn_navigate_all"},   {"kbm_2", "btn_y"},              {"nextfiretype", "btn_nav_up"},
+                  {"kbm_w", "btn_navigate_all"},   {"kbm_2", "btn_navigate_v"},     {"nextfiretype", "btn_nav_up"},
                   {"togglesilencer", "btn_nav_down"},
                   // tutorial_keys_test: the spare pictures, one each
                   {"kbm_t1", "btn_left"},          {"kbm_t2", "btn_right"},         {"kbm_t3", "btn_navigate_h"},

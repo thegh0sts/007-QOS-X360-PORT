@@ -78,6 +78,7 @@ def main():
     kk.key("ESC", str(out / "km_esc_sq.png"), kk.MENU)
     for t in ("W", "2", "X", "4"):  # reworded hints: sprint W, weapons 2, fire mode X, silencer 4
         kk.key(t, str(out / f"km_{t.lower()}.png"), kk.MENU)  # square: menus' back (Esc goes back in menus)  # square: "replace" stretches to the 64x64 texture
+    kk.key("↑↓", str(out / "km_updown.png"), kk.MENU, px=30)  # phone: scroll cameras
     for m in ("left", "right"):
         kk.mouse(m, str(out / f"km_mouse_{m}.png"), kk.MENU)
 

@@ -5,3 +5,7 @@
 # The phone's EXIT uses the B picture, which the menus use for BACK (ESC there): on the phone it shows Tab, the
 # key that opens and closes it (user, 24 Nov).
 replace btn_back 64 64 09784A4CD20751E1 kbm/km_tab
+
+# btn_navigate_v: the cameras screen's "scroll cameras" (Up / Down, or X / 4); keyboard.txt makes it 2 for the
+# weapons hint (src/tutorial_keys.cpp). Hash still to come from a texture dump:
+#   replace btn_navigate_v 64 64 <hash> kbm/km_updown

@@ -29,7 +29,7 @@ replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/km_q
 # Hint pictures of their own (src/tutorial_keys.cpp): in keyboard mode some hint commands get spare pictures from the
 # shared platform library, and some hints are reworded (sprint, switch weapons, fire mode, silencer):
 #   [[{+dash}]] -> btn_left (Ctrl), [[{+stance}]] -> btn_right (C), [[{+cover}]] -> btn_navigate_h (E),
-#   [[{kbm_w}]] -> btn_navigate_all (W), [[{kbm_2}]] -> btn_y (2), [[{nextfiretype}]] -> btn_nav_up (X),
+#   [[{kbm_w}]] -> btn_navigate_all (W), [[{kbm_2}]] -> btn_navigate_v (2; phone: arrow keys), [[{nextfiretype}]] -> btn_nav_up (X),
 #   [[{togglesilencer}]] -> btn_nav_down (4).
 # So the menus' A picture (btn_accept) can show Enter, as the title screen does. Texture hashes still to come from a
 # texture dump (BOTS_GFX_DUMP_TEXTURES) of those hints:
@@ -37,7 +37,7 @@ replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/km_q
 #   replace btn_right        64 64 <hash> kbm/km_c
 #   replace btn_navigate_h   64 64 <hash> kbm/km_e
 #   replace btn_navigate_all 64 64 <hash> kbm/km_w
-#   replace btn_y            64 64 <hash> kbm/km_2
+#   replace btn_navigate_v   64 64 <hash> kbm/km_2
 #   replace btn_nav_up       64 64 <hash> kbm/km_x
 #   replace btn_nav_down     64 64 <hash> kbm/km_4
 

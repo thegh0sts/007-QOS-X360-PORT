@@ -640,6 +640,14 @@ btn_navigate_v not used (the phone's cameras screen shows it). In the user's 17:
 btn_right both drew the same arrows icon (maybe one texture) and btn_navigate_h a D-pad left/right icon. Next: the
 dump run (BOTS_GFX_DUMP_TEXTURES=texdump6), find the seven 64x64 hashes, fill keyboard.txt's placeholder lines.
 
+**18:35 update:** built and seen (user's screenshots): all rewording works. The arrow pictures differ by which arrow
+is lit (btn_left: left; btn_navigate_all: all; btn_nav_up: up), so they're separate pictures. btn_y is not spare (the
+Y button's own picture, Space on keyboard): kbm_2 (weapons "2") now uses btn_navigate_v, and keyboard_phone.txt gives
+btn_navigate_v an arrow-keys picture (km_updown) on the phone's cameras screen. `--tutorial_keys_test=true` makes
+every hint show the six candidates 1-6 (btn_left, btn_right, btn_navigate_h, btn_navigate_v, btn_navigate_all, btn_y)
+for the dump run. Hashes to fill: btn_left, btn_right, btn_navigate_h, btn_navigate_v, btn_navigate_all, btn_nav_up,
+btn_nav_down.
+
 ## To do, 24 Nov (user, 23:20)
 
 Test like the launcher: `--vsync=false` (the 23 Nov dev run had vsync on: 18 ms frames became 33 ms, so the intro
