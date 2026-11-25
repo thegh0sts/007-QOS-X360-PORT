@@ -1835,4 +1835,9 @@ TEXT = {
         'Le multijoueur a le sien, construit de la même façon à son premier lancement.',
         'El multijugador tiene la suya, creada igual en su primer inicio.',
         'Il multigiocatore ha la sua, creata allo stesso modo al primo avvio.'),
+    "Start multiplayer from MULTIPLAYER on the game's main menu; leaving it returns to single player. System Link over your local network. Display and controller settings are shared with single player.": (
+        'Starte den Mehrspieler über MEHRSPIELER im Hauptmenü des Spiels; beim Verlassen kehrst du zum Einzelspieler zurück. System Link über dein lokales Netzwerk. Anzeige- und Controller-Einstellungen gelten auch für den Einzelspieler.',
+        "Lancez le multijoueur avec MULTIJOUEUR dans le menu principal du jeu ; en le quittant, vous revenez au mode solo. System Link sur votre réseau local. Les réglages d'affichage et de manette sont communs avec le mode solo.",
+        'Inicia el multijugador con MULTIJUGADOR en el menú principal del juego; al salir vuelves a un jugador. System Link por tu red local. Los ajustes de pantalla y de mando son los mismos que en un jugador.',
+        'Avvia il multigiocatore da MULTIGIOCATORE nel menu principale del gioco; uscendo torni al giocatore singolo. System Link sulla tua rete locale. Le impostazioni di schermo e controller sono le stesse del giocatore singolo.'),
 }

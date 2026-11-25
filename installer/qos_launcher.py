@@ -703,8 +703,8 @@ class SettingsView(tk.Frame):
         tk.Label(box, text=self.s.get("xuid", ""), font=("Consolas", 10), fg=FG, bg=PANEL).grid(
             row=2, column=1, sticky="e", pady=2)
         note(box, 3, "Your profile's ID, made for this install. The game tells players apart by it.")
-        note(box, 4, "System Link over your local network: start it with Play MP. Display and controller settings are "
-                     "shared with single player.")
+        note(box, 4, "Start multiplayer from MULTIPLAYER on the game's main menu; leaving it returns to single player. "
+                     "System Link over your local network. Display and controller settings are shared with single player.")
 
         box = self._page("Saves")
         line = tk.Frame(box, bg=PANEL)
@@ -740,11 +740,11 @@ class SettingsView(tk.Frame):
 
         foot = tk.Frame(self, bg=BG)
         foot.pack(side="bottom", fill="x", padx=28, pady=18)
-        # Single player and multiplayer side by side (user, 25 Nov; mockup "QoS launcher: Play SP / Play MP").
-        for text, cmd, gap in (("Play SP", self.play, 0), ("Play MP", lambda: self.play(multiplayer=True), 10)):
-            tk.Button(foot, text=tr(text), width=12, command=cmd, font=("Segoe UI", 13, "bold"), bg=ACCENT,
-                      fg=ON_ACCENT, activebackground=ACCENT_HOVER, activeforeground=ON_ACCENT, bd=0, pady=8
-                      ).pack(side="left", padx=(gap, 0))
+        # One Play: multiplayer starts from the game's own MULTIPLAYER item and comes back to single player when
+        # it's left (src/title_switch.h), so a separate Play MP would end in single player anyway (user, 25 Nov).
+        tk.Button(foot, text=tr("Play"), width=16, command=self.play, font=("Segoe UI", 13, "bold"), bg=ACCENT,
+                  fg=ON_ACCENT, activebackground=ACCENT_HOVER, activeforeground=ON_ACCENT, bd=0, pady=8
+                  ).pack(side="left")
         tk.Button(foot, text=tr("Save settings"), width=13, command=self.save, font=("Segoe UI", 12), bd=0, pady=8,
                   fg=ACCENT_HOVER, bg="#23272d", activebackground="#2c3039", activeforeground=ACCENT_HOVER,
                   highlightthickness=1, highlightbackground=ACCENT).pack(side="left", padx=(10, 0))
@@ -757,7 +757,7 @@ class SettingsView(tk.Frame):
                        font=("Segoe UI", 9), fg=DIM, bg=BG, selectcolor=BG, activebackground=BG,
                        activeforeground=FG).pack(side="right", padx=10)
 
-        self.status = tk.StringVar(value=tr("Settings are saved with Save settings, or when you press Play SP or Play MP."))
+        self.status = tk.StringVar(value=tr("Settings are saved with Save settings, or when you press Play."))
         tk.Label(self, textvariable=self.status, font=("Segoe UI", 9), fg=DIM, bg=BG, wraplength=700,
                  justify="left").pack(side="bottom", anchor="w", padx=28)
         body.pack(fill="both", expand=True, padx=28, pady=(14, 4))
