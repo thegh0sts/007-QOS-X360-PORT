@@ -36,6 +36,8 @@ screen with **Play**.
 Requirements: 64-bit Windows, a GPU with up-to-date Vulkan drivers, and a few GB of disk for the build tools and the
 game.
 
+**Multiplayer (System Link) and the map pack:** see [docs/multiplayer.md](docs/multiplayer.md).
+
 Some scripted moments may misbehave above 30 FPS (as noted for Xenia Canary's 60 FPS patch); set the frame rate back
 to 30 in the launcher if a mission gets stuck.
 

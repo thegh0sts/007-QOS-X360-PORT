@@ -332,6 +332,9 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
      broadcast; real QoS probes for Live; launcher server address setting; the one-active-XUID rule). Several
      sessions; start after 1-7.
   Options go on the Graphics tab (Display for FOV), translated in launcher_text.py.
+  Also: player instructions written (docs/multiplayer.md, 25 Nov 21:55, linked from the README; multiplayer to-do
+  item 5). Gap found writing them: no launcher field for --netplay_peers (needed for VPNs that drop broadcasts, e.g.
+  Tailscale): add one to the Multiplayer tab (comma-separated host addresses, passed to both programs).
 - **Graphics options asked for (user, 25 Nov 21:43), dvars found in default.xex (strings, not yet traced):**
   shadows: sm_enable, sm_sunShadowEnable, sm_spotShadowEnable, sm_maxLights, sm_sunSampleSizeNear ("Shadow sample
   size": smaller = sharper sun shadows near the camera), sm_fastSunShadow, r_spotLightShadows, r_playerShadowEnable
