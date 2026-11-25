@@ -353,6 +353,15 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   - Local server for development: Xenia-WebServices (Node/NestJS + MongoDB; npm run start; Swagger UI) on the PC.
     The public server (xenia-netplay-2a0298c0e3f4.herokuapp.com) is third-party: ask its maintainer before pointing
     the port's players at it.
+  - Compatibility (user's links, 25 Nov 22:03; Xenia-WebServices src/public/data/compatibility.json): "007: Quantum of
+    Solace", public "working" (Xbox LIVE through the public server works in the netplay fork), systemlink "partial":
+    "Patch required for systemlink. Systemlink requires a server." Patch patches/415607FF - Quantum of Solace.patch.toml
+    (default_mp.xex hash BC3F3CCCF880F4EC), "Enable QoS Systemlink, host must enable this": nops the two bne at
+    0x8228FA5C / 0x8228FA68 in sub_8228F950 (the server's connectionless packet handler, "getinfo" branch): with them,
+    a getinfo whose from-address bytes +4/+5 (frame 1156/1157, i.e. the first IP bytes) are non-zero keeps its address
+    type; nopped, the type is always set to 3 before the host answers. Our System Link works without it (two copies on
+    one PC; our peers have synthetic 169.254.250.x addresses), so not needed so far; if a two-PC join fails at
+    "getinfo" (host never answers), try the same in a hook (force frame+1152 = 3 in that branch).
   - Plan from here: (a) port XLiveAPI with a WinHTTP backend + whoami/players (sign-in, online XUID); (b)
     xlivebase messages incl. 0x00058035; (c) xsession (create/search/join/leave) over the existing netplay socket
     layer; (d) real QoS; (e) UPnP; (f) launcher server address + hosting toggle.
