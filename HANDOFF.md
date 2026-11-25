@@ -317,7 +317,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   the first 12: log every one during a trace-now window) and limit the blit to the draw's own rectangle (vertex
   bounds) instead of the whole scissor/viewport. Audio crackle the same evening went away after a PC restart (0
   underruns in the logs; leftover builds/test runs).
-- **In-game cutscene letterbox off (25 Nov 21:15, not built):** the bars the user meant (Nov 21 recording, start of
+- **In-game cutscene letterbox off (25 Nov 21:15; works, user 21:13: "looks much better"):** the bars the user meant (Nov 21 recording, start of
   whites_estate) are in-game, not a video. common.ff's letterbox_on(): setsaveddvar letterboxActive 1, r_pipMainMode 1,
   r_pip1Anchor 4, cg_pipmain_border 2 / color "0 0 0.2 1" (the thin dark blue lines), r_pip1Scale "1 1 1 0", then
   level.player animatepip(1000, 1, -1, -1, 1, 0.8, 1, 0): the main view cropped to 80% height. letterbox_off():
