@@ -297,6 +297,13 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   launcher VERSION and GAME_VERSION 0.2.0 (installs rebuild), SDK bundle qos9 (patches to 0028), notes
   docs/releases/0.2.0.md. The user
   builds the installer (after build_native) and publishes with gh.
+- **See-through letterbox bars (25 Nov 19:52, native only; Xenos solid black):** Bolivia intro ("Oruro Province",
+  a Bink video with an alpha plane: ps 7CD27CF8D7613081, t3 = alpha 1C3B9000/1C16F000). The bars are overlay rects
+  drawn after the video; with BOTS_GFX_NO_BLEND=1 they come out solid black (user screenshot 19:59), so they're drawn
+  with alpha ~0. Suspects in bars-trace.txt: draws with ps 2DA1A34264D18532 (alpha = (r0.w*c2.w+c3.w) * r1.w: a
+  second interpolant r1 from vs D437CDDFB1D56DD6, count 30) or ps 3A92D78FE55C7B82 (vertex colour, vs
+  103B6AAEE41C86E1). Next: print those vertex shaders and their vertex fetch formats (extend the 0097 trace to dump
+  vs microcode + vfetch), check what feeds r1.w. In 0.2.0's known issues.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
