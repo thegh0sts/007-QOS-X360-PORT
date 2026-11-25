@@ -332,7 +332,11 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   6. Weapon keeps its own FOV at higher --fov (view model drawn with a 65 degree projection: hook in the view setup).
   7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
      bounds), see the letterbox notes above.
-  8. Launcher: a --netplay_peers field in the Multiplayer tab (host addresses for VPNs that drop broadcasts).
+  8. Launcher: an optional "Host addresses" field in the Multiplayer tab -> --netplay_peers (comma-separated), passed to
+     both programs like the DLC folder. Only for System Link where broadcasts don't arrive: VPNs that drop them
+     (Tailscale), or home networks that block them (guest Wi-Fi, client isolation, separate segments). Not needed on
+     one PC, a normal home LAN or ZeroTier-style virtual LANs: the field's note says so. Then update docs/multiplayer.md
+     (it says the launcher doesn't offer it yet).
   9. ~~Launcher: repair a missing or broken desktop shortcut at start~~ done (user, 25 Nov 23:34: fixed by 0.2.1).
   10. Performance, in this order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
       its render pass, so uploads stop splitting passes; ~300 passes a frame now), then copying uploads on a worker
