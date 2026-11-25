@@ -619,10 +619,15 @@ class SettingsView(tk.Frame):
         self._subheading(box, 5, "Game")
         self._combo(box, 6, "language", "Game language", list(LANGUAGES))
         note(box, 7, "The game's voices, subtitles and text. The achievement names follow it too.")
-        self._subheading(box, 8, "Shader cache")
-        self._link(box, tr("Clear and rebuild"), self.clear_shader_cache).grid(row=9, column=0, sticky="w")
+        self._subheading(box, 8, "SP shader cache")
+        self._link(box, tr("Clear and rebuild"), lambda: self.clear_shader_cache(multiplayer=False)).grid(
+            row=9, column=0, sticky="w")
         note(box, 10, "The shaders are built from the game's files at the first start, so levels don't pop in on "
                       "their first visit. Clearing makes the next start build them again (a few seconds longer).")
+        self._subheading(box, 11, "MP shader cache")
+        self._link(box, tr("Clear and rebuild"), lambda: self.clear_shader_cache(multiplayer=True)).grid(
+            row=12, column=0, sticky="w")
+        note(box, 13, "Multiplayer keeps its own, built the same way at its first start.")
 
         box = self._page("Display")
         self._check(box, 0, "fullscreen", "Fullscreen")
@@ -1016,22 +1021,23 @@ class SettingsView(tk.Frame):
         except OSError as e:
             messagebox.showerror(tr("Open logs"), tr("Couldn't open {folder}: {error}", folder=folder, error=e))
 
-    def clear_shader_cache(self):
-        """Deletes the native renderer's pipeline cache: the next start builds it again from the game's files."""
+    def clear_shader_cache(self, multiplayer=False):
+        """Deletes the native renderer's pipeline cache (single player's or multiplayer's): the next start of that
+        program builds it again from the game's files."""
         import shutil
-        folders = [f for f in (shader_cache_dir(self.info), mp_shader_cache_dir()) if f.is_dir()]
-        if not folders:
+        folder = mp_shader_cache_dir() if multiplayer else shader_cache_dir(self.info)
+        title = tr("MP shader cache" if multiplayer else "SP shader cache")
+        if not folder.is_dir():
             self.status.set(tr("The shader cache is already empty: it's built at the next start."))
             return
-        if not messagebox.askyesno(tr("Shader cache"), tr("Delete the shader cache? The next start builds it again "
-                                                          "(a few seconds longer).")):
+        if not messagebox.askyesno(title, tr("Delete the shader cache? The next start builds it again "
+                                             "(a few seconds longer).")):
             return
         try:
-            for folder in folders:  # single player's and multiplayer's
-                shutil.rmtree(folder)
+            shutil.rmtree(folder)
         except OSError as e:
-            messagebox.showerror(tr("Shader cache"), tr("Couldn't delete {folder}: {error}\nIs the game still "
-                                                        "running?", folder=folder, error=e))
+            messagebox.showerror(title, tr("Couldn't delete {folder}: {error}\nIs the game still "
+                                           "running?", folder=folder, error=e))
             return
         self.status.set(tr("Shader cache cleared: it's built again at the next start."))
 

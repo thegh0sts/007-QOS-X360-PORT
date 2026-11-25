@@ -1820,4 +1820,19 @@ TEXT = {
         'Le multijoueur (qosmp.exe) n\'est pas encore dans cette installation. Réinstallez le jeu (Fichiers du jeu) pour le construire.',
         'El multijugador (qosmp.exe) aún no está en esta instalación. Reinstala el juego (Archivos del juego) para crearlo.',
         'Il multigiocatore (qosmp.exe) non è ancora in questa installazione. Reinstalla il gioco (File di gioco) per crearlo.'),
+    'SP shader cache': (
+        'Shader-Cache (Einzelspieler)',
+        'Cache des shaders (solo)',
+        'Caché de sombreadores (un jugador)',
+        'Cache degli shader (giocatore singolo)'),
+    'MP shader cache': (
+        'Shader-Cache (Mehrspieler)',
+        'Cache des shaders (multijoueur)',
+        'Caché de sombreadores (multijugador)',
+        'Cache degli shader (multigiocatore)'),
+    'Multiplayer keeps its own, built the same way at its first start.': (
+        'Der Mehrspieler hat einen eigenen, der beim ersten Start genauso erstellt wird.',
+        'Le multijoueur a le sien, construit de la même façon à son premier lancement.',
+        'El multijugador tiene la suya, creada igual en su primer inicio.',
+        'Il multigiocatore ha la sua, creata allo stesso modo al primo avvio.'),
 }
