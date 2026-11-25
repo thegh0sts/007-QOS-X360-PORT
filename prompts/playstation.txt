@@ -47,3 +47,28 @@ draw 432 424 446 438 g_options fit clear
 draw 450 424 464 438 g_touchpad fit clear
 draw 20 426 34 441 g_l2 fit clear
 draw 38 426 52 441 g_r2 fit clear
+
+# Multiplayer (default_mp.xex): its HUD font atlas 2714820410303606 (mpdump, 25 Nov) has the same glyph cells.
+texture hud_font_mp 512 1024 2714820410303606 dxt5
+# 28 px
+draw 102 191 132 221 g_cross fit clear
+draw 136 191 166 221 g_circle fit clear
+draw 170 191 200 221 g_square fit clear
+draw 204 191 234 221 g_triangle fit clear
+draw 236 193 270 219 g_l1 fit clear
+draw 270 193 304 219 g_r1 fit clear
+draw 308 190 334 214 g_options fit clear
+draw 342 190 368 214 g_touchpad fit clear
+draw 444 189 470 223 g_l2 fit clear
+draw 4 210 30 244 g_r2 fit clear
+# 14 px
+draw 261 410 277 426 g_cross fit clear
+draw 341 423 357 439 g_circle fit clear
+draw 359 423 375 439 g_square fit clear
+draw 377 423 393 439 g_triangle fit clear
+draw 394 424 412 438 g_l1 fit clear
+draw 412 424 430 438 g_r1 fit clear
+draw 432 424 446 438 g_options fit clear
+draw 450 424 464 438 g_touchpad fit clear
+draw 20 426 34 441 g_l2 fit clear
+draw 38 426 52 441 g_r2 fit clear

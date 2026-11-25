@@ -76,3 +76,32 @@ draw 466 422 483 439 kbm/k_ctrl fit clear
 draw 0 426 17 443 kbm/k_q fit clear
 draw 20 426 34 441 kbm/k_mouse_right fit clear
 draw 38 426 52 441 kbm/k_mouse_left fit clear
+
+# Multiplayer (default_mp.xex): its HUD font atlas 2714820410303606 (mpdump, 25 Nov) has the same glyph cells.
+texture hud_font_mp 512 1024 2714820410303606 dxt5
+# 28 px
+draw 102 191 132 221 kbm/k_e fit clear
+draw 136 191 166 221 kbm/k_c fit clear
+draw 170 191 200 221 kbm/k_f fit clear
+draw 204 191 234 221 kbm/k_space_sq fit clear
+draw 236 193 270 219 kbm/k_1 fit clear
+draw 270 193 304 219 kbm/k_g fit clear
+draw 308 190 334 214 kbm/k_esc fit clear
+draw 342 190 368 214 kbm/k_tab fit clear
+draw 372 190 405 222 kbm/k_ctrl fit clear
+draw 406 190 439 222 kbm/k_q fit clear
+draw 444 189 470 223 kbm/k_mouse_right fit clear
+draw 4 210 30 244 kbm/k_mouse_left fit clear
+# 14 px
+draw 261 410 277 426 kbm/k_e fit clear
+draw 341 423 357 439 kbm/k_c fit clear
+draw 359 423 375 439 kbm/k_f fit clear
+draw 377 423 393 439 kbm/k_space_sq fit clear
+draw 394 424 412 438 kbm/k_1 fit clear
+draw 412 424 430 438 kbm/k_g fit clear
+draw 432 424 446 438 kbm/k_esc fit clear
+draw 450 424 464 438 kbm/k_tab fit clear
+draw 466 422 483 439 kbm/k_ctrl fit clear
+draw 0 426 17 443 kbm/k_q fit clear
+draw 20 426 34 441 kbm/k_mouse_right fit clear
+draw 38 426 52 441 kbm/k_mouse_left fit clear

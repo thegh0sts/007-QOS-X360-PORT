@@ -221,7 +221,10 @@ the Com_Frame hook: key catchers of local client 0 at 0x82C3A1DC (cl block +4; f
 KEYCATCH_UI 0x10 -> SetStartKeysAsBack. User had hit it: Esc in a match's settings closed the menu (START = togglemenu).
 **MP prompts (17:40, not built):** src/pad_prompts.cpp built into MP too (pch include guarded), Update() from the MP
 Com_Frame hook, PhoneUp() stub false in mp/src/menu_keys.cpp. Same prompts/*.txt lists (copied by qosmp_assets).
-Next: a BOTS_GFX_DUMP_TEXTURES run in MP (menus, a match, two instances) for MP-only button pictures.
+**MP dump (mpdump, 17:45, two instances):** 52 64x64 textures, no new button pictures (MP uses SP's menu A/B FFC0.../0978...
+and the X disc 82C5..., already listed); MP's HUD font atlas is 2714820410303606 (512x1024 DXT5), glyph cells as SP's
+C1DB...: keyboard.txt and playstation.txt each get a second `texture hud_font_mp` block with the same draws. Decoder
+for dumps: cloud /home/claude/mpscan/texdec.py (tiled DXT1/3/5, contact sheet), not kept in the repo.
 
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
