@@ -367,9 +367,16 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     Apps -> Install via YAML with backend (image, API_PORT 36000, MONGO_URI mongodb://database:27017/) + database
     (mongo, /data/db on a dataset). Draft YAML in the chat of 25 Nov 22:15; untested. Docker Desktop on the PC is the
     quick alternative (docker compose up -d in the repo).
+  - Server security (checked 25 Nov 22:21): none built in beyond helmet on the web page, a profanity filter and input
+    validation: no auth (players identified by IP + XUID, clients trusted), no rate limiting, no HTTPS of its own,
+    CORS open. Fine on the home network; before opening it to the internet: reverse proxy or tunnel (HTTPS, rate
+    limits), only the game's API paths public (not /api Swagger, not MongoDB), isolated app/dataset, backups,
+    updates. A shared key between port and server only if abuse happens (needs a server change).
   - Plan from here: (a) port XLiveAPI with a WinHTTP backend + whoami/players (sign-in, online XUID); (b)
     xlivebase messages incl. 0x00058035; (c) xsession (create/search/join/leave) over the existing netplay socket
-    layer; (d) real QoS; (e) UPnP; (f) launcher server address + hosting toggle.
+    layer; (d) real QoS; (e) UPnP; (f) launcher server address + hosting toggle. Server: set up privately on the NAS
+    at the start of (a); opening it to the internet (proxy/tunnel, the list above) after (f), before releasing online
+    play.
   Also: player instructions written (docs/multiplayer.md, 25 Nov 21:55, linked from the README; multiplayer to-do
   item 5). Gap found writing them: no launcher field for --netplay_peers (needed for VPNs that drop broadcasts, e.g.
   Tailscale): add one to the Multiplayer tab (comma-separated host addresses, passed to both programs).
