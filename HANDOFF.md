@@ -225,6 +225,7 @@ Com_Frame hook, PhoneUp() stub false in mp/src/menu_keys.cpp. Same prompts/*.txt
 and the X disc 82C5..., already listed); MP's HUD font atlas is 2714820410303606 (512x1024 DXT5), glyph cells as SP's
 C1DB...: keyboard.txt and playstation.txt each get a second `texture hud_font_mp` block with the same draws. Decoder
 for dumps: cloud /home/claude/mpscan/texdec.py (tiled DXT1/3/5, contact sheet), not kept in the repo.
+**PS prompts in MP work (user, 18:04).** Keyboard prompts in MP: not confirmed yet.
 
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
