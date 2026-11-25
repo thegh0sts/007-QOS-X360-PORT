@@ -31,9 +31,9 @@ from launcher_text import tr, tr_label
 from qos_installer import (ACCENT, APP_NAME, BG, DIM, FG, LAUNCHER_HOME, ON_ACCENT, TITLE_FONT, TITLE_TEXT,
                            InstallView, install_info_path, make_root, start_game)
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 # The last launcher version that changed the game itself: installs built before it are asked to rebuild.
-GAME_VERSION = "0.1.2"
+GAME_VERSION = "0.1.3"
 RELEASES_API = "https://api.github.com/repos/thegh0sts/007-QOS-X360-PORT/releases/latest"
 RELEASES_URL = "https://github.com/thegh0sts/007-QOS-X360-PORT/releases/latest"
 SETTINGS_PATH = LAUNCHER_HOME / "settings.json"
