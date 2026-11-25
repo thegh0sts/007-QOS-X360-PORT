@@ -1,0 +1,25 @@
+# The pad style (button prompts, pad_style.h) follows the controller last used: a button press or a stick/trigger
+# pushed past 20000 publishes that pad's style. It was set only when a pad connected (the first pad's), so with a
+# PlayStation and an Xbox pad both connected the prompts stayed on the first.
+diff --git a/src/input/sdl/sdl_input_driver.cpp b/src/input/sdl/sdl_input_driver.cpp
+index 8b170ba..dea1729 100644
+--- a/src/input/sdl/sdl_input_driver.cpp
++++ b/src/input/sdl/sdl_input_driver.cpp
+@@ -684,6 +684,8 @@ void SDLInputDriver::OnControllerDeviceAxisMotionLocked(const SDL_Event& event)
+     return;
+   }
+   auto& pad = controllers_.at(*idx).state.gamepad;
++  // A stick or trigger clearly moved: button prompts follow the pad in use (a small drift doesn't count).
++  if (event.gaxis.value > 20000 || event.gaxis.value < -20000) PublishPadStyle(controllers_.at(*idx).sdl);
+   switch (event.gaxis.axis) {
+     case SDL_GAMEPAD_AXIS_LEFTX:
+       pad.thumb_lx = event.gaxis.value;
+@@ -766,6 +768,8 @@ void SDLInputDriver::OnControllerDeviceButtonChangedLocked(const SDL_Event& even
+     if (xbutton == X_INPUT_GAMEPAD_GUIDE && !REXCVAR_GET(guide_button)) {
+       return;
+     }
++    // Button prompts follow the pad in use, not only the first one connected.
++    PublishPadStyle(controller.sdl);
+     xbuttons |= xbutton;
+   } else {
+     xbuttons &= ~xbutton;

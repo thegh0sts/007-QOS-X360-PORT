@@ -228,6 +228,10 @@ C1DB...: keyboard.txt and playstation.txt each get a second `texture hud_font_mp
 for dumps: cloud /home/claude/mpscan/texdec.py (tiled DXT1/3/5, contact sheet), not kept in the repo.
 **PS prompts in MP work (user, 18:04).** Keyboard prompts in MP: not confirmed yet.
 
+**Prompts follow the pad in use (25 Nov, 18:35), not built:** with a PS and an Xbox pad both connected, Auto stayed on
+the first pad's pictures: the SDK published the pad style only when a pad connected (the first one). SDK patch
+0027-pad-style-last-used (own27): a button press, or a stick/trigger past 20000, publishes that pad's style. Bundle qos8.
+
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
 1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer).
