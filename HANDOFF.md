@@ -226,7 +226,7 @@ Com_Frame hook, PhoneUp() stub false in mp/src/menu_keys.cpp. Same prompts/*.txt
 and the X disc 82C5..., already listed); MP's HUD font atlas is 2714820410303606 (512x1024 DXT5), glyph cells as SP's
 C1DB...: keyboard.txt and playstation.txt each get a second `texture hud_font_mp` block with the same draws. Decoder
 for dumps: cloud /home/claude/mpscan/texdec.py (tiled DXT1/3/5, contact sheet), not kept in the repo.
-**PS prompts in MP work (user, 18:04).** Keyboard prompts in MP: not confirmed yet.
+**PS prompts in MP work (user, 18:04).** Keyboard prompts in MP work and the installer builds multiplayer (user, 25 Nov 19:28).
 
 **Prompts follow the pad in use (25 Nov, 18:35), not built:** with a PS and an Xbox pad both connected, Auto stayed on
 the first pad's pictures: the SDK published the pad style only when a pad connected (the first one). SDK patch
