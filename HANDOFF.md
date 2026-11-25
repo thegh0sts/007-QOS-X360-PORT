@@ -285,13 +285,14 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   is controllers only again (Xbox/PS switching kept). To revisit: the tutorial hints pick their picture once when
   shown (tutorial_keys.cpp swaps names only in keyboard mode), so a hint up during a switch keeps the old device's
   pictures; would need re-rendering the hint on a device change.
-- **Sys_Error message after a restart (25 Nov 19:40, not built):** the game reads its launch data at start-up
+- **Sys_Error message after a restart (25 Nov 19:40; works, user 19:37):** the game reads its launch data at start-up
   (sub_822E1738: XamLoaderGetLaunchData into 0x84E8D7D0; version 5 at +0, message at +4; Com_Init sub_8225F210 checks
   +4 / +904). relaunch_log.cpp now writes the SDK's launch data (xam loader_data) to %TEMP%\qosmp_launch_data.bin
   before a restart, path in env QOS_LAUNCH_DATA (inherited); the new copy's OnPostSetup restores it as its launch
   data and deletes the file. Test: --test_sys_error=TEXT raises Sys_Error(TEXT) after 600 frames (not in a restarted
   copy). Logs "launch data ... passed on", "launch data from the last run restored (... message ...)". Unknown yet:
   whether the game then shows the message on screen. SP <-> MP switching still passes no launch data.
+  **Works (user, 25 Nov 19:37):** the restarted copy shows the error message.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
