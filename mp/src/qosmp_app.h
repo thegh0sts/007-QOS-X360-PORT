@@ -25,6 +25,10 @@ namespace qos::kbm_binds {
 void SetDefaults();  // ../src/kbm_binds.cpp: 007's keyboard layout for the SDK's keyboard/mouse pad
 }  // namespace qos::kbm_binds
 
+namespace qosmp::relaunch {
+void RestoreLaunchData();  // relaunch_log.cpp: a restart's launch data (the Sys_Error message) from the last run
+}  // namespace qosmp::relaunch
+
 namespace qosmp::dlc {
 void InstallFromFolder();  // dlc_folder.cpp: installs the map packs from --dlc_folder
 }  // namespace qosmp::dlc
@@ -44,7 +48,10 @@ class QosMpApp : public rex::ReXApp {
   void OnLoadXexImage(std::string& xex_image) override { xex_image = "game:\\default_mp.xex"; }
 
   // DLC: after the XEX is loaded (the title ID is known) and before the game starts enumerating content.
-  void OnPostSetup() override { qosmp::dlc::InstallFromFolder(); }
+  void OnPostSetup() override {
+    qosmp::relaunch::RestoreLaunchData();
+    qosmp::dlc::InstallFromFolder();
+  }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
     qos::kbm_binds::SetDefaults();

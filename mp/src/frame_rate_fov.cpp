@@ -11,6 +11,9 @@
 namespace qosmp::menu_keys {
 void OnFrame(uint8_t* base);  // menu_keys.cpp: Esc goes back in menus
 }  // namespace qosmp::menu_keys
+namespace qosmp::relaunch {
+void OnFrame(PPCContext& ctx, uint8_t* base);  // relaunch_log.cpp: --test_sys_error
+}  // namespace qosmp::relaunch
 namespace qosmp::dlc {
 void OnFrame(PPCContext& ctx, uint8_t* base);  // dlc_content.cpp: loads the map pack's names and pictures
 }  // namespace qosmp::dlc
@@ -136,6 +139,7 @@ extern "C" REX_FUNC(sub_8225E8B8) {
   qosmp::menu_keys::OnFrame(base);
   qos::pad_prompts::Update();
   qosmp::dlc::OnFrame(ctx, base);
+  qosmp::relaunch::OnFrame(ctx, base);
   __imp__sub_8225E8B8(ctx, base);
 }
 
