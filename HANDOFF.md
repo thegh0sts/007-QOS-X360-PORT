@@ -205,6 +205,10 @@ once (env QOS_RELAUNCHED stops loops; the error message in the launch data isn't
 game_args + --mp_extra_args; MP gets game_args + --user_gamertag/--user_xuid + --mp_extra_args (SP_ONLY_ARGS filter
 removed). Mockup of the launcher's Play SP / Play MP buttons: design canvas "QoS launcher: Play SP / Play MP".
 
+**Launcher Play SP / Play MP (25 Nov, 17:15), not run yet:** the bottom bar's Play is now "Play SP" and "Play MP"
+side by side (as the mockup); the Multiplayer tab's Play multiplayer link removed. For the next update (user, 17:07),
+together with the SP<->MP switching.
+
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
 1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer).

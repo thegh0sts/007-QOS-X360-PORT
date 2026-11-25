@@ -1795,4 +1795,29 @@ TEXT = {
         'Compilation du multijoueur... {percent} %',
         'Compilando el multijugador... {percent} %',
         'Compilazione del multigiocatore... {percent}%'),
+    'Play SP': (
+        'Einzelspieler',
+        'Solo',
+        'Un jugador',
+        'Giocatore singolo'),
+    'Play MP': (
+        'Mehrspieler',
+        'Multijoueur',
+        'Multijugador',
+        'Multigiocatore'),
+    'Settings are saved with Save settings, or when you press Play SP or Play MP.': (
+        'Einstellungen werden mit „Einstellungen speichern“ gespeichert oder wenn du „Einzelspieler“ oder „Mehrspieler“ drückst.',
+        'Les réglages sont enregistrés avec Enregistrer les réglages, ou quand vous appuyez sur Solo ou Multijoueur.',
+        'La configuración se guarda con Guardar configuración, o al pulsar Un jugador o Multijugador.',
+        'Le impostazioni si salvano con Salva impostazioni, o premendo Giocatore singolo o Multigiocatore.'),
+    'System Link over your local network: start it with Play MP. Display and controller settings are shared with single player.': (
+        'System Link über dein lokales Netzwerk: starte es mit „Mehrspieler“. Anzeige- und Controller-Einstellungen gelten auch für den Einzelspieler.',
+        'System Link sur votre réseau local : lancez-le avec Multijoueur. Les réglages d\'affichage et de manette sont communs avec le mode solo.',
+        'System Link por tu red local: inícialo con Multijugador. Los ajustes de pantalla y de mando son los mismos que en un jugador.',
+        'System Link sulla tua rete locale: avvialo con Multigiocatore. Le impostazioni di schermo e controller sono le stesse del giocatore singolo.'),
+    "Multiplayer (qosmp.exe) isn't in this install yet. Reinstall the game (Game files) to build it.": (
+        'Der Mehrspieler (qosmp.exe) ist in dieser Installation noch nicht enthalten. Installiere das Spiel neu (Spieldateien), um ihn zu erstellen.',
+        'Le multijoueur (qosmp.exe) n\'est pas encore dans cette installation. Réinstallez le jeu (Fichiers du jeu) pour le construire.',
+        'El multijugador (qosmp.exe) aún no está en esta instalación. Reinstala el juego (Archivos del juego) para crearlo.',
+        'Il multigiocatore (qosmp.exe) non è ancora in questa installazione. Reinstalla il gioco (File di gioco) per crearlo.'),
 }

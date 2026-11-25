@@ -698,10 +698,8 @@ class SettingsView(tk.Frame):
         tk.Label(box, text=self.s.get("xuid", ""), font=("Consolas", 10), fg=FG, bg=PANEL).grid(
             row=2, column=1, sticky="e", pady=2)
         note(box, 3, "Your profile's ID, made for this install. The game tells players apart by it.")
-        self._link(box, tr("Play multiplayer"), lambda: self.play(multiplayer=True)
-                   ).grid(row=4, column=0, sticky="w", pady=(10, 0))
-        note(box, 5, "System Link over your local network. Display and controller settings are shared with single "
-                     "player.")
+        note(box, 4, "System Link over your local network: start it with Play MP. Display and controller settings are "
+                     "shared with single player.")
 
         box = self._page("Saves")
         line = tk.Frame(box, bg=PANEL)
@@ -737,9 +735,11 @@ class SettingsView(tk.Frame):
 
         foot = tk.Frame(self, bg=BG)
         foot.pack(side="bottom", fill="x", padx=28, pady=18)
-        tk.Button(foot, text=tr("Play"), width=16, command=self.play, font=("Segoe UI", 13, "bold"), bg=ACCENT,
-                  fg=ON_ACCENT, activebackground=ACCENT_HOVER, activeforeground=ON_ACCENT, bd=0, pady=8
-                  ).pack(side="left")
+        # Single player and multiplayer side by side (user, 25 Nov; mockup "QoS launcher: Play SP / Play MP").
+        for text, cmd, gap in (("Play SP", self.play, 0), ("Play MP", lambda: self.play(multiplayer=True), 10)):
+            tk.Button(foot, text=tr(text), width=12, command=cmd, font=("Segoe UI", 13, "bold"), bg=ACCENT,
+                      fg=ON_ACCENT, activebackground=ACCENT_HOVER, activeforeground=ON_ACCENT, bd=0, pady=8
+                      ).pack(side="left", padx=(gap, 0))
         tk.Button(foot, text=tr("Save settings"), width=13, command=self.save, font=("Segoe UI", 12), bd=0, pady=8,
                   fg=ACCENT_HOVER, bg="#23272d", activebackground="#2c3039", activeforeground=ACCENT_HOVER,
                   highlightthickness=1, highlightbackground=ACCENT).pack(side="left", padx=(10, 0))
@@ -752,7 +752,7 @@ class SettingsView(tk.Frame):
                        font=("Segoe UI", 9), fg=DIM, bg=BG, selectcolor=BG, activebackground=BG,
                        activeforeground=FG).pack(side="right", padx=10)
 
-        self.status = tk.StringVar(value=tr("Settings are saved with Save settings, or when you press Play."))
+        self.status = tk.StringVar(value=tr("Settings are saved with Save settings, or when you press Play SP or Play MP."))
         tk.Label(self, textvariable=self.status, font=("Segoe UI", 9), fg=DIM, bg=BG, wraplength=700,
                  justify="left").pack(side="bottom", anchor="w", padx=28)
         body.pack(fill="both", expand=True, padx=28, pady=(14, 4))
@@ -1207,7 +1207,8 @@ class SettingsView(tk.Frame):
         if multiplayer:
             exe = Path(self.info.get("mp_exe") or exe.with_name("qosmp.exe"))
             if not exe.is_file():
-                messagebox.showerror(tr("Play multiplayer"), tr("Multiplayer (qosmp.exe) isn't in this install yet."))
+                messagebox.showerror(tr("Play MP"), tr("Multiplayer (qosmp.exe) isn't in this install yet. Reinstall "
+                                                       "the game (Game files) to build it."))
                 return
         if not any(exe.parent.glob("rexgpu-native*.dll")):
             messagebox.showerror(tr("Play"), tr("The native renderer (rexgpu-native) isn't next to qos.exe. "
