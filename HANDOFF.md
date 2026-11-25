@@ -327,10 +327,10 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   6. Weapon keeps its own FOV at higher --fov (view model drawn with a 65 degree projection: hook in the view setup).
   7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
      bounds), see the letterbox notes above.
-  8. Xbox LIVE via Xenia Web Services (multiplayer to-do item 6 above: the SDK's Live calls - XSession create/
+  8. (later) Xbox LIVE via Xenia Web Services (multiplayer to-do item 6 above: the SDK's Live calls - XSession create/
      search/join/leave, the XLIVEBASE messages such as 0x00058035 - talking to Xenia Web Services instead of the LAN
      broadcast; real QoS probes for Live; launcher server address setting; the one-active-XUID rule). Several
-     sessions; start after 1-7.
+     sessions. **Later, not tomorrow (user, 25 Nov 22:28: "down the line")**; the groundwork below is done.
   Options go on the Graphics tab (Display for FOV), translated in launcher_text.py.
 - **Xbox LIVE via Xenia Web Services, step 1 groundwork (25 Nov 22:05):**
   - QoS is among the titles the netplay fork's release notes name as working (AdrianCassar/xenia-canary releases:
