@@ -1,0 +1,52 @@
+# Draw trace (with 0097's trace-now): each vertex shader once per window, with its microcode (vertex fetch formats),
+# non-zero vertex constants, and each binding's first two vertices as raw words. For the see-through letterbox bars
+# (25 Nov): which interpolant feeds the bars' alpha.
+ src/gfx/vk/draw.cpp | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 2d00a19..4ce96d4 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -2323,6 +2323,38 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+         std::fprintf(stderr, "  c%u = %g %g %g %g\n", c, f[0], f[1], f[2], f[3]);
+       }
+     }
++    // qos (0100): in a trace-now window, each vertex shader once: its microcode (with the vertex fetch formats), the
++    // non-zero vertex constants and, for each vertex binding, the first two vertices' raw words (byte-swapped as
++    // fetched). For finding a draw whose interpolants come out wrong.
++    if (trace_frames_left_ > 0 && trace_dumped_.insert(vshader->ucode_data_hash() ^ 0x5653000000000000ull).second) {
++      std::fprintf(stderr, "--- vertex shader %016llX (first at draw %llu)\n%s", (unsigned long long)vshader->ucode_data_hash(),
++                   (unsigned long long)stats_.draws, vshader->ucode_disassembly().c_str());
++      for (uint32_t c = 0; c < 256; ++c) {
++        const uint32_t* v = &regs.values[rg::XE_GPU_REG_SHADER_CONSTANT_000_X + 4 * c];
++        if (!(v[0] | v[1] | v[2] | v[3])) continue;
++        float f[4];
++        std::memcpy(f, v, sizeof(f));
++        std::fprintf(stderr, "  vc%u = %g %g %g %g\n", c, f[0], f[1], f[2], f[3]);
++      }
++      for (const auto& binding : vshader->vertex_bindings()) {
++        const auto fetch = regs.GetVertexFetch(binding.fetch_constant);
++        std::fprintf(stderr, "  vfetch %u: address %08X size %u stride %u words endian %u\n", binding.fetch_constant,
++                     uint32_t(fetch.address << 2), uint32_t(fetch.size), binding.stride_words, uint32_t(fetch.endian));
++        const uint8_t* data = memory_(fetch.address << 2);
++        for (uint32_t i = 0; data && i < 2 && (i + 1) * binding.stride_words <= fetch.size; ++i) {
++          std::string words;
++          for (uint32_t w = 0; w < binding.stride_words && w < 16; ++w) {
++            uint32_t v;
++            std::memcpy(&v, data + 4 * size_t(i * binding.stride_words + w), 4);
++            v = xe::GpuSwap(v, fetch.endian);
++            char buf[16];
++            std::snprintf(buf, sizeof(buf), " %08X", v);
++            words += buf;
++          }
++          std::fprintf(stderr, "    vertex %u:%s\n", i, words.c_str());
++        }
++      }
++    }
+     // Where the draw can land (BOTS_DRAW_TRACE): scissor, write bound, guest samples per pixel, viewport, and a
+     // rectangle list's vertex positions (XDK clears and copies).
+     std::string verts;
+-- 
+2.43.0
+
