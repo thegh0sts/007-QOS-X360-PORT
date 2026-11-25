@@ -216,7 +216,9 @@ n * 0x1FAE8C, mouseDx +0x252EC, mouseDy +0x252F4, mouseIndex +0x252FC (dvar ptrs
 function reads them). `src/kbm_binds.cpp` built into MP too (no game addresses; pch include guarded), called from
 qosmp_app.h's OnPreSetup. MP's pad file buttons_default_mp.cfg isn't in english/code_post_gfx_mp.ff or common_mp.ff
 (default_mp.cfg execs it, then BACK togglescores, START togglemenu); keys follow pad positions, so SP's layout
-carries over (Tab = scoreboard, Esc = menu). Next: Esc goes back in MP menus (menu_keys at MP addresses).
+carries over (Tab = scoreboard, Esc = menu). **Esc back in MP menus (17:45, not built):** mp/src/menu_keys.cpp, called from
+the Com_Frame hook: key catchers of local client 0 at 0x82C3A1DC (cl block +4; from Key_IsCatcherActive sub_821C2FC8);
+KEYCATCH_UI 0x10 -> SetStartKeysAsBack. User had hit it: Esc in a match's settings closed the menu (START = togglemenu).
 
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 

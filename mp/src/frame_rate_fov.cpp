@@ -8,6 +8,10 @@
 
 #include "generated/default/qosmp_pch.h"
 
+namespace qosmp::menu_keys {
+void OnFrame(uint8_t* base);  // menu_keys.cpp: Esc goes back in menus
+}  // namespace qosmp::menu_keys
+
 #include <atomic>
 #include <cstdint>
 #include <cstring>
@@ -122,6 +126,7 @@ extern "C" REX_FUNC(sub_8225E8B8) {
     }
   }
   qosmp::fov::OnFrame(base);
+  qosmp::menu_keys::OnFrame(base);
   __imp__sub_8225E8B8(ctx, base);
 }
 
