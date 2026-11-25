@@ -333,7 +333,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
      bounds), see the letterbox notes above.
   8. Launcher: a --netplay_peers field in the Multiplayer tab (host addresses for VPNs that drop broadcasts).
-  9. Launcher: repair a missing or broken desktop shortcut at start (no reinstall needed for it).
+  9. ~~Launcher: repair a missing or broken desktop shortcut at start~~ done (user, 25 Nov 23:34: fixed by 0.2.1).
   10. Performance, in this order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
       its render pass, so uploads stop splitting passes; ~300 passes a frame now), then copying uploads on a worker
       thread (needs exact copy timing, or the 24 Nov zero-copy glitch comes back), then the command stream (PM4)
