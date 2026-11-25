@@ -250,6 +250,15 @@ the first pad's pictures: the SDK published the pad style only when a pad connec
    package, e.g. from a console's Content\\0000000000000000\\415607FF\\00000002\\ folder); the launcher checks it is a
    QoS package (title ID 415607FF in its header), copies it where the SDK looks for DLC, and lists installed packs
    (name from the package header) with Remove.
+   **Done (25 Nov, untested; user asked for a user-selectable folder instead):** launcher Multiplayer tab
+   "Downloadable content": Choose folder... / Clear, saved as `dlc_folder`, passed as `--dlc_folder=` on both
+   programs' command lines (single player ignores it; title_switch passes it on). `mp/src/dlc_folder.cpp`
+   (OnPostSetup, after the XEX load): walks the folder 5 deep for STFS files ("LIVE"/"PIRS"/"CON "), skips any whose
+   header isn't title 415607FF + type 00000002, and installs each one without an installed header with the SDK's
+   `ContentManager::InstallContent` (extracts to Documents\qosmp\content\0000000000000000\415607FF\00000002\<file>\
+   and writes Headers\00000002\<file>.header, which XamContentCreateEnumerator lists). Log lines start "dlc:".
+   Not done: removing a pack (delete its folder + header by hand); checking the maps appear (party_mappacks,
+   map list) and a System Link match on one.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's

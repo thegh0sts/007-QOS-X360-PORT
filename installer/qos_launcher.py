@@ -156,6 +156,9 @@ DEFAULTS = {
     # characters at most) and its XUID, made once per install (load_settings): every player in a game needs their own.
     "gamertag": "Player",
     "xuid": "",
+    # A folder with the game's DLC (STFS packages, e.g. the map pack): multiplayer installs what's new in it at its
+    # start (mp/src/dlc_folder.cpp, --dlc_folder). Empty: none.
+    "dlc_folder": "",
 }
 
 
@@ -463,6 +466,11 @@ def game_args(s, screen=None):
     if effect:
         args.append(f"--present_effect={effect}")
     args.append(f"--user_language={LANGUAGES.get(s.get('language'), 1)}")
+    # DLC folder: on single player's command line too, so its MULTIPLAYER item passes it on to qosmp.exe (single
+    # player ignores it). No trailing backslash: before the closing quote it would escape it.
+    dlc = str(s.get("dlc_folder") or "").rstrip("\\/")
+    if dlc:
+        args.append(f"--dlc_folder={dlc}")
     # Controls: an extra dead zone on both sticks (the SDK's, as a fraction; 0 leaves the game's own), rumble
     # (the runtime's switch), and the input device: keyboard and mouse on or off, and the button prompts
     # (src/pad_prompts.cpp).
@@ -705,6 +713,19 @@ class SettingsView(tk.Frame):
         note(box, 3, "Your profile's ID, made for this install. The game tells players apart by it.")
         note(box, 4, "Start multiplayer from MULTIPLAYER on the game's main menu; leaving it returns to single player. "
                      "System Link over your local network. Display and controller settings are shared with single player.")
+        self._subheading(box, 5, "Downloadable content")
+        v = self.vars["dlc_folder"] = tk.StringVar(value=self.s.get("dlc_folder", ""))
+        shown = tk.Label(box, font=("Segoe UI", 9), fg=FG, bg=PANEL, anchor="w", justify="left", wraplength=640)
+        shown.grid(row=6, column=0, columnspan=2, sticky="w")
+        v.trace_add("write", lambda *_: shown.config(text=v.get() or tr("No folder chosen")))
+        shown.config(text=v.get() or tr("No folder chosen"))
+        line = tk.Frame(box, bg=PANEL)
+        line.grid(row=7, column=0, columnspan=2, sticky="w", pady=(4, 4))
+        self._link(line, tr("Choose folder..."), self.choose_dlc_folder).pack(side="left")
+        self._link(line, tr("Clear"), lambda: v.set("")).pack(side="left", padx=8)
+        note(box, 8, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
+                     "whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few "
+                     "seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.")
 
         box = self._page("Saves")
         line = tk.Frame(box, bg=PANEL)
@@ -888,7 +909,7 @@ class SettingsView(tk.Frame):
 
     def reset(self):
         for k, v in self.vars.items():
-            if k != "launcher_language":
+            if k not in ("launcher_language", "dlc_folder"):
                 v.set(DEFAULTS[k])
 
     def check_achievements(self):
@@ -1192,6 +1213,12 @@ class SettingsView(tk.Frame):
         if answer:
             self.save()
         return True
+
+    def choose_dlc_folder(self):
+        folder = filedialog.askdirectory(title=tr("Choose the folder with your DLC"),
+                                         initialdir=self.vars["dlc_folder"].get() or None)
+        if folder:
+            self.vars["dlc_folder"].set(str(Path(folder)))
 
     def quit_launcher(self):
         if self.confirm_close():

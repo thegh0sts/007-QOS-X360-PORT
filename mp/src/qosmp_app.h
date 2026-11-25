@@ -25,6 +25,10 @@ namespace qos::kbm_binds {
 void SetDefaults();  // ../src/kbm_binds.cpp: 007's keyboard layout for the SDK's keyboard/mouse pad
 }  // namespace qos::kbm_binds
 
+namespace qosmp::dlc {
+void InstallFromFolder();  // dlc_folder.cpp: installs the map packs from --dlc_folder
+}  // namespace qosmp::dlc
+
 class QosMpApp : public rex::ReXApp {
  public:
   using rex::ReXApp::ReXApp;
@@ -38,6 +42,9 @@ class QosMpApp : public rex::ReXApp {
   // The runtime loads game:\default.xex (single player) unless told otherwise: the first run started single
   // player's entry point (0x82425F18), which isn't in this recompilation ("No function registered at 82425F18").
   void OnLoadXexImage(std::string& xex_image) override { xex_image = "game:\\default_mp.xex"; }
+
+  // DLC: after the XEX is loaded (the title ID is known) and before the game starts enumerating content.
+  void OnPostSetup() override { qosmp::dlc::InstallFromFolder(); }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
     qos::kbm_binds::SetDefaults();

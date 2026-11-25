@@ -1840,4 +1840,19 @@ TEXT = {
         "Lancez le multijoueur avec MULTIJOUEUR dans le menu principal du jeu ; en le quittant, vous revenez au mode solo. System Link sur votre réseau local. Les réglages d'affichage et de manette sont communs avec le mode solo.",
         'Inicia el multijugador con MULTIJUGADOR en el menú principal del juego; al salir vuelves a un jugador. System Link por tu red local. Los ajustes de pantalla y de mando son los mismos que en un jugador.',
         'Avvia il multigiocatore da MULTIGIOCATORE nel menu principale del gioco; uscendo torni al giocatore singolo. System Link sulla tua rete locale. Le impostazioni di schermo e controller sono le stesse del giocatore singolo.'),
+    'Downloadable content': (
+        'Zusatzinhalte', 'Contenu téléchargeable', 'Contenido descargable', 'Contenuti scaricabili'),
+    'No folder chosen': (
+        'Kein Ordner gewählt', 'Aucun dossier choisi', 'Ninguna carpeta elegida', 'Nessuna cartella scelta'),
+    'Choose folder...': (
+        'Ordner wählen...', 'Choisir un dossier...', 'Elegir carpeta...', 'Scegli cartella...'),
+    'Clear': ('Leeren', 'Effacer', 'Borrar', 'Cancella'),
+    'Choose the folder with your DLC': (
+        'Wähle den Ordner mit deinen Zusatzinhalten', 'Choisissez le dossier de votre contenu téléchargeable',
+        'Elige la carpeta con tu contenido descargable', 'Scegli la cartella con i tuoi contenuti scaricabili'),
+    "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.": (
+        'Der Ordner mit deinen Zusatzinhalten (die Datei des Kartenpakets, wie von einer Xbox-360-Festplatte kopiert, oder ein ganzer Content-Ordner). Der Mehrspieler installiert neue beim Start (beim ersten Mal dauert das einige Sekunden) und zeigt die Karten mit den anderen an. Alle Spieler einer Partie brauchen dieselben Zusatzinhalte, um ihre Karten zu spielen.',
+        "Le dossier de vos contenus téléchargeables (le fichier du pack de cartes, copié depuis un disque Xbox 360, ou tout un dossier Content). Le multijoueur installe les nouveaux à son lancement (quelques secondes la première fois) et affiche les cartes avec les autres. Tous les joueurs d'une partie ont besoin des mêmes contenus pour jouer sur leurs cartes.",
+        'La carpeta con tus paquetes descargables (el archivo del paquete de mapas, copiado de un disco de Xbox 360, o una carpeta Content entera). El multijugador instala los nuevos al iniciarse (la primera vez tarda unos segundos) y muestra los mapas con los demás. Todos los jugadores de una partida necesitan el mismo contenido para jugar sus mapas.',
+        "La cartella con i tuoi contenuti scaricabili (il file del pacchetto mappe, copiato da un disco Xbox 360, o un'intera cartella Content). Il multigiocatore installa quelli nuovi all'avvio (la prima volta richiede qualche secondo) e mostra le mappe insieme alle altre. Tutti i giocatori di una partita devono avere gli stessi contenuti per giocare le loro mappe."),
 }
