@@ -332,6 +332,30 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
      broadcast; real QoS probes for Live; launcher server address setting; the one-active-XUID rule). Several
      sessions; start after 1-7.
   Options go on the Graphics tab (Display for FOV), translated in launcher_text.py.
+- **Xbox LIVE via Xenia Web Services, step 1 groundwork (25 Nov 22:05):**
+  - QoS is among the titles the netplay fork's release notes name as working (AdrianCassar/xenia-canary releases:
+    "Armoured Core 4, Blur, Call of Duty 4 ..., Quantum of Solace, Super Meat Boy"). The wiki compatibility page
+    couldn't be fetched (GitHub client_error); check its QoS row (modes, notes) by hand.
+  - Client code, branch netplay_canary_experimental (BSD, like Xenia): src/xenia/kernel/XLiveAPI.cpp/.h (2,685 lines:
+    REST client over libcurl, async via overlapped tasks), xsession.cc/.h (1,588: XSession create/search/join/leave/
+    migrate/arbitration/details/modify), xam/apps/xlivebase_app.cc (3,259: XLIVEBASE messages), xgi_app.cc (761),
+    xam/xam_net.cc (2,673: XNet incl. QoS), upnp.cc (611), json/*_object_json (session, leaderboard, stats, http
+    response), util/net_utils + network_adapter_manager_win/linux. About 12k lines to bring into SDK patches.
+  - Server endpoints used (api_address + ...): whoami; players, players/find, findusers, presence, setpresence,
+    getsettings/setsettings, deletemyprofiles; title/{id}/ports, servers, services; title/{id}/sessions (create),
+    sessions/search, sessions/{sid}[/details|join|leave|migrate|modify|arbitration|prejoin|qos|properties|
+    leaderboards]; leaderboards/enumerate|find|estimate-rank; DeleteSessions.
+  - Why --user_signin_live=true quit at start (24 Nov): XLIVEBASE 0x00058035 is XStorageBuildServerPath (the fork
+    answers it: X_ONLINE_E_LOGON_NOT_LOGGED_ON when not signed in to Live, else builds the server path from the
+    XUID). Our SDK leaves it unimplemented. First thing to port.
+  - Our SDK has no HTTP client (thirdparty: no libcurl). Either add libcurl (as the fork) or a small WinHTTP wrapper
+    on Windows (no new dependency; Linux later via libcurl).
+  - Local server for development: Xenia-WebServices (Node/NestJS + MongoDB; npm run start; Swagger UI) on the PC.
+    The public server (xenia-netplay-2a0298c0e3f4.herokuapp.com) is third-party: ask its maintainer before pointing
+    the port's players at it.
+  - Plan from here: (a) port XLiveAPI with a WinHTTP backend + whoami/players (sign-in, online XUID); (b)
+    xlivebase messages incl. 0x00058035; (c) xsession (create/search/join/leave) over the existing netplay socket
+    layer; (d) real QoS; (e) UPnP; (f) launcher server address + hosting toggle.
   Also: player instructions written (docs/multiplayer.md, 25 Nov 21:55, linked from the README; multiplayer to-do
   item 5). Gap found writing them: no launcher field for --netplay_peers (needed for VPNs that drop broadcasts, e.g.
   Tailscale): add one to the Multiplayer tab (comma-separated host addresses, passed to both programs).
