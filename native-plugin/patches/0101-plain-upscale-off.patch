@@ -1,0 +1,29 @@
+# Plain upscale (0023) off by default: BOTS_GFX_PLAIN_UPSCALE=1 turns it on. Above render scale 1 its blit covered
+# the Bolivia intro's black letterbox bars with the picture (25 Nov); the game's own stretches keep the scaled
+# resolution since SDK 0014 + native 0024, so it isn't needed.
+ src/gfx/vk/draw.cpp | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 4ce96d4..435150d 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -2246,10 +2246,13 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   // shader binds it twice, signed and unsigned) into a
+   // wider area of one colour target, no depth - is followed by a linear blit of the host image over the area it can
+   // write (scissor, bounded by the viewport), replacing its result (same colours: the pass changes none).
+-  // BOTS_GFX_PLAIN_UPSCALE=0 turns it off.
++  // qos (0101): off by default, BOTS_GFX_PLAIN_UPSCALE=1 turns it on. Since SDK 0014 + native 0024 the game's own
++  // stretches keep the scaled resolution (A/B 20 Nov: no visible difference), and above 1x the blit painted over
++  // the black letterbox bars of the Bolivia intro (25 Nov: the bars showed the picture through them at render
++  // scale 2, black with this off).
+   static const bool plain_upscale = [] {
+     const char* v = std::getenv("BOTS_GFX_PLAIN_UPSCALE");
+-    return !(v && *v == '0');
++    return v && *v == '1';
+   }();
+   if (plain_upscale && scale_ != 1.0f && attachments.color[0] && !draw_reads_.empty()) {
+     Image* source = draw_reads_[0];
+-- 
+2.43.0
+

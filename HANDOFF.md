@@ -294,7 +294,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   whether the game then shows the message on screen. SP <-> MP switching still passes no launch data.
   **Works (user, 25 Nov 19:37):** the restarted copy shows the error message.
 - **Release 0.2.0 prepared (25 Nov 19:45; first as 0.1.3, renamed 0.2.0 at the user's request, 19:43):** QOS_RELEASE,
-  launcher VERSION and GAME_VERSION 0.2.0 (installs rebuild), SDK bundle qos9 (patches to 0028), notes
+  launcher VERSION and GAME_VERSION 0.2.0 (installs rebuild), SDK bundle qos10 (SDK patches to 0028, native to 0101), notes
   docs/releases/0.2.0.md. The user
   builds the installer (after build_native) and publishes with gh.
 - **See-through letterbox bars (25 Nov 19:52, native only; Xenos solid black):** Bolivia intro ("Oruro Province",
@@ -303,7 +303,14 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   with alpha ~0. Suspects in bars-trace.txt: draws with ps 2DA1A34264D18532 (alpha = (r0.w*c2.w+c3.w) * r1.w: a
   second interpolant r1 from vs D437CDDFB1D56DD6, count 30) or ps 3A92D78FE55C7B82 (vertex colour, vs
   103B6AAEE41C86E1). Next: print those vertex shaders and their vertex fetch formats (extend the 0097 trace to dump
-  vs microcode + vfetch), check what feeds r1.w. In 0.2.0's known issues.
+  vs microcode + vfetch), check what feeds r1.w.
+  **Solved (25 Nov 20:25):** not the shaders. The bars are the video's alpha 0 over a black made by an XDK depth-only
+  clear (z 0x3F7F0001 -> D24S8 0xFF000100 = colour 00 01 00 FF) moved into colour by Own()'s transfer; fine at render
+  scale 1 (manual runs), missing at 2 (launcher 1440p), whatever the render threads. BOTS_GFX_PLAIN_UPSCALE=0 at scale
+  2: black bars. Native patch 0101 makes plain upscale (0023) opt-in (BOTS_GFX_PLAIN_UPSCALE=1); not needed since
+  SDK 0014 + native 0024. SDK bundle qos10. Also new: native 0100 (trace prints vertex shaders). Side notes: the
+  1-thread launcher run crashed once (game: read of 0x30, as crash-15880 on 24 Nov); a manual 1440p run without
+  BOTS_GFX_RECORD_THREAD=1 crackled (CPU-bound, launcher runs set it).
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
