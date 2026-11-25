@@ -317,6 +317,17 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   the first 12: log every one during a trace-now window) and limit the blit to the draw's own rectangle (vertex
   bounds) instead of the whole scissor/viewport. Audio crackle the same evening went away after a PC restart (0
   underruns in the logs; leftover builds/test runs).
+- **To do, 26 Nov (user, 25 Nov 21:44), in this order:**
+  1. Launcher: fixed window size, vertical scroll bar on each tab (the Display tab overflows).
+  2. Depth of field off option (r_dof_enable + weaponDof, held every frame).
+  3. Hit markers off option (enemy hit indicator: find its drawing; hud_fade_enemyhit).
+  4. LOD distance option (Original / Far / Maximum: r_highLodDist..r_lowestLodDist, r_lodScale/r_lodBias); check
+     frame times in busy areas.
+  5. Shadow quality option (sm_sunSampleSizeNear and sun shadow distance; sm_maxLights; test for flicker).
+  6. Weapon keeps its own FOV at higher --fov (view model drawn with a 65 degree projection: hook in the view setup).
+  7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
+     bounds), see the letterbox notes above.
+  Options go on the Graphics tab (Display for FOV), translated in launcher_text.py.
 - **Graphics options asked for (user, 25 Nov 21:43), dvars found in default.xex (strings, not yet traced):**
   shadows: sm_enable, sm_sunShadowEnable, sm_spotShadowEnable, sm_maxLights, sm_sunSampleSizeNear ("Shadow sample
   size": smaller = sharper sun shadows near the camera), sm_fastSunShadow, r_spotLightShadows, r_playerShadowEnable
