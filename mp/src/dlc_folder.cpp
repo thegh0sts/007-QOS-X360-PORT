@@ -32,6 +32,8 @@ REXCVAR_DEFINE_STRING(dlc_folder, "", "Game",
                       "A folder with the game's downloadable content (STFS packages); installed at start-up");
 
 namespace qosmp::dlc {
+
+using rex::X_RESULT;  // X_ERROR_SUCCESS expands to (X_RESULT)(0)
 namespace {
 
 namespace fs = std::filesystem;
