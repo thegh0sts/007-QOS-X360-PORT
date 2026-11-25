@@ -317,6 +317,16 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   the first 12: log every one during a trace-now window) and limit the blit to the draw's own rectangle (vertex
   bounds) instead of the whole scissor/viewport. Audio crackle the same evening went away after a PC restart (0
   underruns in the logs; leftover builds/test runs).
+- **Graphics options asked for (user, 25 Nov 21:43), dvars found in default.xex (strings, not yet traced):**
+  shadows: sm_enable, sm_sunShadowEnable, sm_spotShadowEnable, sm_maxLights, sm_sunSampleSizeNear ("Shadow sample
+  size": smaller = sharper sun shadows near the camera), sm_fastSunShadow, r_spotLightShadows, r_playerShadowEnable
+  ("Hirez Player Shadows"); shadow map sizes are the engine's render targets (sun/spot/player-sun, already scaled by
+  render scale in the native renderer). LOD: r_lodScale, r_lodBias, r_forceLod, r_highLodDist / r_mediumLodDist /
+  r_lowLodDist / r_lowestLodDist; streaming/sc_offscreenCasterLodScale. DoF: r_dof_enable (+ near/far start/end/blur,
+  r_dof_viewModelStart/End, r_dof_bias), dvar weaponDof ("Far Weapon DoF"); scripts set DoF per scene
+  (setdepthoffield, customcamera_setdof), so an off switch must hold it every frame (as fov.cpp). Hit markers: the
+  "enemy hit indicator" (hud_fade_enemyhit fade time), drawing code to find. Weapon FOV: no gun-FOV dvar (only
+  cg_gun_x/y/z offsets, cg_fov); keeping the weapon model's own FOV needs a hook in the view model's projection.
 - **Next update, launcher (user, 25 Nov 21:37):** fixed window size with a vertical scroll bar on each tab's page;
   the Display tab now overflows (the Skullburglar credit line is cut off at the bottom in the user's screenshot).
   tkinter: each page a Canvas + inner Frame + ttk.Scrollbar, mouse wheel bound while the pointer is over it.
