@@ -687,8 +687,8 @@ class SettingsView(tk.Frame):
                      "in a game needs a different one.")
         # The profile's XUID (made once, load_settings): shown so players can tell profiles apart, not editable.
         tk.Label(box, text=tr("XUID"), font=("Segoe UI", 10), fg=FG, bg=PANEL).grid(row=2, column=0, sticky="w")
-        xuid = tk.StringVar(value=self.s["xuid"])
-        ttk.Entry(box, textvariable=xuid, width=24, state="readonly").grid(row=2, column=1, sticky="e", pady=2)
+        tk.Label(box, text=self.s.get("xuid", ""), font=("Consolas", 10), fg=FG, bg=PANEL).grid(
+            row=2, column=1, sticky="e", pady=2)
         note(box, 3, "Your profile's ID, made for this install. The game tells players apart by it.")
         self._link(box, tr("Play multiplayer"), lambda: self.play(multiplayer=True)
                    ).grid(row=4, column=0, sticky="w", pady=(10, 0))
