@@ -1211,7 +1211,13 @@ class SettingsView(tk.Frame):
         self.saved = self._snapshot()
         exe, game = Path(self.info["exe"]), Path(self.info["game"])
         if multiplayer:
-            exe = Path(self.info.get("mp_exe") or exe.with_name("qosmp.exe"))
+            # Where the installer builds it (project\mp\out\build\<preset>, launcher.json "mp_exe"), else found from
+            # qos.exe's place: the launcher's install info may be from before a reinstall that added multiplayer.
+            sp = exe
+            candidates = [Path(self.info["mp_exe"])] if self.info.get("mp_exe") else []
+            candidates += [sp.parents[3] / "mp" / "out" / "build" / sp.parent.name / "qosmp.exe",
+                           sp.with_name("qosmp.exe")]
+            exe = next((c for c in candidates if c.is_file()), candidates[0])
             if not exe.is_file():
                 messagebox.showerror(tr("Play MP"), tr("Multiplayer (qosmp.exe) isn't in this install yet. Reinstall "
                                                        "the game (Game files) to build it."))
