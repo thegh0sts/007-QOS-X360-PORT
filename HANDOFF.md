@@ -231,6 +231,10 @@ for dumps: cloud /home/claude/mpscan/texdec.py (tiled DXT1/3/5, contact sheet), 
 **Prompts follow the pad in use (25 Nov, 18:35), not built:** with a PS and an Xbox pad both connected, Auto stayed on
 the first pad's pictures: the SDK published the pad style only when a pad connected (the first one). SDK patch
 0027-pad-style-last-used (own27): a button press, or a stick/trigger past 20000, publishes that pad's style. Bundle qos8.
+**0027 works for prompts (user, 25 Nov 18:42), but Xbox -> PS -> Xbox left the Xbox pad dead:** the SDK's
+SlotAssignment made each pad its own guest user (pad 2 = user 1) and the game followed one. SDK patch
+0028-shared-pads (own28, bundle qos9): `--shared_pads` (default on) uses SharedAssignment, every pad merged into
+user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not built.
 
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 

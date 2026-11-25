@@ -1,0 +1,32 @@
+# Every controller drives player 1 (shared_pads, on by default): with an Xbox and a PlayStation pad connected, each
+# was its own guest user (pad 2 = user 1), and the game followed one and dropped the other (Xbox -> PlayStation ->
+# Xbox: the Xbox pad went dead). Merged like the keyboard/mouse device already is. --shared_pads=false: pad N = player N.
+diff --git a/src/input/input_system.cpp b/src/input/input_system.cpp
+index 14e3fc6..a536d91 100644
+--- a/src/input/input_system.cpp
++++ b/src/input/input_system.cpp
+@@ -32,6 +32,9 @@ REXCVAR_DEFINE_STRING(input_backend, "sdl", "Input",
+                       "Input backend: sdl, xinput, or none (no controllers: keyboard and mouse only)")
+     .allowed({"sdl", "xinput", "none"});
+ 
++REXCVAR_DEFINE_BOOL(shared_pads, true, "Input",
++                    "Every controller drives player 1 (one-player games); off: controller N is player N");
++
+ REXCVAR_DEFINE_BOOL(guide_button, false, "Input", "Enable guide button pass-through");
+ 
+ REXCVAR_DEFINE_BOOL(vibration, true, "Input", "Enable controller vibration");
+@@ -543,7 +546,13 @@ std::unique_ptr<InputSystem> CreateDefaultInputSystem(bool tool_mode) {
+   // NOP driver (primary in tool mode, fallback otherwise)
+   uint8_t nop_index = tool_mode ? 0 : 1;
+   input->AddDriver(std::make_unique<nop::NopInputDriver>(nullptr, nop_index));
+-  input->SetDeviceAssignment(std::make_unique<SlotAssignment>());
++  // One player with several pads connected: each pad as its own player made the game follow one pad and drop
++  // the other (e.g. Xbox -> PlayStation -> Xbox went dead), so by default all pads are merged into player 1.
++  if (REXCVAR_GET(shared_pads)) {
++    input->SetDeviceAssignment(std::make_unique<SharedAssignment>());
++  } else {
++    input->SetDeviceAssignment(std::make_unique<SlotAssignment>());
++  }
+   return input;
+ }
+ 
