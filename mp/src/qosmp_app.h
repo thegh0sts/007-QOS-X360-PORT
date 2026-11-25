@@ -21,6 +21,10 @@ REXCVAR_DEFINE_BOOL(show_fps_detail, false, "UI",
 REXCVAR_DEFINE_DOUBLE(brightness, 1.0, "GPU", "Picture brightness, native renderer (1 = the game's)")
     .range(0.5, 2.0);
 
+namespace qos::kbm_binds {
+void SetDefaults();  // ../src/kbm_binds.cpp: 007's keyboard layout for the SDK's keyboard/mouse pad
+}  // namespace qos::kbm_binds
+
 class QosMpApp : public rex::ReXApp {
  public:
   using rex::ReXApp::ReXApp;
@@ -36,6 +40,7 @@ class QosMpApp : public rex::ReXApp {
   void OnLoadXexImage(std::string& xex_image) override { xex_image = "game:\\default_mp.xex"; }
 
   void OnPreSetup(rex::RuntimeConfig& config) override {
+    qos::kbm_binds::SetDefaults();
     if (config.gpu_plugin.empty()) config.gpu_plugin = "xenos";
     if (config.gpu_plugin == "xenos-vulkan") config.graphics = rex::system::LoadGpuPlugin("xenos", "vulkan");
     if (config.gpu_plugin == "native" && !std::getenv("BOTS_GFX_NESTED_DRAWS")) {

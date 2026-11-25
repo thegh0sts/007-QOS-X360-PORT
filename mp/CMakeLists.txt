@@ -19,6 +19,8 @@ set(QOS_MP_SOURCES
     src/frame_rate_fov.cpp
     src/console_log.cpp
     ${QOS_SP_DIR}/src/crash_win.cpp
+    ${QOS_SP_DIR}/src/kbm_binds.cpp
+    src/mouse_look.cpp
 )
 
 if(WIN32)

@@ -209,6 +209,15 @@ removed). Mockup of the launcher's Play SP / Play MP buttons: design canvas "QoS
 side by side (as the mockup); the Multiplayer tab's Play multiplayer link removed. For the next update (user, 17:07),
 together with the SP<->MP switching.
 
+**MP keyboard and mouse, part 1 (25 Nov, 17:35), written, not built:** `mp/src/mouse_look.cpp` = single player's at MP
+addresses: CL_MouseMove sub_821BF478(localClientNum, cmd), CL_GetMouseMovement sub_821BF340; cl[n] = 0x82C3A1D8 +
+n * 0x1FAE8C, mouseDx +0x252EC, mouseDy +0x252F4, mouseIndex +0x252FC (dvar ptrs: sensitivity 0x82C34C90, m_yaw
+0x82C34C9C, m_pitch 0x82C34CB4, cl_mouseAccel 0x82C3A164, cl_freelook 0x82C3A1C8, m_filter 0x82C3A1B4; found by which
+function reads them). `src/kbm_binds.cpp` built into MP too (no game addresses; pch include guarded), called from
+qosmp_app.h's OnPreSetup. MP's pad file buttons_default_mp.cfg isn't in english/code_post_gfx_mp.ff or common_mp.ff
+(default_mp.cfg execs it, then BACK togglescores, START togglemenu); keys follow pad positions, so SP's layout
+carries over (Tab = scoreboard, Esc = menu). Next: Esc goes back in MP menus (menu_keys at MP addresses).
+
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
 1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer).

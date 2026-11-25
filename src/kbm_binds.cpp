@@ -14,7 +14,11 @@
 // (mouse_look.cpp). Only binds still at the SDK's compiled-in default are set, so the command line, the config file
 // and the Rebind screen win.
 
+// Also built into multiplayer (mp/), whose pad layout puts the same actions on the same buttons (default_mp.cfg execs
+// buttons_default_mp.cfg, then BACK -> scoreboard, START -> menu): the keys follow the pad positions.
+#if __has_include("generated/default/qos_pch.h")
 #include "generated/default/qos_pch.h"
+#endif
 
 #include <string_view>
 
