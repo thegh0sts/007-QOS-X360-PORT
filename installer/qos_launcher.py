@@ -159,6 +159,8 @@ DEFAULTS = {
     # A folder with the game's DLC (STFS packages, e.g. the map pack): multiplayer installs what's new in it at its
     # start (mp/src/dlc_folder.cpp, --dlc_folder). Empty: none.
     "dlc_folder": "",
+    # In-game cutscenes' black bars (src/letterbox.cpp): off keeps the view full screen.
+    "cutscene_letterbox": False,
 }
 
 
@@ -460,6 +462,8 @@ def game_args(s, screen=None):
             args.append("--show_fps_detail=true")
     if s.get("hide_achievements"):
         args.append("--achievement_popups=false")
+    if s.get("cutscene_letterbox"):
+        args.append("--cutscene_letterbox=true")
     if int(s.get("brightness", 100)) != 100:
         args.append(f"--brightness={int(s['brightness']) / 100:.2f}")  # the native renderer's last pass
     effect = UPSCALING_EFFECT.get(s.get("upscaling"))
@@ -685,10 +689,12 @@ class SettingsView(tk.Frame):
         note(box, 12, "65 is the original.")
         self._combo(box, 13, "fps_counter", "FPS counter", FPS_COUNTER)
         self._check(box, 14, "hide_achievements", "Hide achievement pop-ups")
+        self._check(box, 15, "cutscene_letterbox", "Black bars in in-game cutscenes")
+        note(box, 16, "Off: in-game cutscenes stay full screen. Video cutscenes keep their own bars.")
         self.vars["language"].trace_add("write", lambda *_: self._game_language_changed())
         tk.Label(box, text=tr("Native renderer by the Skullburglar project (github.com/nlwstein/skullburglar, "
                               "BSD 3-Clause)."), font=("Segoe UI", 8), fg=DIM, bg=PANEL, anchor="w"
-                 ).grid(row=15, column=0, columnspan=2, sticky="w", pady=(10, 0))
+                 ).grid(row=17, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
         box = self._page("Graphics")
         self._slider(box, 0, "brightness", "Brightness (%)", 50, 200, 5)

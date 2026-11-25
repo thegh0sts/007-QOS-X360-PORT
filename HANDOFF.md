@@ -317,6 +317,16 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   the first 12: log every one during a trace-now window) and limit the blit to the draw's own rectangle (vertex
   bounds) instead of the whole scissor/viewport. Audio crackle the same evening went away after a PC restart (0
   underruns in the logs; leftover builds/test runs).
+- **In-game cutscene letterbox off (25 Nov 21:15, not built):** the bars the user meant (Nov 21 recording, start of
+  whites_estate) are in-game, not a video. common.ff's letterbox_on(): setsaveddvar letterboxActive 1, r_pipMainMode 1,
+  r_pip1Anchor 4, cg_pipmain_border 2 / color "0 0 0.2 1" (the thin dark blue lines), r_pip1Scale "1 1 1 0", then
+  level.player animatepip(1000, 1, -1, -1, 1, 0.8, 1, 0): the main view cropped to 80% height. letterbox_off():
+  animatepip back to 1, r_pipMainMode 0, letterboxActive 0. src/letterbox.cpp (from the Com_Frame hook): while
+  letterboxActive (dvar ptr 0x8264C054, byte +12) keeps r_pipMainMode (ptr 0x84055EFC, int +12) at 0.
+  --cutscene_letterbox (default false); launcher Display "Black bars in in-game cutscenes" (default off). The 1440p
+  level-1 trace (level1-trace2.txt) showed the bars as four 1x1-texture quads (vs 73FF89529D64FE5C) drawn into the
+  1024x608 view before the 608 -> 720 stretch. Videos (Bolivia intro, level intro) keep their own bars; their
+  see-through bars at 1440p (plain upscale) stay a known issue.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's

@@ -1859,4 +1859,12 @@ TEXT = {
         'Keine Zusatzinhalte in diesem Ordner gefunden', 'Aucun contenu téléchargeable dans ce dossier',
         'No hay contenido descargable en esta carpeta', 'Nessun contenuto scaricabile in questa cartella'),
     'Found: {names}': ('Gefunden: {names}', 'Trouvé : {names}', 'Encontrado: {names}', 'Trovato: {names}'),
+    'Black bars in in-game cutscenes': (
+        'Schwarze Balken in Zwischensequenzen im Spiel', 'Bandes noires dans les cinématiques en jeu',
+        'Franjas negras en las escenas del juego', 'Bande nere nelle scene di gioco'),
+    'Off: in-game cutscenes stay full screen. Video cutscenes keep their own bars.': (
+        'Aus: Zwischensequenzen im Spiel bleiben im Vollbild. Video-Zwischensequenzen behalten ihre eigenen Balken.',
+        'Désactivé : les cinématiques en jeu restent en plein écran. Les cinématiques vidéo gardent leurs bandes.',
+        'Desactivado: las escenas del juego siguen a pantalla completa. Los vídeos conservan sus propias franjas.',
+        'Disattivato: le scene di gioco restano a schermo intero. I video mantengono le proprie bande.'),
 }

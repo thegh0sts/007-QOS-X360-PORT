@@ -40,6 +40,9 @@ void OnDvarRegistered(const char* name, uint32_t dvar);  // menu_quit.cpp: finds
 namespace qos::fov {
 void OnFrame(uint8_t* base);  // fov.cpp: keeps cg_fov at --fov
 }  // namespace qos::fov
+namespace qos::letterbox {
+void OnFrame(uint8_t* base);  // letterbox.cpp: in-game cutscenes full screen (--cutscene_letterbox)
+}  // namespace qos::letterbox
 namespace qos::takedown_keys {
 void OnFrame();
 }  // namespace qos::takedown_keys
@@ -88,6 +91,7 @@ extern "C" REX_FUNC(sub_8229B7C0) {
     }
   }
   qos::fov::OnFrame(base);
+  qos::letterbox::OnFrame(base);
   qos::takedown_keys::OnFrame();
   qos::menu_keys::OnFrame(base);
   __imp__sub_8229B7C0(ctx, base);
