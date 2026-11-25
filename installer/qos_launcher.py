@@ -485,15 +485,22 @@ def game_args(s, screen=None):
     return args
 
 
-# qos.exe's own settings (src/), which qosmp.exe doesn't have: left out of multiplayer's command line.
-SP_ONLY_ARGS = ("--achievement_popups", "--pad_prompts", "--mouse_sensitivity", "--mouse_invert")
+def mp_profile_args(s):
+    """The multiplayer profile: gamertag (letters, digits, spaces) and XUID."""
+    return [f"--user_gamertag={clean_gamertag(s.get('gamertag'))}", f"--user_xuid={s['xuid']}"]
+
+
+def mp_extra_arg(s):
+    """--mp_extra_args for qos.exe: what its MULTIPLAYER item adds when it starts qosmp.exe (src/title_switch.h).
+    Single player doesn't take the profile itself: the SDK names the profile folder after the gamertag."""
+    gamertag, xuid = mp_profile_args(s)
+    return f'--mp_extra_args="{gamertag}" {xuid}'
 
 
 def mp_args(s, screen=None):
-    """ReXGlue command-line settings for qosmp.exe: the display and controller ones from game_args, plus the
-    multiplayer profile."""
-    args = [a for a in game_args(s, screen) if not a.startswith(SP_ONLY_ARGS)]
-    return args + [f"--user_gamertag={clean_gamertag(s.get('gamertag'))}", f"--user_xuid={s['xuid']}"]
+    """qosmp.exe's command line: single player's settings (each program ignores the ones it doesn't have), the
+    profile, and --mp_extra_args so multiplayer's way back to single player can pass the profile on again."""
+    return game_args(s, screen) + mp_profile_args(s) + [mp_extra_arg(s)]
 
 
 def game_env(s):
@@ -1211,7 +1218,7 @@ class SettingsView(tk.Frame):
         if multiplayer:
             log = logs_dir(self.info) / "game_mp.log"
         args = [str(exe), "--game_data_root", str(game)] + \
-            (mp_args(s, screen) if multiplayer else game_args(s, screen)) + ["--log_file", str(log)]
+            (mp_args(s, screen) if multiplayer else game_args(s, screen) + [mp_extra_arg(s)]) + ["--log_file", str(log)]
         try:
             # The working folder is the exe's: the renderer finds its files there (hints\, prompts\, pipelines\).
             start_game(args, exe.parent, game_env(s))

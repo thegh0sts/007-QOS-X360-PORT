@@ -14,6 +14,8 @@
 
 #include <rex/logging.h>
 
+#include "title_switch.h"
+
 REX_EXTERN(__imp__sub_82372B60);  // launch title (name, flags)
 
 namespace {
@@ -30,5 +32,13 @@ extern "C" REX_FUNC(sub_82372B60) {
   const std::string name = GuestString(base, ctx.r3.u32, 260);
   const std::string error = GuestString(base, kErrorBlock + 4, 900);
   REXLOG_ERROR("game relaunch: \"{}\" (flags {:X}); Sys_Error message: \"{}\"", name, ctx.r4.u32, error);
+  // "default.xex": multiplayer's way back to single player; "default_mp.xex": a restart (Sys_Error). Start that
+  // program first (title_switch.h); the launch then ends this process as before. (The launch data, the error
+  // message for the restarted game to show, isn't passed on yet.)
+  if (name.find("default_mp.xex") != std::string::npos) {
+    qos::title_switch::Start(true, true, "");
+  } else if (name.find("default.xex") != std::string::npos) {
+    qos::title_switch::Start(false, false, "");
+  }
   __imp__sub_82372B60(ctx, base);
 }

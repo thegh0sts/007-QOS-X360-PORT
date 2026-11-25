@@ -193,6 +193,18 @@ always loads SDL (or XInput). SDK patch 0026-input-backend-none (own26): input_b
 driver; the launcher passes --input_backend=none for Keyboard and mouse, sdl otherwise. SDK bundle qos7.
 Also: the launcher's XUID is now plain text (the read-only Entry drew nothing).
 
+**Single player <-> multiplayer switching (25 Nov, 17:10), written, not built:** `src/title_switch.h` (header-only,
+both programs): Start() finds the other exe (beside this one, else project\out\build\<preset>\qos.exe /
+project\mp\out\build\<preset>\qosmp.exe) and CreateProcessW's it with this process's command line (unknown
+--name=value are ignored by SDK cvar parsing, so both take the same settings): to MP adds --mp_extra_args's text
+(the launcher puts the gamertag and XUID there) and game.log -> game_mp.log; to SP drops --user_gamertag/--user_xuid
+(the SDK names the profile folder after the gamertag) and game_mp.log -> game.log. SP: `src/multiplayer_launch.cpp`
+hooks sub_82423D78 (title launch; "default_mp.xex" from startMultiplayer), cvar mp_extra_args. MP:
+relaunch_log.cpp's sub_82372B60 hook: "default.xex" -> qos.exe, "default_mp.xex" (Sys_Error) -> restart qosmp.exe
+once (env QOS_RELAUNCHED stops loops; the error message in the launch data isn't passed on yet). Launcher: SP gets
+game_args + --mp_extra_args; MP gets game_args + --user_gamertag/--user_xuid + --mp_extra_args (SP_ONLY_ARGS filter
+removed). Mockup of the launcher's Play SP / Play MP buttons: design canvas "QoS launcher: Play SP / Play MP".
+
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
 1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer).

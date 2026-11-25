@@ -28,6 +28,7 @@ set(QOS_SOURCES
     src/menu_keys.cpp
     src/tutorial_keys.cpp
     src/native_inflate.cpp
+    src/multiplayer_launch.cpp
     thirdparty/miniz/miniz.c
     thirdparty/miniz/miniz_tinfl.c
     src/version_log.cpp
