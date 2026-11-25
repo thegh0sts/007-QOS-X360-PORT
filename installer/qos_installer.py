@@ -13,6 +13,7 @@ No game code or data ships with this installer.
 Only the Python standard library is used, so it packages with PyInstaller.
 """
 
+import ctypes
 import json
 import os
 import queue
@@ -62,6 +63,12 @@ NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 class InstallError(Exception):
     """An error with a message meant for the player."""
+
+
+def shortcut_name() -> str:
+    """APP_NAME as a file name: Windows doesn't allow : \\ / * ? " < > | in names."""
+    name = APP_NAME.replace(": ", " - ")
+    return "".join(c for c in name if c not in ':\\/*?"<>|').strip() or "Quantum of Solace"
 
 
 def resource_dir() -> Path:
@@ -701,16 +708,37 @@ class Installer:
                 target, args, wd = launcher, "", self.root
             except OSError as e:
                 self.log(f"Couldn't copy the launcher next to the game: {e}")
+        # The desktop folder Windows actually uses (OneDrive can move it out of %USERPROFILE%\Desktop).
         desktop = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Desktop"
-        lnk = desktop / f"{APP_NAME}.lnk"
+        try:
+            buf = ctypes.create_unicode_buffer(260)
+            if ctypes.windll.shell32.SHGetFolderPathW(None, 0x10, None, 0, buf) == 0 and Path(buf.value).is_dir():
+                desktop = Path(buf.value)  # CSIDL_DESKTOPDIRECTORY
+        except (AttributeError, OSError):
+            pass
+        # No ':' in a file name: "007: Quantum of Solace.lnk" made an empty file "007" with the shortcut hidden in an
+        # NTFS stream (0.2.0 and earlier: it wouldn't open and had no icon). Remove that leftover if it's ours.
+        base, _, stream = APP_NAME.partition(":")
+        old = desktop / base
+        try:
+            if stream and old.is_file() and old.stat().st_size == 0 and os.path.exists(f"{old}:{stream}.lnk"):
+                old.unlink()
+                self.log(f"Removed the broken shortcut left by an earlier install: {old}")
+        except OSError:
+            pass
+        lnk = desktop / f"{shortcut_name()}.lnk"
         q = lambda p: str(p).replace("'", "''")
         ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');"
               "$s.TargetPath='{exe}';$s.Arguments='{args}';"
               "$s.WorkingDirectory='{wd}';{icon}$s.Save()").format(
             lnk=q(lnk), exe=q(target), args=q(args), wd=q(wd),
-            icon=f"$s.IconLocation='{q(icon)},0';" if icon.exists() else "")
+            icon=f"$s.IconLocation='{q(icon)},0';" if icon.exists() else
+                 (f"$s.IconLocation='{q(target)},0';" if str(target).lower().endswith(".exe") else ""))
         r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=NO_WINDOW)
-        self.log("Desktop shortcut created." if r.returncode == 0 else "Couldn't create desktop shortcut.")
+        if r.returncode == 0 and lnk.is_file():
+            self.log(f"Desktop shortcut created: {lnk}")
+        else:
+            self.log(f"Couldn't create the desktop shortcut ({lnk}).")
 
     def run(self):
         try:
