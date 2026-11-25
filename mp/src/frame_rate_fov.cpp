@@ -11,6 +11,9 @@
 namespace qosmp::menu_keys {
 void OnFrame(uint8_t* base);  // menu_keys.cpp: Esc goes back in menus
 }  // namespace qosmp::menu_keys
+namespace qos::pad_prompts {
+void Update();  // ../src/pad_prompts.cpp: which button pictures the renderer shows
+}  // namespace qos::pad_prompts
 
 #include <atomic>
 #include <cstdint>
@@ -127,6 +130,7 @@ extern "C" REX_FUNC(sub_8225E8B8) {
   }
   qosmp::fov::OnFrame(base);
   qosmp::menu_keys::OnFrame(base);
+  qos::pad_prompts::Update();
   __imp__sub_8225E8B8(ctx, base);
 }
 

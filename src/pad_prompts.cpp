@@ -19,7 +19,10 @@
 //
 // Not done yet: text that names buttons (the Press Start screen's text, the controls screen's labels).
 
+// Also built into multiplayer (mp/): there Update() runs from the Com_Frame hook and PhoneUp() is always false.
+#if __has_include("generated/default/qos_pch.h")
 #include "generated/default/qos_pch.h"
+#endif
 
 #include <cstdint>
 #include <string>

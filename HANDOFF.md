@@ -219,6 +219,9 @@ qosmp_app.h's OnPreSetup. MP's pad file buttons_default_mp.cfg isn't in english/
 carries over (Tab = scoreboard, Esc = menu). **Esc back in MP menus (works, user 17:31):** mp/src/menu_keys.cpp, called from
 the Com_Frame hook: key catchers of local client 0 at 0x82C3A1DC (cl block +4; from Key_IsCatcherActive sub_821C2FC8);
 KEYCATCH_UI 0x10 -> SetStartKeysAsBack. User had hit it: Esc in a match's settings closed the menu (START = togglemenu).
+**MP prompts (17:40, not built):** src/pad_prompts.cpp built into MP too (pch include guarded), Update() from the MP
+Com_Frame hook, PhoneUp() stub false in mp/src/menu_keys.cpp. Same prompts/*.txt lists (copied by qosmp_assets).
+Next: a BOTS_GFX_DUMP_TEXTURES run in MP (menus, a match, two instances) for MP-only button pictures.
 
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 

@@ -44,3 +44,9 @@ void OnFrame(uint8_t* base) {
 }
 
 }  // namespace qosmp::menu_keys
+
+// ../src/pad_prompts.cpp asks whether the phone is up (single player's keyboard pictures for the phone); multiplayer
+// has no phone.
+namespace qos::menu_keys {
+bool PhoneUp() { return false; }
+}  // namespace qos::menu_keys

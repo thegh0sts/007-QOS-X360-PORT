@@ -20,6 +20,7 @@ set(QOS_MP_SOURCES
     src/console_log.cpp
     ${QOS_SP_DIR}/src/crash_win.cpp
     ${QOS_SP_DIR}/src/kbm_binds.cpp
+    ${QOS_SP_DIR}/src/pad_prompts.cpp
     src/mouse_look.cpp
     src/menu_keys.cpp
 )
