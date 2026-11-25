@@ -293,6 +293,9 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   copy). Logs "launch data ... passed on", "launch data from the last run restored (... message ...)". Unknown yet:
   whether the game then shows the message on screen. SP <-> MP switching still passes no launch data.
   **Works (user, 25 Nov 19:37):** the restarted copy shows the error message.
+- **Release 0.1.3 prepared (25 Nov 19:45, commit "chore: release 0.1.3"):** QOS_RELEASE, launcher VERSION and
+  GAME_VERSION 0.1.3 (installs rebuild), SDK bundle qos9 (patches to 0028), notes docs/releases/0.1.3.md. The user
+  builds the installer (after build_native) and publishes with gh.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
