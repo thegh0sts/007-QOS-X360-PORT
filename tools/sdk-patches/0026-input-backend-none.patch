@@ -1,0 +1,18 @@
+# input_backend "none": no controller driver (keyboard and mouse only, with mnk_mode). The SDK always loaded SDL or
+# XInput, so a pad kept working when a game's launcher chose keyboard and mouse.
+diff --git a/src/input/input_system.cpp b/src/input/input_system.cpp
+index 8f3c752..14e3fc6 100644
+--- a/src/input/input_system.cpp
++++ b/src/input/input_system.cpp
+@@ -28,8 +28,9 @@
+ #include <rex/logging.h>
+ #include <rex/system/kernel_state.h>
+ 
+-REXCVAR_DEFINE_STRING(input_backend, "sdl", "Input", "Input backend: sdl, xinput")
+-    .allowed({"sdl", "xinput"});
++REXCVAR_DEFINE_STRING(input_backend, "sdl", "Input",
++                      "Input backend: sdl, xinput, or none (no controllers: keyboard and mouse only)")
++    .allowed({"sdl", "xinput", "none"});
+ 
+ REXCVAR_DEFINE_BOOL(guide_button, false, "Input", "Enable guide button pass-through");
+ 

@@ -188,6 +188,11 @@ tomls, CMake files, src, generated\rexglue.cmake) into payload\project\mp; the i
 install continues), copies the renderer DLLs if missing, and writes "mp_exe" into launcher.json; the launcher's Play
 multiplayer uses it. Existing installs: Game files -> Reinstall.
 
+**Keyboard and mouse = no controller (25 Nov, 16:50):** the pad still worked with "Keyboard and mouse" picked: the SDK
+always loads SDL (or XInput). SDK patch 0026-input-backend-none (own26): input_backend "none" loads no controller
+driver; the launcher passes --input_backend=none for Keyboard and mouse, sdl otherwise. SDK bundle qos7.
+Also: the launcher's XUID is now plain text (the read-only Entry drew nothing).
+
 ## Multiplayer to-do (user, 24 Nov 23:46), in the order the parts depend on each other
 
 1. (needed by everything that starts qosmp.exe) Installer builds/copies qosmp.exe (needed by the launcher's Play multiplayer).

@@ -475,9 +475,10 @@ def game_args(s, screen=None):
     device = s.get("input_device", "Auto")
     args.append(f"--pad_prompts={INPUT_PROMPTS.get(device, 'auto')}")
     if device != "Keyboard and mouse":
-        args += ["--mnk_mode=false", "--mnk_mouse=false"]
+        args += ["--mnk_mode=false", "--mnk_mouse=false", "--input_backend=sdl"]
     else:
-        args += ["--mnk_mode=true", "--mnk_mouse=true",
+        # input_backend none (SDK patch 0026): no controller driver, so a connected pad does nothing.
+        args += ["--mnk_mode=true", "--mnk_mouse=true", "--input_backend=none",
                  f"--mouse_sensitivity={int(s.get('mouse_sensitivity', 100)) / 100:.2f}"]
         if s.get("mouse_invert"):
             args.append("--mouse_invert=true")
