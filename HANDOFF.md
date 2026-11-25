@@ -294,7 +294,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   whether the game then shows the message on screen. SP <-> MP switching still passes no launch data.
   **Works (user, 25 Nov 19:37):** the restarted copy shows the error message.
 - **Release 0.2.0 prepared (25 Nov 19:45; first as 0.1.3, renamed 0.2.0 at the user's request, 19:43):** QOS_RELEASE,
-  launcher VERSION and GAME_VERSION 0.2.0 (installs rebuild), SDK bundle qos10 (SDK patches to 0028, native to 0100), notes
+  launcher VERSION and GAME_VERSION 0.2.0 (installs rebuild), SDK bundle qos11 (SDK patches to 0028, native to 0100; qos10 had 0101 and installs that got it kept it on reinstall, the bundle name being the same: 1440p pixelated, user 21:20), notes
   docs/releases/0.2.0.md. The user
   builds the installer (after build_native) and publishes with gh.
 - **See-through letterbox bars (25 Nov 19:52, native only; Xenos solid black):** Bolivia intro ("Oruro Province",
