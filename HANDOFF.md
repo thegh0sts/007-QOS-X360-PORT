@@ -281,6 +281,10 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   --mnk_mode/--mnk_mouse=true with --input_backend=sdl (plus mouse sensitivity/invert); pad_prompts auto already
   shows keys while keyboard/mouse was used last (SDK 0016), Xbox/PS by the pad (0027), all pads player 1 (0028).
   Controls shows both the controller and the keyboard settings for Auto.
+  **Reverted (user, 25 Nov 19:25):** switching input while a tutorial hint was up left wrong glyphs in it, so Auto
+  is controllers only again (Xbox/PS switching kept). To revisit: the tutorial hints pick their picture once when
+  shown (tutorial_keys.cpp swaps names only in keyboard mode), so a hint up during a switch keeps the old device's
+  pictures; would need re-rendering the hint on a device change.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's

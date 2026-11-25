@@ -1545,11 +1545,11 @@ TEXT = {
         'Manette',
         'Mando',
         'Controller'),
-    'Auto plays with a controller or keyboard and mouse; the button prompts follow whichever you used last (Xbox, PlayStation or keys).': (
-        'Automatisch spielt mit Controller oder Tastatur und Maus; die Tastensymbole folgen dem zuletzt benutzten Gerät (Xbox, PlayStation oder Tasten).',
-        "Auto joue avec une manette ou le clavier et la souris ; les boutons affichés suivent le dernier utilisé (Xbox, PlayStation ou touches).",
-        'Automático juega con un mando o con teclado y ratón; los botones mostrados siguen al último usado (Xbox, PlayStation o teclas).',
-        "Automatico gioca con un controller o con tastiera e mouse; i tasti mostrati seguono l'ultimo usato (Xbox, PlayStation o tasti)."),
+    'Auto plays with a controller, with Xbox or PlayStation buttons to match the one connected.': (
+        'Automatisch spielt mit einem Controller, mit Xbox- oder PlayStation-Tasten passend zum angeschlossenen.',
+        "Auto joue avec une manette, avec les boutons Xbox ou PlayStation de la manette branchée.",
+        'Automático juega con un mando, con botones de Xbox o PlayStation según el mando conectado.',
+        'Automatico gioca con un controller, con i tasti Xbox o PlayStation del controller collegato.'),
     'Render threads': (
         'Render-Threads',
         'Threads de rendu',

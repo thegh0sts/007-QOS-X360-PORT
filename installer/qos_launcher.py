@@ -66,9 +66,9 @@ ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERIN
 FPS = ["30 (original)", "40", "50", "60"]
 FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60}
 FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
-# Input device (Controls tab). Auto: controllers and keyboard and mouse together, the prompts following whichever was
-# used last: Xbox, PlayStation or keys (user 25 Nov; until then Auto was controllers only). The others pick one
-# device and fix the prompts to it (src/pad_prompts.cpp --pad_prompts).
+# Input device (Controls tab). Auto: controllers only, with Xbox or PlayStation prompts to match the one connected
+# (keyboard and mouse off, user 24 Nov). The others pick one device and fix the prompts to it
+# (src/pad_prompts.cpp --pad_prompts); keyboard and mouse is on only for "Keyboard and mouse".
 INPUT_DEVICES = ["Auto", "Keyboard and mouse", "Xbox controller", "PlayStation controller"]
 INPUT_PROMPTS = {"Auto": "auto", "Keyboard and mouse": "keyboard", "Xbox controller": "xbox",
                  "PlayStation controller": "playstation"}
@@ -482,13 +482,11 @@ def game_args(s, screen=None):
         args.append("--vibration=false")
     device = s.get("input_device", "Auto")
     args.append(f"--pad_prompts={INPUT_PROMPTS.get(device, 'auto')}")
-    if device in ("Xbox controller", "PlayStation controller"):
+    if device != "Keyboard and mouse":
         args += ["--mnk_mode=false", "--mnk_mouse=false", "--input_backend=sdl"]
     else:
-        # Keyboard and mouse: input_backend none (SDK patch 0026), no controller driver, so a connected pad does
-        # nothing. Auto: both.
-        backend = "none" if device == "Keyboard and mouse" else "sdl"
-        args += ["--mnk_mode=true", "--mnk_mouse=true", f"--input_backend={backend}",
+        # input_backend none (SDK patch 0026): no controller driver, so a connected pad does nothing.
+        args += ["--mnk_mode=true", "--mnk_mouse=true", "--input_backend=none",
                  f"--mouse_sensitivity={int(s.get('mouse_sensitivity', 100)) / 100:.2f}"]
         if s.get("mouse_invert"):
             args.append("--mouse_invert=true")
@@ -704,8 +702,7 @@ class SettingsView(tk.Frame):
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)
-        note(box, 1, "Auto plays with a controller or keyboard and mouse; the button prompts follow whichever you used "
-                     "last (Xbox, PlayStation or keys).")
+        note(box, 1, "Auto plays with a controller, with Xbox or PlayStation buttons to match the one connected.")
         # Only the settings of the chosen device are shown: controller ones for Auto, Xbox and PlayStation, keyboard
         # ones for keyboard and mouse.
         pad = self.pad_settings = tk.Frame(box, bg=PANEL)
@@ -930,14 +927,12 @@ class SettingsView(tk.Frame):
         device = self.vars["input_device"].get()
         ps = device == "PlayStation controller"
         self._control_map(self.pad_map, [(p if ps else x, what) for x, p, what in PAD_MAP])
-        # Auto uses both, so it shows both.
-        if device in ("Auto", "Keyboard and mouse"):
+        keyboard = device == "Keyboard and mouse"
+        if keyboard:
+            self.pad_settings.grid_remove()
             self.kbm_settings.grid()
         else:
             self.kbm_settings.grid_remove()
-        if device == "Keyboard and mouse":
-            self.pad_settings.grid_remove()
-        else:
             self.pad_settings.grid()
 
     def _game_language_changed(self):
