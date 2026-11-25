@@ -332,7 +332,14 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   6. Weapon keeps its own FOV at higher --fov (view model drawn with a 65 degree projection: hook in the view setup).
   7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
      bounds), see the letterbox notes above.
-  8. (later) Xbox LIVE via Xenia Web Services (multiplayer to-do item 6 above: the SDK's Live calls - XSession create/
+  8. Launcher: a --netplay_peers field in the Multiplayer tab (host addresses for VPNs that drop broadcasts).
+  9. Launcher: repair a missing or broken desktop shortcut at start (no reinstall needed for it).
+  10. Performance, in this order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
+      its render pass, so uploads stop splitting passes; ~300 passes a frame now), then copying uploads on a worker
+      thread (needs exact copy timing, or the 24 Nov zero-copy glitch comes back), then the command stream (PM4)
+      parsed on its own thread (up to ~2.4 ms), then faster level loads (native zlib stall) and cheaper texture
+      checks. Comparison sheet: https://claude.ai/artifact/HCX3LGF4VVAyR2L5HYT6uW
+  11. (later) Xbox LIVE via Xenia Web Services (multiplayer to-do item 6 above: the SDK's Live calls - XSession create/
      search/join/leave, the XLIVEBASE messages such as 0x00058035 - talking to Xenia Web Services instead of the LAN
      broadcast; real QoS probes for Live; launcher server address setting; the one-active-XUID rule). Several
      sessions. **Later, not tomorrow (user, 25 Nov 22:28: "down the line")**; the groundwork below is done.
@@ -383,8 +390,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     at the start of (a); opening it to the internet (proxy/tunnel, the list above) after (f), before releasing online
     play.
   Also: player instructions written (docs/multiplayer.md, 25 Nov 21:55, linked from the README; multiplayer to-do
-  item 5). Gap found writing them: no launcher field for --netplay_peers (needed for VPNs that drop broadcasts, e.g.
-  Tailscale): add one to the Multiplayer tab (comma-separated host addresses, passed to both programs).
+  item 5). 0.2.0 and 0.2.1 released (user publishes).
 - **Graphics options asked for (user, 25 Nov 21:43), dvars found in default.xex (strings, not yet traced):**
   shadows: sm_enable, sm_sunShadowEnable, sm_spotShadowEnable, sm_maxLights, sm_sunSampleSizeNear ("Shadow sample
   size": smaller = sharper sun shadows near the camera), sm_fastSunShadow, r_spotLightShadows, r_playerShadowEnable
