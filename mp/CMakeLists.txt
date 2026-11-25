@@ -19,6 +19,7 @@ set(QOS_MP_SOURCES
     src/frame_rate_fov.cpp
     src/console_log.cpp
     src/dlc_folder.cpp
+    src/dlc_content.cpp
     ${QOS_SP_DIR}/src/crash_win.cpp
     ${QOS_SP_DIR}/src/kbm_binds.cpp
     ${QOS_SP_DIR}/src/pad_prompts.cpp

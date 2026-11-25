@@ -263,6 +263,18 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
    and writes Headers\00000002\<file>.header, which XamContentCreateEnumerator lists). Log lines start "dlc:".
    Not done: removing a pack (delete its folder + header by hand); checking the maps appear (party_mappacks,
    map list) and a System Link match on one.
+   **Test (25 Nov 18:56):** installed and mounted ("Mounting Camille Map Pack as drive 'mappack1'"), maps listed, but
+   names showed as CONTENT_MP_BAGS and no picture ("Could not load material mapimg_mp_bags"). The pack holds mp_*.ff,
+   mp_*_load.ff, jbmaps.arena (longname "@CONTENT_MP_*"), mappack1.id ("mp_bags,18,4" ...) and <language>\content.ff
+   (CONTENT_MP_* strings incl. unused MANOR/VENICE, mapimg_mp_* materials). Nothing in default_mp.xex asks for a zone
+   "content" (no such string; probably the title update did). Zone path builder sub_821F0EA8(name, ext, size, buf,
+   lang): non-localized "%s\\%s%s" with base from sub_822D83F0(name) (mappack drive for a pack's map), localized
+   "D:\\<lang>..." only. DB_LoadXAssets = sub_821F2A98(XZoneInfo{name, alloc, free}[], count, r5, r6); startup: common_mp
+   {17, 0}, ui_mp {34, 0}; ui reload {ui_mp, 2, 2}. Pack mount = sub_822D7D58(n) (returns 1 when mounted).
+   **mp/src/dlc_content.cpp (19:25, not built):** after a mount, the next Com_Frame loads zone "content" {alloc 1, free
+   0}; the sub_821F0EA8 hook gives it "mappack1:\\<language>\\content.ff" (sub_82296340 = language folder; languages
+   the pack lacks read english). --dlc_content=false off. Log "dlc: loading ...", "dlc: zone content read from ...".
+   A second pack (mappack2) isn't handled (only one pack exists).
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
