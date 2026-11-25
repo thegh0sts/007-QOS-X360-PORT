@@ -317,6 +317,11 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   the first 12: log every one during a trace-now window) and limit the blit to the draw's own rectangle (vertex
   bounds) instead of the whole scissor/viewport. Audio crackle the same evening went away after a PC restart (0
   underruns in the logs; leftover builds/test runs).
+- **0.2.1 (25 Nov 22:50):** desktop shortcut fix (APP_NAME's colon made "007" + an NTFS stream; now
+  "007 - Quantum of Solace.lnk" on SHGetFolderPath's desktop, leftover removed; works, user 22:49). Launcher VERSION
+  0.2.1, GAME_VERSION and QOS_RELEASE stay 0.2.0 (game unchanged, no rebuild prompt), SDK bundle qos11. Notes
+  docs/releases/0.2.1.md. Idea for later: the launcher could repair a missing/broken shortcut at start, so players
+  needn't reinstall for it.
 - **To do, 26 Nov (user, 25 Nov 21:44), in this order:**
   1. Launcher: fixed window size, vertical scroll bar on each tab (the Display tab overflows).
   2. Depth of field off option (r_dof_enable + weaponDof, held every frame).
