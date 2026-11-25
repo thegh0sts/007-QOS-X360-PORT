@@ -362,6 +362,11 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     type; nopped, the type is always set to 3 before the host answers. Our System Link works without it (two copies on
     one PC; our peers have synthetic 169.254.250.x addresses), so not needed so far; if a two-PC join fails at
     "getinfo" (host never answers), try the same in a hook (force frame+1152 = 3 in that branch).
+  - Test server: the user's NAS, TrueNAS 25.10 (Docker apps), Ryzen 5 3500 (Zen 2: AVX, so current mongo images
+    run). No prebuilt server image: build it on the PC from Xenia-WebServices (dockerfile), push to a registry, then
+    Apps -> Install via YAML with backend (image, API_PORT 36000, MONGO_URI mongodb://database:27017/) + database
+    (mongo, /data/db on a dataset). Draft YAML in the chat of 25 Nov 22:15; untested. Docker Desktop on the PC is the
+    quick alternative (docker compose up -d in the repo).
   - Plan from here: (a) port XLiveAPI with a WinHTTP backend + whoami/players (sign-in, online XUID); (b)
     xlivebase messages incl. 0x00058035; (c) xsession (create/search/join/leave) over the existing netplay socket
     layer; (d) real QoS; (e) UPnP; (f) launcher server address + hosting toggle.
