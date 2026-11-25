@@ -1545,11 +1545,11 @@ TEXT = {
         'Manette',
         'Mando',
         'Controller'),
-    'Auto plays with a controller, with Xbox or PlayStation buttons to match the one connected.': (
-        'Automatisch spielt mit einem Controller, mit Xbox- oder PlayStation-Tasten passend zum angeschlossenen.',
-        "Auto joue avec une manette, avec les boutons Xbox ou PlayStation de la manette branchée.",
-        'Automático juega con un mando, con botones de Xbox o PlayStation según el mando conectado.',
-        'Automatico gioca con un controller, con i tasti Xbox o PlayStation del controller collegato.'),
+    'Auto plays with a controller or keyboard and mouse; the button prompts follow whichever you used last (Xbox, PlayStation or keys).': (
+        'Automatisch spielt mit Controller oder Tastatur und Maus; die Tastensymbole folgen dem zuletzt benutzten Gerät (Xbox, PlayStation oder Tasten).',
+        "Auto joue avec une manette ou le clavier et la souris ; les boutons affichés suivent le dernier utilisé (Xbox, PlayStation ou touches).",
+        'Automático juega con un mando o con teclado y ratón; los botones mostrados siguen al último usado (Xbox, PlayStation o teclas).',
+        "Automatico gioca con un controller o con tastiera e mouse; i tasti mostrati seguono l'ultimo usato (Xbox, PlayStation o tasti)."),
     'Render threads': (
         'Render-Threads',
         'Threads de rendu',
@@ -1855,4 +1855,8 @@ TEXT = {
         "Le dossier de vos contenus téléchargeables (le fichier du pack de cartes, copié depuis un disque Xbox 360, ou tout un dossier Content). Le multijoueur installe les nouveaux à son lancement (quelques secondes la première fois) et affiche les cartes avec les autres. Tous les joueurs d'une partie ont besoin des mêmes contenus pour jouer sur leurs cartes.",
         'La carpeta con tus paquetes descargables (el archivo del paquete de mapas, copiado de un disco de Xbox 360, o una carpeta Content entera). El multijugador instala los nuevos al iniciarse (la primera vez tarda unos segundos) y muestra los mapas con los demás. Todos los jugadores de una partida necesitan el mismo contenido para jugar sus mapas.',
         "La cartella con i tuoi contenuti scaricabili (il file del pacchetto mappe, copiato da un disco Xbox 360, o un'intera cartella Content). Il multigiocatore installa quelli nuovi all'avvio (la prima volta richiede qualche secondo) e mostra le mappe insieme alle altre. Tutti i giocatori di una partita devono avere gli stessi contenuti per giocare le loro mappe."),
+    'No DLC found in this folder': (
+        'Keine Zusatzinhalte in diesem Ordner gefunden', 'Aucun contenu téléchargeable dans ce dossier',
+        'No hay contenido descargable en esta carpeta', 'Nessun contenuto scaricabile in questa cartella'),
+    'Found: {names}': ('Gefunden: {names}', 'Trouvé : {names}', 'Encontrado: {names}', 'Trovato: {names}'),
 }

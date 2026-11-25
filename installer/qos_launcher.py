@@ -66,9 +66,9 @@ ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERIN
 FPS = ["30 (original)", "40", "50", "60"]
 FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60}
 FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
-# Input device (Controls tab). Auto: controllers only, with Xbox or PlayStation prompts to match the one connected
-# (keyboard and mouse off, user 24 Nov). The others pick one device and fix the prompts to it
-# (src/pad_prompts.cpp --pad_prompts); keyboard and mouse is on only for "Keyboard and mouse".
+# Input device (Controls tab). Auto: controllers and keyboard and mouse together, the prompts following whichever was
+# used last: Xbox, PlayStation or keys (user 25 Nov; until then Auto was controllers only). The others pick one
+# device and fix the prompts to it (src/pad_prompts.cpp --pad_prompts).
 INPUT_DEVICES = ["Auto", "Keyboard and mouse", "Xbox controller", "PlayStation controller"]
 INPUT_PROMPTS = {"Auto": "auto", "Keyboard and mouse": "keyboard", "Xbox controller": "xbox",
                  "PlayStation controller": "playstation"}
@@ -482,15 +482,46 @@ def game_args(s, screen=None):
         args.append("--vibration=false")
     device = s.get("input_device", "Auto")
     args.append(f"--pad_prompts={INPUT_PROMPTS.get(device, 'auto')}")
-    if device != "Keyboard and mouse":
+    if device in ("Xbox controller", "PlayStation controller"):
         args += ["--mnk_mode=false", "--mnk_mouse=false", "--input_backend=sdl"]
     else:
-        # input_backend none (SDK patch 0026): no controller driver, so a connected pad does nothing.
-        args += ["--mnk_mode=true", "--mnk_mouse=true", "--input_backend=none",
+        # Keyboard and mouse: input_backend none (SDK patch 0026), no controller driver, so a connected pad does
+        # nothing. Auto: both.
+        backend = "none" if device == "Keyboard and mouse" else "sdl"
+        args += ["--mnk_mode=true", "--mnk_mouse=true", f"--input_backend={backend}",
                  f"--mouse_sensitivity={int(s.get('mouse_sensitivity', 100)) / 100:.2f}"]
         if s.get("mouse_invert"):
             args.append("--mouse_invert=true")
     return args
+
+
+def dlc_packages(folder, depth=0):
+    """The game's DLC packages in a folder (searched 5 deep, as mp/src/dlc_folder.cpp): their names from each Xbox 360
+    package header (CON/LIVE/PIRS; content type at 0x344, title ID at 0x360, English display name at 0x411)."""
+    found = []
+    try:
+        entries = list(os.scandir(folder))
+    except OSError:
+        return found
+    for e in entries:
+        try:
+            if e.is_dir():
+                if depth < 5:
+                    found += dlc_packages(e.path, depth + 1)
+                continue
+            if not e.is_file() or e.stat().st_size < 0xA000:
+                continue
+            with open(e.path, "rb") as f:
+                head = f.read(0x491)
+        except OSError:
+            continue
+        if head[:4] not in (b"CON ", b"LIVE", b"PIRS") or len(head) < 0x491:
+            continue
+        if int.from_bytes(head[0x344:0x348], "big") != 2 or int.from_bytes(head[0x360:0x364], "big") != 0x415607FF:
+            continue
+        name = head[0x411:0x491].decode("utf-16-be", "ignore").split("\0")[0].strip()
+        found.append(name or e.name)
+    return found
 
 
 def mp_profile_args(s):
@@ -673,7 +704,8 @@ class SettingsView(tk.Frame):
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)
-        note(box, 1, "Auto plays with a controller, with Xbox or PlayStation buttons to match the one connected.")
+        note(box, 1, "Auto plays with a controller or keyboard and mouse; the button prompts follow whichever you used "
+                     "last (Xbox, PlayStation or keys).")
         # Only the settings of the chosen device are shown: controller ones for Auto, Xbox and PlayStation, keyboard
         # ones for keyboard and mouse.
         pad = self.pad_settings = tk.Frame(box, bg=PANEL)
@@ -717,13 +749,25 @@ class SettingsView(tk.Frame):
         v = self.vars["dlc_folder"] = tk.StringVar(value=self.s.get("dlc_folder", ""))
         shown = tk.Label(box, font=("Segoe UI", 9), fg=FG, bg=PANEL, anchor="w", justify="left", wraplength=640)
         shown.grid(row=6, column=0, columnspan=2, sticky="w")
-        v.trace_add("write", lambda *_: shown.config(text=v.get() or tr("No folder chosen")))
-        shown.config(text=v.get() or tr("No folder chosen"))
+        packs = tk.Label(box, font=("Segoe UI", 9), fg=DIM, bg=PANEL, anchor="w", justify="left", wraplength=640)
+        packs.grid(row=7, column=0, columnspan=2, sticky="w")
+
+        def show_dlc(*_):
+            folder = v.get()
+            shown.config(text=folder or tr("No folder chosen"))
+            if not folder:
+                packs.config(text="")
+                return
+            names = sorted(set(dlc_packages(folder)))
+            packs.config(text=tr("Found: {names}", names=", ".join(names)) if names else tr("No DLC found in this folder"))
+
+        v.trace_add("write", show_dlc)
+        show_dlc()
         line = tk.Frame(box, bg=PANEL)
-        line.grid(row=7, column=0, columnspan=2, sticky="w", pady=(4, 4))
+        line.grid(row=8, column=0, columnspan=2, sticky="w", pady=(4, 4))
         self._link(line, tr("Choose folder..."), self.choose_dlc_folder).pack(side="left")
         self._link(line, tr("Clear"), lambda: v.set("")).pack(side="left", padx=8)
-        note(box, 8, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
+        note(box, 9, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
                      "whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few "
                      "seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.")
 
@@ -886,12 +930,14 @@ class SettingsView(tk.Frame):
         device = self.vars["input_device"].get()
         ps = device == "PlayStation controller"
         self._control_map(self.pad_map, [(p if ps else x, what) for x, p, what in PAD_MAP])
-        keyboard = device == "Keyboard and mouse"
-        if keyboard:
-            self.pad_settings.grid_remove()
+        # Auto uses both, so it shows both.
+        if device in ("Auto", "Keyboard and mouse"):
             self.kbm_settings.grid()
         else:
             self.kbm_settings.grid_remove()
+        if device == "Keyboard and mouse":
+            self.pad_settings.grid_remove()
+        else:
             self.pad_settings.grid()
 
     def _game_language_changed(self):

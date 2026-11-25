@@ -275,6 +275,12 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
    0}; the sub_821F0EA8 hook gives it "mappack1:\\<language>\\content.ff" (sub_82296340 = language folder; languages
    the pack lacks read english). --dlc_content=false off. Log "dlc: loading ...", "dlc: zone content read from ...".
    A second pack (mappack2) isn't handled (only one pack exists).
+   **Works (user, 25 Nov 19:19).** Launcher now lists the packs found in the DLC folder under its path ("Found: Camille
+   Map Pack", from each package header: type 0x344, title 0x360, display name 0x411), dlc_packages() in qos_launcher.py.
+- **Auto input = controllers + keyboard/mouse (user, 25 Nov 19:19), launcher only, not run:** Auto now passes
+  --mnk_mode/--mnk_mouse=true with --input_backend=sdl (plus mouse sensitivity/invert); pad_prompts auto already
+  shows keys while keyboard/mouse was used last (SDK 0016), Xbox/PS by the pad (0027), all pads player 1 (0028).
+  Controls shows both the controller and the keyboard settings for Auto.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
