@@ -1,0 +1,141 @@
+# PM4 fast path (26 Nov). Indirect buffers (nearly all of the game's command stream) are run by the renderer's own
+# loop: packet headers read straight from the buffer, type-2 padding skipped in place (~29,000 a frame), type-0/1
+# writes to registers with no side effects stored directly (the rest, and every type-3 packet, go through the SDK as
+# before; same order). The 0105 packet profile measured ~2.2 ms a frame of parsing and register writes at ~7,500
+# draws, about half of it this per-packet overhead. BOTS_GFX_FAST_PM4=0 uses the SDK's loop. The packet profile now
+# needs BOTS_CP_PACKETS=1 as well as BOTS_DRAW_PROFILE=1 (it runs the SDK's loop, with ~0.5 ms of clock reads).
+ src/gfx/native.cpp | 111 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 109 insertions(+), 2 deletions(-)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index a36a0f3..2bf2b93 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -322,7 +322,15 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+ 
+  protected:
+   bool SetupContext() override {
+-    packet_profile_ = cp_profile_;  // qos (SDK 0030): per-packet timing with BOTS_DRAW_PROFILE=1
++    // qos (SDK 0030): per-packet timing with BOTS_DRAW_PROFILE=1 and BOTS_CP_PACKETS=1 (patch 0106: its own switch,
++    // as it goes through the SDK's packet loop instead of the fast one and adds ~0.5 ms a frame of clock reads).
++    packet_profile_ = cp_profile_ && [] {
++      const char* v = std::getenv("BOTS_CP_PACKETS");
++      return v && *v == '1';
++    }();
++    BuildPlainRegisters();
++    REXLOG_INFO("gfx native: PM4 fast path {}", fast_pm4_ && !packet_profile_ ? "on"
++                : packet_profile_ ? "off (BOTS_CP_PACKETS=1 profiles the SDK's loop)" : "off (BOTS_GFX_FAST_PM4=0)");
+     packet_mark_ticks_ = PacketProfileTicks(), packet_mark_time_ = std::chrono::steady_clock::now();
+     auto* provider = static_cast<rex::ui::vulkan::VulkanProvider*>(graphics_system_->provider());
+     if (!provider) {
+@@ -496,10 +504,109 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     CpTimer timer(cp_profile_ && indirect_depth_ == 0, cp_.ib_ns);
+     ++cp_.ibs;
+     ++indirect_depth_;
+-    CommandProcessor::ExecuteIndirectBuffer(ptr, length);
++    if (fast_pm4_ && !packet_profile_) {
++      RunIndirectBuffer(ptr, length);
++    } else {
++      CommandProcessor::ExecuteIndirectBuffer(ptr, length);
++    }
+     --indirect_depth_;
+   }
+ 
++  // qos (patch 0106): the PM4 fast path. The SDK's loop reads each packet through a RingBuffer, and every register
++  // write goes through the virtual WriteRegister: an extended-register check, the known-register table, the scratch
++  // range and the side-effect switch. A frame of ~7,500 draws has ~60,000 packets (29,000 of them type-2 padding)
++  // and ~60,000 single register writes, ~1 ms of the CP thread. Here the packet headers are read straight from the
++  // buffer, padding is skipped in place, type-0/1 register writes to registers with no side effects are stored
++  // directly (the rest still go through WriteRegister), and type-3 packets go to the SDK's ExecutePacketType3 as
++  // before, so the order of everything is unchanged. BOTS_GFX_FAST_PM4=0 uses the SDK's loop.
++  const bool fast_pm4_ = [] {
++    const char* v = std::getenv("BOTS_GFX_FAST_PM4");
++    return !(v && *v == '0');
++  }();
++  std::vector<uint8_t> plain_registers_;  // 1: WriteRegister would only store the value (and note a constant)
++
++  void BuildPlainRegisters() {
++    plain_registers_.assign(rg::RegisterFile::kRegisterCount, 1);
++    for (uint32_t i = rg::XE_GPU_REG_SCRATCH_REG0; i <= rg::XE_GPU_REG_SCRATCH_REG7; ++i) plain_registers_[i] = 0;
++    for (const uint32_t i : {uint32_t(rg::XE_GPU_REG_COHER_STATUS_HOST), uint32_t(rg::XE_GPU_REG_DC_LUT_RW_INDEX),
++                             uint32_t(rg::XE_GPU_REG_DC_LUT_SEQ_COLOR), uint32_t(rg::XE_GPU_REG_DC_LUT_PWL_DATA),
++                             uint32_t(rg::XE_GPU_REG_DC_LUT_30_COLOR), uint32_t(bots::kHybridMarkerRegister)}) {
++      if (i < plain_registers_.size()) plain_registers_[i] = 0;
++    }
++  }
++
++  void FastWriteRegister(uint32_t index, uint32_t value) {
++    if (index < plain_registers_.size() && plain_registers_[index]) {
++      register_file_->values[index] = value;
++      constant_writes_.Note(index);
++      ++cp_.reg_writes;
++      return;
++    }
++    WriteRegister(index, value);
++  }
++
++  void RunIndirectBuffer(uint32_t ptr, uint32_t length) {
++    uint8_t* bytes = memory_->TranslatePhysical(ptr);
++    if (!bytes || !length) return;
++    const uint32_t* words = reinterpret_cast<const uint32_t*>(bytes);
++    rex::memory::RingBuffer reader(bytes, size_t(length) * sizeof(uint32_t));
++    reader.set_write_offset(size_t(length) * sizeof(uint32_t));
++    uint32_t i = 0;
++    while (i < length) {
++      const uint32_t packet = rex::byte_swap(words[i]);
++      switch (packet >> 30) {
++        case 0: {
++          if (packet == 0) {  // the SDK skips a zero dword
++            ++i;
++            break;
++          }
++          const uint32_t count = ((packet >> 16) & 0x3FFF) + 1;
++          if (count > length - i - 1) {
++            REXLOG_ERROR("gfx native: PM4 type-0 packet {:08X} runs past its indirect buffer ({} of {} dwords left)",
++                         packet, length - i - 1, count);
++            return;
++          }
++          const uint32_t base = packet & 0x7FFF;
++          const uint32_t* data = words + i + 1;
++          if (packet & 0x8000) {  // all to one register
++            for (uint32_t k = 0; k < count; ++k) FastWriteRegister(base, rex::byte_swap(data[k]));
++          } else if (base >= 0x4000 && base + count <= 0x4928) {  // constants: stored in one pass
++            WriteRegistersFromMem(base, const_cast<uint32_t*>(data), count);
++          } else {
++            for (uint32_t k = 0; k < count; ++k) FastWriteRegister(base + k, rex::byte_swap(data[k]));
++          }
++          i += 1 + count;
++          break;
++        }
++        case 1:
++          if (length - i - 1 < 2) {
++            REXLOG_ERROR("gfx native: PM4 type-1 packet {:08X} runs past its indirect buffer", packet);
++            return;
++          }
++          FastWriteRegister(packet & 0x7FF, rex::byte_swap(words[i + 1]));
++          FastWriteRegister((packet >> 11) & 0x7FF, rex::byte_swap(words[i + 2]));
++          i += 3;
++          break;
++        case 2:  // padding
++          ++i;
++          break;
++        default: {
++          if (packet == 0xCDCDCDCD) REXLOG_WARN("GPU packet is CDCDCDCD - probably read uninitialized memory!");
++          reader.set_read_offset(size_t(i + 1) * sizeof(uint32_t));
++          if (!ExecutePacketType3(&reader, packet)) {
++            REXLOG_ERROR("**** INDIRECT RINGBUFFER: Failed to execute packet.");
++            return;
++          }
++          // The reader wraps to 0 at the buffer's end.
++          const uint32_t next = reader.read_offset() ? uint32_t(reader.read_offset() / sizeof(uint32_t)) : length;
++          if (next <= i) return;  // can't happen: a type-3 packet is at least its header
++          i = next;
++          break;
++        }
++      }
++    }
++  }
++
+   bool IssueDraw(xe::PrimitiveType prim_type, uint32_t index_count, IndexBufferInfo* index_buffer_info,
+                  bool major_mode_explicit) override {
+     if (!renderer_) return false;

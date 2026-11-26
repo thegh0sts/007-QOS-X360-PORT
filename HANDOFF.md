@@ -411,7 +411,30 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       hitch lines and the 10M-request line count memo hits (54% of requests). Profiled: tracker 0.26-0.33 us/draw
       (7,500 draws: 2.2 ms vs 3.1), heavy stretch 0.38-0.52 vs 0.45-0.65. Unprofiled: 1.22-1.43 us/draw in draws vs
       1.32-1.51 (same route, 21:00 run), heavy stretch 1.58-1.80 vs 1.70-1.90; ~0.5-1 ms a busy frame.
-      Next (user, 21:10): PM4 parsing on its own thread; first a BOTS_DRAW_PROFILE=1 run to size it today.
+      **PM4 packet profile (26 Nov 22:20, SDK 0030-packet-profile + native 0105-cp-packet-profile, own30; built,
+      qos_194):** per-packet-type CP time (exclusive), ~7,600 draws: 3.7 ms total incl. ~0.5 ms of its own clock
+      reads: INDIRECT_BUFFER 0.9 (= header reads/dispatch of ~60k packets a frame, attributed to the parent IB),
+      type-0 registers 0.8 (32k packets, 203k dwords), WAIT_REG_MEM 0.7 (140 a frame: waiting on the game, a
+      thread can't help), IM_LOAD 0.37 (0.21 shader loads), type-2 padding 0.26 (29k packets: ~all profiler cost),
+      DRAW_INDX 0.12, SET_CONSTANT 0.1, LOAD_ALU_CONSTANT 0.09. So ~2.2 ms is movable parsing, half of it per-packet
+      overhead; a parsing thread would also stall at ~200 guest writes a frame. Decision (user, 22:28): fast path
+      first, thread maybe later (~1 ms more at best).
+      **Native 0106-pm4-fast-path (works, 27 Nov 07:08-07:25, qos_195 on / qos_196 off, same route):** NativeCommandProcessor runs
+      indirect buffers with its own loop (headers read straight, type-2 skipped, type-0/1 writes to registers with no
+      side effects stored directly: all but scratch 0-7, COHER_STATUS_HOST, DC_LUT_RW_INDEX/SEQ_COLOR/PWL_DATA/
+      30_COLOR and the hybrid marker 0x30; type-3 via ExecutePacketType3 on a RingBuffer positioned at the packet).
+      BOTS_GFX_FAST_PM4=0 off; packet profile now needs BOTS_CP_PACKETS=1 too (and runs the SDK loop). Test: A/B
+      BOTS_DRAW_PROFILE=1 with BOTS_GFX_FAST_PM4 unset vs =0 at the heavy spot; compare "command buffers" minus
+      IssueDraw and shader loads in the CP thread line. Result: CP time outside draws 2.69 -> 2.15-2.22 ms at ~7,200
+      draws, 2.0 -> 1.66 at ~4,100 (0.35-0.5 ms a frame, ~18%; less than the ~1 ms hoped). No glitches.
+      **Explosions (user, 27 Nov 07:18):** FPS drops at an explosion: 5,400 draws, ~560-580 render passes (210-350
+      around it), 1,275 barriers, ~600 uploads in place, tracker 3.1 ms, 2.2 us/draw, 221 of 600 frames > 20 ms;
+      same in both runs. Particle vertices written into pages earlier draws of the submission already read, so
+      hoisting can't move them. Next: a diagnostic logging in-place uploads (address, size, which part of the page
+      was read) to choose between finer read tracking and checking the read bytes are unchanged. Note: manual runs
+      had BOTS_GFX_RECORD_THREAD unset ("recorder 0 packets"); the launcher sets 1: set it in test runs.
+      Committed 27 Nov.
+      Earlier next (user, 21:10): PM4 parsing on its own thread (sized at 22:20, see above).
       Earlier order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
       its render pass, so uploads stop splitting passes; ~300 passes a frame now), then copying uploads on a worker
       thread (needs exact copy timing, or the 24 Nov zero-copy glitch comes back), then the command stream (PM4)

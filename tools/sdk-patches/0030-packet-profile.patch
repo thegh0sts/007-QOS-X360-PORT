@@ -1,0 +1,86 @@
+# Per-packet timing for profiling (off unless a backend sets packet_profile_): CommandProcessor::ExecutePacket adds
+# each packet's time (the CPU's time-stamp counter on x86; exclusive, so an indirect buffer's packets count as their
+# own), count and dwords to packet_stats_[type-3 opcode, or 128 + packet type for types 0-2]. Native patch 0105 logs
+# it with BOTS_DRAW_PROFILE=1, to size the command-processor work outside the draws before moving it to a thread.
+ include/rex/graphics/command_processor.h | 12 ++++++++
+ src/graphics/command_processor.cpp       | 37 ++++++++++++++++++++++++
+ 2 files changed, 49 insertions(+)
+
+diff --git a/include/rex/graphics/command_processor.h b/include/rex/graphics/command_processor.h
+index cc739c0..1b1836a 100644
+--- a/include/rex/graphics/command_processor.h
++++ b/include/rex/graphics/command_processor.h
+@@ -193,6 +193,18 @@ class CommandProcessor {
+   // Virtual so a backend can tell indirect-buffer packets from primary-ring ones.
+   virtual void ExecuteIndirectBuffer(uint32_t ptr, uint32_t length);
+   bool ExecutePacket(memory::RingBuffer* reader);
++  bool ExecutePacketOfType(memory::RingBuffer* reader, uint32_t packet, uint32_t packet_type);
++  // own 0030: per-packet timing for profiling, off unless a backend sets packet_profile_. Slot = type-3 opcode
++  // (0-127), or 128 + packet type for types 0-2. Ticks are exclusive (an INDIRECT_BUFFER's packets count as
++  // their own), in PacketProfileTicks() units (the CPU's time-stamp counter on x86).
++  struct PacketStats {
++    uint64_t ticks = 0, count = 0, dwords = 0;
++  };
++  static constexpr uint32_t kPacketStatSlots = 128 + 3;
++  bool packet_profile_ = false;
++  PacketStats packet_stats_[kPacketStatSlots] = {};
++  uint64_t packet_child_ticks_ = 0;
++  static uint64_t PacketProfileTicks();
+   bool ExecutePacketType0(memory::RingBuffer* reader, uint32_t packet);
+   bool ExecutePacketType1(memory::RingBuffer* reader, uint32_t packet);
+   bool ExecutePacketType2(memory::RingBuffer* reader, uint32_t packet);
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index 93a6f6d..d34a460 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -9,6 +9,13 @@
+  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
+  */
+ 
++#include <algorithm>
++#include <chrono>
++#if defined(_M_X64)
++#include <intrin.h>
++#elif defined(__x86_64__)
++#include <x86intrin.h>
++#endif
+ #include <algorithm>
+ #include <vector>
+ #include <chrono>
+@@ -704,6 +711,36 @@ bool CommandProcessor::ExecutePacket(memory::RingBuffer* reader) {
+     REXGPU_WARN("GPU packet is CDCDCDCD - probably read uninitialized memory!");
+   }
+ 
++  if (packet_profile_) [[unlikely]] {  // own 0030
++    const uint32_t slot = packet_type == 3 ? (packet >> 8) & 0x7F : 128 + packet_type;
++    const uint32_t dwords = packet_type == 1 ? 2 : packet_type == 2 ? 0 : ((packet >> 16) & 0x3FFF) + 1;
++    const uint64_t outer = packet_child_ticks_;
++    packet_child_ticks_ = 0;
++    const uint64_t start = PacketProfileTicks();
++    const bool result = ExecutePacketOfType(reader, packet, packet_type);
++    const uint64_t inclusive = PacketProfileTicks() - start;
++    PacketStats& stats = packet_stats_[slot];
++    stats.ticks += inclusive - std::min(inclusive, packet_child_ticks_);
++    ++stats.count;
++    stats.dwords += dwords;
++    packet_child_ticks_ = outer + inclusive;
++    return result;
++  }
++  return ExecutePacketOfType(reader, packet, packet_type);
++}
++
++uint64_t CommandProcessor::PacketProfileTicks() {
++#if defined(_M_X64) || defined(__x86_64__)
++  return __rdtsc();
++#else
++  return uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
++                      std::chrono::steady_clock::now().time_since_epoch())
++                      .count());
++#endif
++}
++
++bool CommandProcessor::ExecutePacketOfType(memory::RingBuffer* reader, uint32_t packet,
++                                           uint32_t packet_type) {
+   switch (packet_type) {
+     case 0x00:
+       return ExecutePacketType0(reader, packet);
