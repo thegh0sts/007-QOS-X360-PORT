@@ -1,0 +1,257 @@
+# Upload hoisting (26 Nov): a guest-memory upload that no GPU work recorded so far in the submission reads goes into a
+# second command buffer submitted before the main one, instead of ending the current render pass and adding two
+# barriers. In busy scenes ~235 uploads a frame (vertex data the game rewrites each frame) split the passes (~1,460
+# render passes, 8.5 ms of GPU upload time). Reads are tracked per 4 KB page from MemorySync::Request. Per-frame log
+# line: "uploads moved ahead, in place". BOTS_GFX_HOIST_UPLOADS=0 turns it off (A/B).
+ src/gfx/native.cpp         |  8 +++--
+ src/gfx/vk/memory_sync.cpp | 10 ++++--
+ src/gfx/vk/renderer.cpp    | 90 ++++++++++++++++++++++++++++++++++++++++++++--
+ src/gfx/vk/renderer.h      | 17 +++++++++
+ 4 files changed, 119 insertions(+), 6 deletions(-)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 0407870..4fe0df5 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -198,13 +198,15 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         REXLOG_INFO(
+             "gfx native: per frame over {} frames: {:.2f} ms wall, {:.2f} ms in draws, {:.2f} ms textures, {:.2f} ms "
+             "GPU wait, {:.1f} flushes, {:.0f} draws, {:.1f} resolves, {:.1f} render passes, {:.1f} transfers, {:.1f} barriers, "
+-            "{:.1f} draws waiting on shaders",
++            "{:.1f} draws waiting on shaders, {:.1f} uploads moved ahead, {:.1f} in place",
+             frames_ - last_.frames,
+             std::chrono::duration<double, std::milli>(now - last_.time).count() / n, ms(st.draw_us, last_.draw_us),
+             ms(st.texture_us, last_.texture_us), ms(st.wait_us, last_.wait_us), double(st.flushes - last_.flushes) / n,
+             double(st.draws - last_.draws) / n, double(st.resolves - last_.resolves) / n,
+             double(st.render_passes - last_.render_passes) / n, double(st.transfers - last_.transfers) / n,
+-            double(st.barriers - last_.barriers) / n, double(st.pending_draws - last_.pending_draws) / n);
++            double(st.barriers - last_.barriers) / n, double(st.pending_draws - last_.pending_draws) / n,
++            double(st.uploads_hoisted - last_.uploads_hoisted) / n,
++            double(st.uploads_in_place - last_.uploads_in_place) / n);
+         if (renderer_->draw_profile()) {
+           std::string phases;
+           for (size_t i = 0; i < std::size(st.draw_phase_ns); ++i) {
+@@ -288,6 +290,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+       last_.texture_memo_hits = st.texture_memo_hits, last_.index_heap_requests = st.index_heap_requests;
+       last_.sampler_memo_hits = st.sampler_memo_hits, last_.set_binds_skipped = st.set_binds_skipped;
+       last_.invalidations = st.invalidations;
++      last_.uploads_hoisted = st.uploads_hoisted, last_.uploads_in_place = st.uploads_in_place;
+       last_.index_bytes_converted = st.index_bytes_converted, last_.index_expanded = st.index_expanded;
+       last_.texture_loads = st.texture_loads, last_.texture_loads_evicted = st.texture_loads_evicted;
+       last_.texture_reloads = st.texture_reloads, last_.texture_evictions = st.texture_evictions;
+@@ -1169,6 +1172,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     uint64_t texture_loads = 0, texture_loads_evicted = 0, texture_reloads = 0, texture_evictions = 0;
+     uint64_t texture_reloads_skipped = 0;
+     uint64_t texture_levels_split = 0;  // qos (0099)
++    uint64_t uploads_hoisted = 0, uploads_in_place = 0;  // qos (0102)
+   } last_;
+   // Frame-time diagnostics (issue #12): the interval between swaps on this thread, what each slow one did (a "gfx
+   // hitch" line, at most kHitchLines per stats interval), and a histogram per interval. BOTS_HITCH_MS sets the
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index e9ea9ca..8e8f6c2 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -54,14 +54,20 @@ bool MemorySync::Request(uint32_t start, uint32_t length) {
+   if (++requests_ % 10000000 == 0) {
+     REXLOG_INFO("gfx memory sync: {} requests, {} took the lock, {} of those uploaded", requests_, locked_, uploaded_);
+   }
+-  if (all_valid) return true;
++  if (all_valid) {
++    renderer_.NoteSharedRead(start, length);  // qos (patch 0102)
++    return true;
++  }
+   ++locked_;
+   uploading_ = false;
+   // Set before the SDK validates the pages: an invalidation from here on clears the bits again.
+   SetValidBits(page_first, page_last, true);
+   const bool ok = RequestRange(start, length);
+   uploaded_ += uploading_;
+-  if (ok) return true;
++  if (ok) {
++    renderer_.NoteSharedRead(start, length);  // qos (patch 0102): after its uploads, which may go ahead of it
++    return true;
++  }
+   SetValidBits(page_first, page_last, false);
+   return false;
+ }
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index 08e61db..70317a6 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -218,7 +218,22 @@ Renderer::Renderer(const rex::ui::vulkan::VulkanDevice* device, PhysicalMemory m
+       Fail("vkAllocateCommandBuffers failed", r);
+       return;
+     }
++    // qos (patch 0102): the hoisted uploads' command buffer, from a pool of its own.
++    if (vk_.vkCreateCommandPool(device_->device(), &pool_info, nullptr, &submission.pre_pool) != VK_SUCCESS) {
++      Fail("couldn't create a command pool");
++      return;
++    }
++    const VkCommandBufferAllocateInfo pre_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr,
++                                               submission.pre_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1};
++    if (const VkResult r = vk_.vkAllocateCommandBuffers(device_->device(), &pre_info, &submission.pre_cmd);
++        r != VK_SUCCESS) {
++      Fail("vkAllocateCommandBuffers failed", r);
++      return;
++    }
+   }
++  if (const char* v = std::getenv("BOTS_GFX_HOIST_UPLOADS"); v && *v == '0') hoist_uploads_ = false;
++  page_read_stamp_.assign(size_t(512) << 20 >> 12, 0);  // the shared-memory buffer (kSharedMemorySize) in 4 KB pages
++  REXLOG_INFO("gfx native: upload hoisting {}", hoist_uploads_ ? "on" : "off (BOTS_GFX_HOIST_UPLOADS=0)");
+   // Intel's Windows driver (seen on Gen9, UHD 620, 31.0.101.2135) crashes in vkCmdBeginRendering when a pass
+   // without a depth attachment follows one with depth in the same command buffer. There every pass gets one: a
+   // scratch depth image that is never loaded or stored. BOTS_GFX_DUMMY_DEPTH=0/1 overrides.
+@@ -480,6 +495,7 @@ void Renderer::WaitSubmission(Submission& submission) {
+   for (Image& image : submission.retired) DestroyImage(image);
+   submission.retired.clear();
+   vk_.vkResetCommandPool(device_->device(), submission.pool, 0);
++  if (submission.pre_pool) vk_.vkResetCommandPool(device_->device(), submission.pre_pool, 0);
+   vk_.vkResetDescriptorPool(device_->device(), submission.transient_pool, 0);
+   submission.pending = false;
+ }
+@@ -784,8 +800,58 @@ void Renderer::DropGuestTexture(GuestTexture& texture) {
+   Retire(texture.image);
+ }
+ 
++void Renderer::NoteSharedRead(uint32_t start, uint32_t length) {
++  if (!hoist_uploads_ || !length) return;
++  const uint64_t end = std::min<uint64_t>(uint64_t(start) + length, uint64_t(page_read_stamp_.size()) << 12);
++  for (uint64_t page = start >> 12; page < (end + 4095) >> 12; ++page) page_read_stamp_[page] = page_stamp_;
++}
++
++bool Renderer::ReadThisSubmission(uint32_t start, uint32_t length) const {
++  const uint64_t end = uint64_t(start) + length;
++  if (end > uint64_t(page_read_stamp_.size()) << 12) return true;
++  for (uint64_t page = start >> 12; page < (end + 4095) >> 12; ++page) {
++    if (page_read_stamp_[page] == page_stamp_) return true;
++  }
++  return false;
++}
++
++// qos (patch 0102): an upload no work recorded so far in this submission reads (or could read) doesn't need to sit
++// where it was asked for: the copy goes into the submission's pre_cmd, which runs before everything recorded in cmd.
++// So the render pass isn't ended for it and no barriers are added there (one barrier ends pre_cmd). Before, every
++// upload split the pass it came in (~1,460 passes a frame in busy scenes, most of them for vertex data the game
++// rewrites each frame). False: not possible here (the caller uploads in place).
++bool Renderer::HoistUpload(uint32_t start, uint32_t length) {
++  if (!hoist_uploads_ || ReadThisSubmission(start, length)) return false;
++  // Ring space for all of it first: a full ring means a flush, which the in-place path handles.
++  if (ring_used_ + length + 16 > ring_.size || length > ring_.size / 4) return false;
++  if (!recording_) BeginCommands();  // Flush submits pre_cmd only with cmd
++  Submission& s = submissions_[current_];
++  if (!s.pre_recording) {
++    const VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr,
++                                         VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
++    vk_.vkBeginCommandBuffer(s.pre_cmd, &begin);
++    // Earlier submissions may still read what these copies overwrite.
++    const VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr,
++                                  VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT};
++    vk_.vkCmdPipelineBarrier(s.pre_cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1,
++                             &barrier, 0, nullptr, 0, nullptr);
++    s.pre_recording = true;
++  }
++  VkDeviceSize offset;
++  uint8_t* staging = Upload(length, 16, offset);
++  if (!staging) return false;
++  std::memcpy(staging, memory_(start), length);
++  const VkBufferCopy region{offset, start, length};
++  vk_.vkCmdCopyBuffer(s.pre_cmd, ring_.buffer, shared_memory_.buffer, 1, &region);
++  stats_.uploaded_bytes += length;
++  ++stats_.uploads_hoisted;
++  return true;
++}
++
+ bool Renderer::UploadGuestMemory(uint32_t start, uint32_t length) {
+   if (zero_copy_) return true;  // the buffer is guest memory itself
++  if (HoistUpload(start, length)) return true;
++  ++stats_.uploads_in_place;
+   BeginCommands(kGpuUpload);
+   EndRendering("upload");
+   Barrier();
+@@ -890,6 +956,7 @@ Renderer::~Renderer() {
+   for (Submission& submission : submissions_) {
+     if (submission.fence) vk_.vkDestroyFence(dev, submission.fence, nullptr);
+     if (submission.pool) vk_.vkDestroyCommandPool(dev, submission.pool, nullptr);
++    if (submission.pre_pool) vk_.vkDestroyCommandPool(dev, submission.pre_pool, nullptr);
+     if (submission.timing_pool) vk_.vkDestroyQueryPool(dev, submission.timing_pool, nullptr);
+     if (submission.occlusion_pool) vk_.vkDestroyQueryPool(dev, submission.occlusion_pool, nullptr);
+   }
+@@ -1055,8 +1122,27 @@ void Renderer::Flush() {
+   vk_.vkEndCommandBuffer(Cmd());
+   recording_ = false;
+   VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+-  submit.commandBufferCount = 1;
+-  submit.pCommandBuffers = &cmd_raw_;
++  // qos (patch 0102): the hoisted uploads first, made visible to everything after them.
++  Submission& pre = submissions_[current_];
++  VkCommandBuffer buffers[2] = {pre.pre_cmd, cmd_raw_};
++  if (pre.pre_recording) {
++    const VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_TRANSFER_WRITE_BIT,
++                                  VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT};
++    vk_.vkCmdPipelineBarrier(pre.pre_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1,
++                             &barrier, 0, nullptr, 0, nullptr);
++    vk_.vkEndCommandBuffer(pre.pre_cmd);
++    pre.pre_recording = false;
++    submit.commandBufferCount = 2;
++    submit.pCommandBuffers = buffers;
++  } else {
++    submit.commandBufferCount = 1;
++    submit.pCommandBuffers = &cmd_raw_;
++  }
++  // The next submission starts with no pages read.
++  if (++page_stamp_ == 0) {
++    std::fill(page_read_stamp_.begin(), page_read_stamp_.end(), 0);
++    page_stamp_ = 1;
++  }
+   {
+     auto queue = device_->AcquireQueue(device_->queue_family_graphics_compute(), 0);
+     vk_.vkQueueSubmit(queue.queue(), 1, &submit, fence_);
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index dff58f2..63e48f7 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -158,6 +158,9 @@ class Renderer : public Pm4Sink {
+   uint64_t occlusion_hidden() const { return occlusion_hidden_.load(std::memory_order_relaxed); }
+   // For the tracker: records a copy of guest physical [start, start + length) into the shared-memory buffer.
+   bool UploadGuestMemory(uint32_t start, uint32_t length);
++  // qos (patch 0102): [start, start + length) of the shared-memory buffer is read by GPU work recorded from now on
++  // in this submission (MemorySync::Request), so an upload there can't be moved ahead of it (UploadGuestMemory).
++  void NoteSharedRead(uint32_t start, uint32_t length);
+   // Live: after each guest frame's Flush. Evicts guest textures no draw used for a while.
+   void EndFrame();
+   // Native present: the front buffer resolved to `address` (else the latest resolve), through the 256-entry
+@@ -188,6 +191,7 @@ class Renderer : public Pm4Sink {
+     uint64_t sampler_memo_hits = 0, set_binds_skipped = 0;  // qos (0092)
+     uint64_t texture_reloads_skipped = 0;  // qos (0095): dirty textures kept, their bytes unchanged
+     uint64_t texture_levels_split = 0;     // qos (0099): texture levels copied half on the texture worker
++    uint64_t uploads_hoisted = 0, uploads_in_place = 0;  // qos (0102): guest-memory uploads moved ahead / not
+     uint64_t index_bytes_converted = 0, index_expanded = 0;  // qos (0094): DMA index bytes converted; draws whose indices were rebuilt on the CPU (quads, fans, other)
+     uint64_t pending_draws = 0;  // live: skipped while their shaders or pipeline were still being made
+     // Live: draws dropped because their pipeline failed to build (the driver refused it; every frame it's drawn).
+@@ -708,6 +712,11 @@ class Renderer : public Pm4Sink {
+     std::vector<OcclusionQuery> occlusion;
+     bool resolving = false;  // queued for the resolver (occlusion_mutex_)
+     uint64_t serial = 0;     // stats_.flushes once submitted
++    // qos (patch 0102): uploads moved ahead of the submission's work, in a command buffer submitted before cmd. Its
++    // own pool: it's recorded on this thread while the recorder (0093) records cmd on its own.
++    VkCommandPool pre_pool = VK_NULL_HANDLE;
++    VkCommandBuffer pre_cmd = VK_NULL_HANDLE;
++    bool pre_recording = false;
+   };
+   // More slots than frames in flight: occlusion queries add a submission mid-frame (the guest waits on them), and
+   // with only 3 slots that one waited for a free slot. EndFrame keeps the frames in flight at kFramesInFlight.
+@@ -745,6 +754,14 @@ class Renderer : public Pm4Sink {
+   }
+   VkFence fence_ = VK_NULL_HANDLE;
+   bool recording_ = false;
++  // qos (patch 0102): upload hoisting. An upload of guest memory that no GPU work recorded so far in this submission
++  // reads goes into the submission's pre_cmd instead of ending the render pass (BOTS_GFX_HOIST_UPLOADS=0 turns it
++  // off). page_read_stamp_[page] == page_stamp_: the 4 KB page was read in this submission.
++  bool hoist_uploads_ = true;
++  std::vector<uint32_t> page_read_stamp_;
++  uint32_t page_stamp_ = 1;
++  bool ReadThisSubmission(uint32_t start, uint32_t length) const;
++  bool HoistUpload(uint32_t start, uint32_t length);
+ 
+   std::map<SurfaceKey, std::unique_ptr<Image>> surfaces_;
+   std::map<TextureKey, std::unique_ptr<Image>> textures_;

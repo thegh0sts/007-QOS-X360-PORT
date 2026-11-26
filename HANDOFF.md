@@ -378,7 +378,17 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
      one PC, a normal home LAN or ZeroTier-style virtual LANs: the field's note says so. Then update docs/multiplayer.md
      (it says the launcher doesn't offer it yet).
   9. ~~Launcher: repair a missing or broken desktop shortcut at start~~ done (user, 25 Nov 23:34: fixed by 0.2.1).
-  10. Performance, in this order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
+  10. **Upload hoisting done 26 Nov 19:35 (native patch 0102-upload-hoisting, works, no glitches):** an upload no
+      GPU work recorded so far in the submission reads (per-4 KB-page stamps set in MemorySync::Request) goes into a
+      second command buffer (own pool per submission: the recorder thread records the main one) submitted before the
+      main one; barrier at its start and end. BOTS_GFX_HOIST_UPLOADS=0 off. A/B at the same busy spot, render scale
+      2, recorder on: ~5,000 draws 296-365 passes / 600-740 barriers (on) vs 702 / 1,440 (off); heaviest ~7,300 draws
+      1,140 vs 1,253 passes, 17.7 vs 18.2 ms. GPU wait 0.00 ms in both: the GPU isn't the limit on the user's 4080, the
+      renderer thread is (13-14.5 ms in draws at 7,300+). 40-65% of uploads move ahead (80-95% in light scenes); the
+      rest are pages already read earlier in the submission. Next (user, 19:52): upload copies on a worker thread (CPU
+      half of the uploads, ~1-1.5 ms), then PM4 parsing on its own thread (~2.4 ms), then per-draw trims (setup from
+      changed registers, constants by changed ranges, descriptor reuse, tracker skip).
+      Earlier order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
       its render pass, so uploads stop splitting passes; ~300 passes a frame now), then copying uploads on a worker
       thread (needs exact copy timing, or the 24 Nov zero-copy glitch comes back), then the command stream (PM4)
       parsed on its own thread (up to ~2.4 ms), then faster level loads (native zlib stall) and cheaper texture
