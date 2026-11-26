@@ -348,7 +348,15 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
      0 = always LOD 0 (the devs' minimap script uses r_lodscale 0). --lod_scale 0-1; launcher Graphics "Detail
      distance" Original 1 / Far (2x) 0.5 / Very far (4x) 0.25 / Maximum 0. r_lodBias untouched (takedown camera
      uses it). To check: frame times and draw counts at a big outdoor spot per setting.
-  5. Shadow quality option (sm_sunSampleSizeNear and sun shadow distance; sm_maxLights; test for flicker).
+  5. ~~Shadow quality option~~ written 26 Nov 18:40, not tested: src/shadows.cpp (both programs). sm_sunSampleSizeNear
+     (float, registered 0.381875, range 0.0625-32; SP ptr 0x84055E5C, MP 0x8518C0FC) = world units per sun shadow
+     texel: bigger reaches further, coarser. Levels set it themselves (whites_estate 0.25/0.569/1.208, eco_hotel
+     0.25/0.7, shantytown 0.38; sub_8223F750 resets it at level start), so --sun_shadow_range (1-4) multiplies the
+     game's last value each frame (a value not written by us = the game's). Launcher Graphics "Sun shadow range"
+     Original / Longer (2x) / Longest (4x). Test switch --sun_shadow_fast=false holds sm_fastSunShadow (SP 0x84055D98,
+     MP 0x8518C038) at 0, effect unknown. sm_maxLights is already 4 = its max. The native renderer draws shadow maps
+     at the render scale already; shadow maps above the render scale would need a renderer patch. Dvar registration
+     reader for these: cloud /home/claude/xex/dvars.py NAME... (MP=1 for multiplayer).
   6. Weapon keeps its own FOV at higher --fov (view model drawn with a 65 degree projection: hook in the view setup).
   7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
      bounds), see the letterbox notes above.
