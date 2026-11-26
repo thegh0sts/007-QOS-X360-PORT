@@ -49,6 +49,9 @@ void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // dof.cpp: depth of field 
 namespace qos::lod {
 void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // lod.cpp: detail distance (--lod_scale)
 }  // namespace qos::lod
+namespace qos::shadows {
+void OnFrame(uint8_t* base, uint32_t sample_size_pointer, uint32_t fast_pointer);  // shadows.cpp: sun shadow range
+}  // namespace qos::shadows
 namespace qos::takedown_keys {
 void OnFrame();
 }  // namespace qos::takedown_keys
@@ -100,6 +103,7 @@ extern "C" REX_FUNC(sub_8229B7C0) {
   qos::letterbox::OnFrame(base);
   qos::dof::OnFrame(base, 0x84055E40);  // r_dof_enable
   qos::lod::OnFrame(base, 0x84055C78);  // r_lodScale
+  qos::shadows::OnFrame(base, 0x84055E5C, 0x84055D98);  // sm_sunSampleSizeNear, sm_fastSunShadow
   qos::takedown_keys::OnFrame();
   qos::menu_keys::OnFrame(base);
   __imp__sub_8229B7C0(ctx, base);

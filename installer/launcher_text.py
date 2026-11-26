@@ -1884,6 +1884,19 @@ TEXT = {
         'Más lejos cuesta fotogramas en zonas grandes y concurridas; Máximo, el que más.',
         'Fino a che distanza persone, piante e oggetti mantengono tutti i dettagli, così compaiono meno di colpo. '
         'Più lontano costa frame rate nelle aree grandi e affollate; Massimo più di tutti.'),
+    'Sun shadow range': ('Reichweite der Sonnenschatten', 'Portée des ombres du soleil', 'Alcance de las sombras del sol',
+                         'Portata delle ombre del sole'),
+    'Longer (2x)': ('Weiter (2x)', 'Plus loin (2x)', 'Más lejos (2x)', 'Più lontano (2x)'),
+    'Longest (4x)': ('Am weitesten (4x)', 'Le plus loin (4x)', 'Lo más lejos (4x)', 'Il più lontano (4x)'),
+    'How far from you outdoor shadows are drawn. Longer makes them softer unless the render resolution is raised: Longer looks as sharp as the original with 2560×1440; Longest stays a little softer even with 3840×2160.': (
+        'Wie weit entfernt Schatten im Freien gezeichnet werden. Weiter macht sie weicher, außer die Renderauflösung wird '
+        'erhöht: Weiter sieht mit 2560×1440 so scharf aus wie das Original; Am weitesten bleibt selbst mit 3840×2160 etwas weicher.',
+        'Jusqu\'à quelle distance les ombres extérieures sont dessinées. Plus loin les rend plus douces, sauf si la '
+        'résolution de rendu est augmentée : Plus loin est aussi net que l\'original en 2560×1440 ; Le plus loin reste un peu plus doux même en 3840×2160.',
+        'Hasta qué distancia se dibujan las sombras en exteriores. Más lejos las suaviza, salvo que se suba la '
+        'resolución de renderizado: Más lejos se ve tan nítido como el original con 2560×1440; Lo más lejos sigue algo más suave incluso con 3840×2160.',
+        'Fino a che distanza vengono disegnate le ombre all\'aperto. Più lontano le rende più morbide, a meno che la '
+        'risoluzione di rendering non venga alzata: Più lontano è nitido come l\'originale con 2560×1440; Il più lontano resta un po\' più morbido anche con 3840×2160.'),
     'Hit markers': ('Treffermarkierungen', 'Marqueurs de touche', 'Marcadores de impacto', 'Indicatori di colpo'),
     'The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.': (
         'Die Markierung am Fadenkreuz, wenn ein Schuss einen Gegner trifft. Im Mehrspieler bleibt der Ton.',

@@ -24,6 +24,9 @@ void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // ../src/dof.cpp: depth of
 namespace qos::lod {
 void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // ../src/lod.cpp: detail distance (--lod_scale)
 }  // namespace qos::lod
+namespace qos::shadows {
+void OnFrame(uint8_t* base, uint32_t sample_size_pointer, uint32_t fast_pointer);  // ../src/shadows.cpp
+}  // namespace qos::shadows
 
 namespace qos::pad_prompts {
 void Update();  // ../src/pad_prompts.cpp: which button pictures the renderer shows
@@ -147,6 +150,7 @@ extern "C" REX_FUNC(sub_8225E8B8) {
   qos::pad_prompts::Update();
   qos::dof::OnFrame(base, 0x8518C0E0);  // r_dof_enable
   qos::lod::OnFrame(base, 0x8518BF18);  // r_lodScale
+  qos::shadows::OnFrame(base, 0x8518C0FC, 0x8518C038);  // sm_sunSampleSizeNear, sm_fastSunShadow
   qosmp::dlc::OnFrame(ctx, base);
   qosmp::relaunch::OnFrame(ctx, base);
   __imp__sub_8225E8B8(ctx, base);

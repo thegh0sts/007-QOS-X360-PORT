@@ -25,6 +25,7 @@ set(QOS_MP_SOURCES
     ${QOS_SP_DIR}/src/pad_prompts.cpp
     ${QOS_SP_DIR}/src/dof.cpp
     ${QOS_SP_DIR}/src/lod.cpp
+    ${QOS_SP_DIR}/src/shadows.cpp
     src/mouse_look.cpp
     src/menu_keys.cpp
     src/hit_markers.cpp

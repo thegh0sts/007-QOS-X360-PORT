@@ -124,6 +124,9 @@ RENDER_THREADS = ["1 (original)", "2", "3"]
 # Detail distance (src/lod.cpp: r_lodScale): how far away models keep their detailed versions.
 DETAIL_DISTANCE = ["Original", "Far (2x)", "Very far (4x)", "Maximum (always detailed)"]
 LOD_SCALE = {DETAIL_DISTANCE[0]: 1.0, DETAIL_DISTANCE[1]: 0.5, DETAIL_DISTANCE[2]: 0.25, DETAIL_DISTANCE[3]: 0.0}
+# Sun shadow range (src/shadows.cpp: a multiplier on the levels' sm_sunSampleSizeNear).
+SHADOW_RANGE = ["Original", "Longer (2x)", "Longest (4x)"]
+SHADOW_RANGE_SCALE = {SHADOW_RANGE[0]: 1.0, SHADOW_RANGE[1]: 2.0, SHADOW_RANGE[2]: 4.0}
 OLD_PAD_PROMPTS = {"Keyboard only": "Keyboard and mouse", "Xbox only": "Xbox controller",
                    "PlayStation only": "PlayStation controller"}
 
@@ -169,6 +172,7 @@ DEFAULTS = {
     # The hit marker when a shot lands (src/hit_markers.cpp, mp/src/hit_markers.cpp).
     "hit_markers": True,
     "detail_distance": "Original",
+    "shadow_range": "Original",
 }
 
 
@@ -479,6 +483,9 @@ def game_args(s, screen=None):
     scale = LOD_SCALE.get(s.get("detail_distance"), 1.0)
     if scale != 1.0:
         args.append(f"--lod_scale={scale}")
+    shadow_range = SHADOW_RANGE_SCALE.get(s.get("shadow_range"), 1.0)
+    if shadow_range != 1.0:
+        args.append(f"--sun_shadow_range={shadow_range}")
     if int(s.get("brightness", 100)) != 100:
         args.append(f"--brightness={int(s['brightness']) / 100:.2f}")  # the native renderer's last pass
     effect = UPSCALING_EFFECT.get(s.get("upscaling"))
@@ -731,6 +738,10 @@ class SettingsView(tk.Frame):
         self._combo(box, 10, "detail_distance", "Detail distance", DETAIL_DISTANCE)
         note(box, 11, "How far away people, plants and objects keep their full detail, so less pops in. Further costs "
                       "frame rate in big, busy areas; Maximum the most.")
+        self._combo(box, 12, "shadow_range", "Sun shadow range", SHADOW_RANGE)
+        note(box, 13, "How far from you outdoor shadows are drawn. Longer makes them softer unless the render resolution "
+                      "is raised: Longer looks as sharp as the original with 2560×1440; Longest stays a little "
+                      "softer even with 3840×2160.")
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)

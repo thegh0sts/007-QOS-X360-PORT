@@ -24,6 +24,7 @@ set(QOS_SOURCES
     src/dof.cpp
     src/hit_markers.cpp
     src/lod.cpp
+    src/shadows.cpp
     src/menu_quit.cpp
     src/pad_prompts.cpp
     src/mouse_look.cpp
