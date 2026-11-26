@@ -23,8 +23,10 @@ set(QOS_MP_SOURCES
     ${QOS_SP_DIR}/src/crash_win.cpp
     ${QOS_SP_DIR}/src/kbm_binds.cpp
     ${QOS_SP_DIR}/src/pad_prompts.cpp
+    ${QOS_SP_DIR}/src/dof.cpp
     src/mouse_look.cpp
     src/menu_keys.cpp
+    src/hit_markers.cpp
 )
 
 if(WIN32)

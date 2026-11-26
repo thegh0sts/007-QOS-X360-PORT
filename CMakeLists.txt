@@ -21,6 +21,8 @@ set(QOS_SOURCES
     src/fps_unlock.cpp
     src/fov.cpp
     src/letterbox.cpp
+    src/dof.cpp
+    src/hit_markers.cpp
     src/menu_quit.cpp
     src/pad_prompts.cpp
     src/mouse_look.cpp
