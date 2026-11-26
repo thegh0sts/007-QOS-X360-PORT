@@ -121,6 +121,9 @@ KBM_MAP = [
 # 0093, BOTS_GFX_RECORD_THREAD), 3 = plus the texture worker (native patch 0099, BOTS_GFX_WORKER). Each includes the
 # ones before it.
 RENDER_THREADS = ["1 (original)", "2", "3"]
+# Detail distance (src/lod.cpp: r_lodScale): how far away models keep their detailed versions.
+DETAIL_DISTANCE = ["Original", "Far (2x)", "Very far (4x)", "Maximum (always detailed)"]
+LOD_SCALE = {DETAIL_DISTANCE[0]: 1.0, DETAIL_DISTANCE[1]: 0.5, DETAIL_DISTANCE[2]: 0.25, DETAIL_DISTANCE[3]: 0.0}
 OLD_PAD_PROMPTS = {"Keyboard only": "Keyboard and mouse", "Xbox only": "Xbox controller",
                    "PlayStation only": "PlayStation controller"}
 
@@ -165,6 +168,7 @@ DEFAULTS = {
     "depth_of_field": True,
     # The hit marker when a shot lands (src/hit_markers.cpp, mp/src/hit_markers.cpp).
     "hit_markers": True,
+    "detail_distance": "Original",
 }
 
 
@@ -472,6 +476,9 @@ def game_args(s, screen=None):
         args.append("--depth_of_field=false")
     if not s.get("hit_markers", True):
         args.append("--hit_markers=false")
+    scale = LOD_SCALE.get(s.get("detail_distance"), 1.0)
+    if scale != 1.0:
+        args.append(f"--lod_scale={scale}")
     if int(s.get("brightness", 100)) != 100:
         args.append(f"--brightness={int(s['brightness']) / 100:.2f}")  # the native renderer's last pass
     effect = UPSCALING_EFFECT.get(s.get("upscaling"))
@@ -721,6 +728,9 @@ class SettingsView(tk.Frame):
         note(box, 7, "The blur on distant or close things in cutscenes and when aiming. Off: everything stays sharp.")
         self._toggle(box, 8, "hit_markers", "Hit markers")
         note(box, 9, "The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.")
+        self._combo(box, 10, "detail_distance", "Detail distance", DETAIL_DISTANCE)
+        note(box, 11, "How far away people, plants and objects keep their full detail, so less pops in. Further costs "
+                      "frame rate in big, busy areas; Maximum the most.")
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)

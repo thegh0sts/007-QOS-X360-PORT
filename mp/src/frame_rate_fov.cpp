@@ -21,6 +21,9 @@ void OnFrame(PPCContext& ctx, uint8_t* base);  // dlc_content.cpp: loads the map
 namespace qos::dof {
 void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // ../src/dof.cpp: depth of field on or off (--depth_of_field)
 }  // namespace qos::dof
+namespace qos::lod {
+void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // ../src/lod.cpp: detail distance (--lod_scale)
+}  // namespace qos::lod
 
 namespace qos::pad_prompts {
 void Update();  // ../src/pad_prompts.cpp: which button pictures the renderer shows
@@ -143,6 +146,7 @@ extern "C" REX_FUNC(sub_8225E8B8) {
   qosmp::menu_keys::OnFrame(base);
   qos::pad_prompts::Update();
   qos::dof::OnFrame(base, 0x8518C0E0);  // r_dof_enable
+  qos::lod::OnFrame(base, 0x8518BF18);  // r_lodScale
   qosmp::dlc::OnFrame(ctx, base);
   qosmp::relaunch::OnFrame(ctx, base);
   __imp__sub_8225E8B8(ctx, base);

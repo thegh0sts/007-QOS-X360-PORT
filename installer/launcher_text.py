@@ -1869,6 +1869,21 @@ TEXT = {
         'Disattivato: le scene di gioco restano a schermo intero. I video mantengono le proprie bande.'),
     'Enabled': ('Aktiviert', 'Activé', 'Activado', 'Attivato'),
     'Disabled': ('Deaktiviert', 'Désactivé', 'Desactivado', 'Disattivato'),
+    'Detail distance': ('Detailentfernung', 'Distance des détails', 'Distancia de detalle', 'Distanza dei dettagli'),
+    'Original': ('Original', 'Original', 'Original', 'Originale'),
+    'Far (2x)': ('Weit (2x)', 'Loin (2x)', 'Lejos (2x)', 'Lontano (2x)'),
+    'Very far (4x)': ('Sehr weit (4x)', 'Très loin (4x)', 'Muy lejos (4x)', 'Molto lontano (4x)'),
+    'Maximum (always detailed)': ('Maximum (immer detailliert)', 'Maximum (toujours détaillé)',
+                                  'Máximo (siempre detallado)', 'Massimo (sempre dettagliato)'),
+    'How far away people, plants and objects keep their full detail, so less pops in. Further costs frame rate in big, busy areas; Maximum the most.': (
+        'Wie weit entfernt Personen, Pflanzen und Objekte ihre volle Detailstufe behalten, damit weniger auftaucht. '
+        'Weiter kostet Bildrate in großen, belebten Bereichen; Maximum am meisten.',
+        'Jusqu\'à quelle distance personnages, plantes et objets gardent tous leurs détails, pour moins d\'apparitions. '
+        'Plus loin coûte des images par seconde dans les grandes zones chargées ; Maximum le plus.',
+        'Hasta qué distancia personas, plantas y objetos mantienen todo su detalle, para que aparezcan menos de golpe. '
+        'Más lejos cuesta fotogramas en zonas grandes y concurridas; Máximo, el que más.',
+        'Fino a che distanza persone, piante e oggetti mantengono tutti i dettagli, così compaiono meno di colpo. '
+        'Più lontano costa frame rate nelle aree grandi e affollate; Massimo più di tutti.'),
     'Hit markers': ('Treffermarkierungen', 'Marqueurs de touche', 'Marcadores de impacto', 'Indicatori di colpo'),
     'The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.': (
         'Die Markierung am Fadenkreuz, wenn ein Schuss einen Gegner trifft. Im Mehrspieler bleibt der Ton.',
