@@ -357,7 +357,19 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
      MP 0x8518C038) at 0, effect unknown. sm_maxLights is already 4 = its max. The native renderer draws shadow maps
      at the render scale already; shadow maps above the render scale would need a renderer patch. Dvar registration
      reader for these: cloud /home/claude/xex/dvars.py NAME... (MP=1 for multiplayer).
-  6. Weapon keeps its own FOV at higher --fov (view model drawn with a 65 degree projection: hook in the view setup).
+  6. **Weapon keeps its own FOV: parked 26 Nov 19:15 (user), two tries failed, code removed.** Findings:
+     (a) the view angle comes from sub_82198A30 (cg_fov blended to the weapon's zoom while aiming; returns f1; may
+     update a smoothed float at 0x827A4A24); calling it a second time with cg_fov 65 gives the original angle fine.
+     (b) The render backend's projection for the CoD4 "depth hack" pass (source state + 4784 == 2, set by
+     sub_825993D0 from the sort key's 0x2 bit; matrices from sub_82599668 by index, 4 projection, 16 view-proj via
+     sub_82599490, 20 world-view-proj, 24 world; view copy at state + 3920, projection + 64): scaling it changed
+     nothing, and a run with the weapon on screen had no mode-2 requests at all (gun_fov_debug=3 squashing that pass
+     to a point left the gun visible). So 007 draws the gun in the normal pass with the world's matrices.
+     (c) cg_gun_x/y/z (SP ptrs 0x8266EF38/0x8266C6F4/0x8266EEE4, MP 0x82603810/0x825F04AC/0x82603754; read in
+     sub_821A87F8, CoD4's CG_AddViewWeapon) set to -6 and -20: no visible change, so 007 places its weapon elsewhere.
+     Next try, if ever: find 007's own weapon placement (which DObj is the view model; where its pose/bone matrices
+     are built) and squash it along the view direction by tan(W/2)/tan(G/2); or identify the gun's draws in a
+     renderer trace and work back from their constants.
   7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
      bounds), see the letterbox notes above.
   8. Launcher: an optional "Host addresses" field in the Multiplayer tab -> --netplay_peers (comma-separated), passed to
