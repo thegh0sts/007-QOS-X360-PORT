@@ -342,8 +342,12 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     gets "content" appended (DB_LoadXAssets hook). 0.2.1 has the bug: release 0.2.2 once it's confirmed.
   - **Testing note:** the launcher's Play runs the installed build (launcher.json), not the repo's; test new game code
     with the repo's qos.exe directly.
-  4. LOD distance option (Original / Far / Maximum: r_highLodDist..r_lowestLodDist, r_lodScale/r_lodBias); check
-     frame times in busy areas.
+  4. ~~LOD distance option~~ written 26 Nov 18:30, not tested: src/lod.cpp (both programs) writes r_lodScale every
+     frame (SP dvar ptr 0x84055C78, MP 0x8518BF18; registered 1, range 1-4, so written raw). The renderer
+     (SP sub_82563E30) picks LODs by distance * r_lodScale + r_lodBias, scaled by FOV: smaller = detailed further,
+     0 = always LOD 0 (the devs' minimap script uses r_lodscale 0). --lod_scale 0-1; launcher Graphics "Detail
+     distance" Original 1 / Far (2x) 0.5 / Very far (4x) 0.25 / Maximum 0. r_lodBias untouched (takedown camera
+     uses it). To check: frame times and draw counts at a big outdoor spot per setting.
   5. Shadow quality option (sm_sunSampleSizeNear and sun shadow distance; sm_maxLights; test for flicker).
   6. Weapon keeps its own FOV at higher --fov (view model drawn with a 65 degree projection: hook in the view setup).
   7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
