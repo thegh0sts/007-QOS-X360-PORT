@@ -28,7 +28,7 @@ from tkinter import filedialog, messagebox, ttk
 import launcher_text
 import xex_achievements
 from launcher_text import tr, tr_label
-from qos_installer import (ACCENT, APP_NAME, BG, DIM, FG, LAUNCHER_HOME, ON_ACCENT, TITLE_FONT, TITLE_TEXT,
+from qos_installer import (ACCENT, APP_NAME, BG, dropdown, DIM, FG, LAUNCHER_HOME, ON_ACCENT, TITLE_FONT, TITLE_TEXT,
                            InstallView, install_info_path, make_root, start_game)
 
 VERSION = "0.2.1"
@@ -40,7 +40,19 @@ SETTINGS_PATH = LAUNCHER_HOME / "settings.json"
 PANEL = "#1a1d21"
 ACCENT_HOVER = "#e0bd6a"
 
-TABS = ("Game files", "Display", "Graphics", "Controls", "Multiplayer", "Saves", "Achievements")
+TABS = ("Game files", "Display", "Graphics", "Controls", "Multiplayer", "Saves", "Achievements", "Credits")
+# The Credits tab: (name, what it gave the port, website or None). Names aren't translated; the texts are.
+CREDITS = [
+    ("ReXGlue SDK", "The recompiler and runtime that turn the Xbox 360 game into a PC program, built from the Xenia "
+                    "emulator.", "https://github.com/rexglue/rexglue-sdk"),
+    ("Skullburglar", "The native Vulkan renderer and SDK performance patches. BSD 3-Clause licence.",
+     "https://github.com/nlwstein/skullburglar"),
+    ("Xenia", "The Xbox 360 emulator the SDK's runtime comes from. Xenia Canary's game patch notes (by Sowa_95) "
+              "pointed to the frame limiter.", "https://xenia.jp"),
+    ("AMD FidelityFX", "FSR 1 upscaling and CAS sharpening.", "https://gpuopen.com"),
+    ("miniz", "Decompression for the game's files. MIT licence.", "https://github.com/richgel999/miniz"),
+    ("Launcher", "Adapted from this author's Eat Lead and The Bourne Conspiracy ports.", None),
+]
 # The game's languages (english\, french\ on the disc) -> XLanguage ids (--user_language).
 LANGUAGES = {"English": 1, "French": 4}
 
@@ -603,10 +615,43 @@ def link_button(parent, text, cmd):
                      activebackground=ACCENT_HOVER, activeforeground=ON_ACCENT, bd=0, padx=10, pady=3, cursor="hand2")
 
 
+def two_columns(box):
+    """A settings page's grid: names and notes in the left two thirds, the controls in the right third, left-aligned
+    so they line up (user, 27 Nov)."""
+    box.columnconfigure(0, weight=2, uniform="settings")
+    box.columnconfigure(1, weight=1, uniform="settings")
+
+
+def wrapping(label):
+    """Wrap the label's text at whatever width its grid cell gives it (the left column), so long lines go on to the
+    next line instead of widening the column."""
+    label.configure(anchor="w", justify="left", wraplength=470)
+    label.bind("<Configure>", lambda e: label.configure(wraplength=max(120, e.width - 2)))
+    return label
+
+
 def note(box, row, text):
-    """A small grey explanation under a setting."""
-    tk.Label(box, text=tr(text), font=("Segoe UI", 8), fg=DIM, bg=PANEL, anchor="w", justify="left", wraplength=640
-             ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(0, 4))
+    """A small grey explanation of a setting. Right after a setting (row - 1 is its row) it goes in the setting's own
+    cell under its name, so the name and the note share one grid row and the control sits centred beside both (user,
+    27 Nov); anywhere else it gets a row of its own in the left column."""
+    cell = getattr(box, "setting_cells", {}).get(row - 1)
+    label = wrapping(tk.Label(cell or box, text=tr(text), font=("Segoe UI", 8), fg=DIM, bg=PANEL))
+    if cell:
+        label.pack(fill="x", pady=(1, 0))
+    else:
+        label.grid(row=row, column=0, sticky="ew", pady=(0, 4), padx=(0, 16))
+
+
+def setting_name(box, row, text, pady=2):
+    """A setting's name in the left column, wrapped like the notes: in a cell of its own that its note joins."""
+    cell = tk.Frame(box, bg=PANEL)
+    cell.grid(row=row, column=0, sticky="ew", pady=(5, 5), padx=(0, 16))
+    if not hasattr(box, "setting_cells"):
+        box.setting_cells = {}
+    box.setting_cells[row] = cell
+    label = wrapping(tk.Label(cell, text=tr(text), font=("Segoe UI", 10), fg=FG, bg=PANEL))
+    label.pack(fill="x")
+    return label
 
 
 class SettingsView(tk.Frame):
@@ -630,10 +675,8 @@ class SettingsView(tk.Frame):
         names = [tr("Same as game")] + [launcher_text.NATIVE_NAMES[c] for c in launcher_text.LANGUAGE_CODES]
         current = self.s.get("launcher_language", "same")
         self.vars["launcher_language"] = tk.StringVar(value=current if current in choices else "same")
-        picker = ttk.Combobox(head, values=names, state="readonly", width=16)
-        picker.current(choices.index(self.vars["launcher_language"].get()))
-        picker.pack(side="right", anchor="s")
-        picker.bind("<<ComboboxSelected>>", lambda e: self._launcher_language(choices[picker.current()]))
+        dropdown(head, BG, names, lambda: choices.index(self.vars["launcher_language"].get()),
+                 lambda i: self._launcher_language(choices[i]), width=16).pack(side="right", anchor="s")
         tk.Label(head, text=tr("Launcher language"), font=("Segoe UI", 9), fg=DIM, bg=BG
                  ).pack(side="right", anchor="s", padx=(16, 6), pady=(0, 2))
         tk.Label(head, text=tr("Launcher {version}", version=VERSION), font=("Segoe UI", 9), fg=DIM, bg=BG
@@ -661,7 +704,7 @@ class SettingsView(tk.Frame):
 
         body = tk.Frame(self, bg=BG)
         nav = tk.Frame(body, bg=BG, width=180)
-        nav.pack(side="left", fill="y", pady=(4, 0))
+        nav.pack(side="left", fill="y")  # level with the page (user, 27 Nov)
         nav.pack_propagate(False)
         self.pages_frame = tk.Frame(body, bg=PANEL)
         self.pages_frame.pack(side="left", fill="both", expand=True)
@@ -673,61 +716,59 @@ class SettingsView(tk.Frame):
             self.tab_buttons[name] = b
 
         box = self._page("Game files")
-        tk.Label(box, text=tr("Installed in {folder}", folder=info['game']), font=("Segoe UI", 9), fg=DIM, bg=PANEL,
-                 anchor="w").grid(row=0, column=0, columnspan=2, sticky="w")
-        self._link(box, tr("Reinstall from a disc image..."), on_reinstall).grid(row=1, column=0, sticky="w", pady=(10, 4))
-        self._link(box, tr("Use a different install..."), on_locate).grid(row=2, column=0, sticky="w")
-        self._subheading(box, 3, "Help")
-        links = tk.Frame(box, bg=PANEL)
-        links.grid(row=4, column=0, columnspan=2, sticky="w")
-        self._link(links, tr("Open logs"), self.open_logs).pack(side="left")
-        self._link(links, tr("Save crash report"), self.crash_report).pack(side="left", padx=8)
-        self._link(links, tr("Check for updates"), lambda: self.check_updates(manual=True)).pack(side="left")
-        self._subheading(box, 5, "Game")
-        self._combo(box, 6, "language", "Game language", list(LANGUAGES))
-        note(box, 7, "The game's voices, subtitles and text. The achievement names follow it too.")
-        self._subheading(box, 8, "SP shader cache")
-        self._link(box, tr("Clear and rebuild"), lambda: self.clear_shader_cache(multiplayer=False)).grid(
-            row=9, column=0, sticky="w")
-        note(box, 10, "The shaders are built from the game's files at the first start, so levels don't pop in on "
-                      "their first visit. Clearing makes the next start build them again (a few seconds longer).")
-        self._subheading(box, 11, "MP shader cache")
-        self._link(box, tr("Clear and rebuild"), lambda: self.clear_shader_cache(multiplayer=True)).grid(
-            row=12, column=0, sticky="w")
-        note(box, 13, "Multiplayer keeps its own, built the same way at its first start.")
+        # The same two columns as the settings tabs: what each thing is on the left, its buttons on the right
+        # (user, 27 Nov).
+        setting_name(box, 0, "Install location")
+        note(box, 1, str(info['game']))
+        self._button_stack(box, 0, [(tr("Reinstall from a disc image..."), on_reinstall),
+                                    (tr("Use a different install..."), on_locate)], pady=(2, 18))
+        setting_name(box, 2, "Help")
+        note(box, 3, "If the game crashes or misbehaves: the logs show what happened, and a crash report gathers them "
+                     "into one file to send with a bug report.")
+        self._button_stack(box, 2, [(tr("Open logs"), self.open_logs),
+                                    (tr("Save crash report"), self.crash_report),
+                                    (tr("Check for updates"), lambda: self.check_updates(manual=True))])
+        self._subheading(box, 4, "Game")
+        self._choice(box, 5, "language", "Game language", list(LANGUAGES))
+        note(box, 6, "The game's voices, subtitles and text. The achievement names follow it too.")
+        setting_name(box, 7, "SP shader cache")
+        note(box, 8, "The shaders are built from the game's files at the first start, so levels don't pop in on "
+                     "their first visit. Clearing makes the next start build them again (a few seconds longer).")
+        self._button_stack(box, 7, [(tr("Clear and rebuild"), lambda: self.clear_shader_cache(multiplayer=False))])
+        setting_name(box, 9, "MP shader cache")
+        note(box, 10, "Multiplayer keeps its own, built the same way at its first start.")
+        self._button_stack(box, 9, [(tr("Clear and rebuild"), lambda: self.clear_shader_cache(multiplayer=True))])
 
         box = self._page("Display")
         self._toggle(box, 0, "fullscreen", "Fullscreen")
-        self._combo(box, 1, "resolution", "Output resolution", RESOLUTIONS)
-        self._combo(box, 2, "render_scale", "Render resolution (sharper, slower)", SCALES)
-        note(box, 3, "The game draws at 1280×720; the render resolution is what the native renderer draws it at. "
+        self._choice(box, 1, "resolution", "Output resolution", RESOLUTIONS, ["720p", "1080p", "1440p", "4K"])
+        self._choice(box, 2, "render_scale", "Render resolution (sharper, slower)", SCALES,
+                     ["720p", "1440p", "2160p"])
+        note(box, 3, "The game draws at 720p; the render resolution is what the native renderer draws it at. "
                      "Output resolution is the size of the picture on your screen.")
-        self._combo(box, 4, "aa", "Anti-aliasing", AA)
-        self._combo(box, 5, "upscaling", "Upscaling", UPSCALING)
+        self._choice(box, 4, "aa", "Anti-aliasing", AA, ["Off", "FXAA", "FXAA strong"])
+        self._choice(box, 5, "upscaling", "Upscaling", UPSCALING, ["Bilinear", "FSR 1", "CAS"])
         note(box, 6, "How the picture is scaled to your screen. FSR 1 upscales with sharper edges than bilinear: "
-                     "best with a render resolution below the output (e.g. 2560×1440 on a 4K screen).")
-        self._combo(box, 7, "fps", "Frame rate", FPS)
+                     "best with a render resolution below the output (e.g. 1440p on a 4K screen).")
+        self._choice(box, 7, "fps", "Frame rate", FPS, ["30", "40", "50", "60"])
         note(box, 8, "30 is the original. The game runs at normal speed at any rate, but some scripted moments may "
                      "misbehave above 30.")
         self._toggle(box, 9, "vsync", "V-sync")
         note(box, 10, "Off can smooth heavy scenes at 60 FPS, with some tearing.")
         self._slider(box, 11, "fov", "Field of view (degrees)", 65, 110, 1)
         note(box, 12, "65 is the original.")
-        self._combo(box, 13, "fps_counter", "FPS counter", FPS_COUNTER)
+        self._choice(box, 13, "fps_counter", "FPS counter", FPS_COUNTER, ["Off", "FPS", "Detailed"])
         self._toggle(box, 14, "hide_achievements", "Achievement pop-ups", invert=True)
         self._toggle(box, 15, "cutscene_letterbox", "Black bars in in-game cutscenes")
         note(box, 16, "Off: in-game cutscenes stay full screen. Video cutscenes keep their own bars.")
         self.vars["language"].trace_add("write", lambda *_: self._game_language_changed())
-        tk.Label(box, text=tr("Native renderer by the Skullburglar project (github.com/nlwstein/skullburglar, "
-                              "BSD 3-Clause)."), font=("Segoe UI", 8), fg=DIM, bg=PANEL, anchor="w"
-                 ).grid(row=17, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
         box = self._page("Graphics")
         self._slider(box, 0, "brightness", "Brightness (%)", 50, 200, 5)
         note(box, 1, "Black and white stay as they are.")
-        self._combo(box, 2, "texture_filtering", "Texture filtering", TEXTURE_FILTERING)
+        self._choice(box, 2, "texture_filtering", "Texture filtering", TEXTURE_FILTERING, ["Original", "4x", "8x", "16x"])
         note(box, 3, "Keeps floors and walls sharp at an angle. The HUD and text keep the game's own filtering.")
-        self._combo(box, 4, "render_threads", "Render threads", RENDER_THREADS)
+        self._choice(box, 4, "render_threads", "Render threads", RENDER_THREADS, ["1", "2", "3"])
         note(box, 5, "2 records the drawing on a second thread: faster in busy scenes. 3 also copies textures on a "
                      "third thread, for fewer hitches when areas load. Go back to 1 if the picture flickers or objects "
                      "go missing.")
@@ -735,13 +776,13 @@ class SettingsView(tk.Frame):
         note(box, 7, "The blur on distant or close things in cutscenes and when aiming. Off: everything stays sharp.")
         self._toggle(box, 8, "hit_markers", "Hit markers")
         note(box, 9, "The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.")
-        self._combo(box, 10, "detail_distance", "Detail distance", DETAIL_DISTANCE)
+        self._choice(box, 10, "detail_distance", "Detail distance", DETAIL_DISTANCE, ["Original", "2x", "4x", "Max"])
         note(box, 11, "How far away people, plants and objects keep their full detail, so less pops in. Further costs "
-                      "frame rate in big, busy areas; Maximum the most.")
-        self._combo(box, 12, "shadow_range", "Sun shadow range", SHADOW_RANGE)
-        note(box, 13, "How far from you outdoor shadows are drawn. Longer makes them softer unless the render resolution "
-                      "is raised: Longer looks as sharp as the original with 2560×1440; Longest stays a little "
-                      "softer even with 3840×2160.")
+                      "frame rate in big, busy areas; Max the most.")
+        self._choice(box, 12, "shadow_range", "Sun shadow range", SHADOW_RANGE, ["Original", "2x", "4x"])
+        note(box, 13, "How far from you outdoor shadows are drawn. Further makes them softer unless the render "
+                      "resolution is raised: 2x looks as sharp as the original with 1440p; 4x stays a little "
+                      "softer even with 2160p.")
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)
@@ -749,7 +790,7 @@ class SettingsView(tk.Frame):
         # Only the settings of the chosen device are shown: controller ones for Auto, Xbox and PlayStation, keyboard
         # ones for keyboard and mouse.
         pad = self.pad_settings = tk.Frame(box, bg=PANEL)
-        pad.columnconfigure(1, weight=1)
+        two_columns(pad)
         pad.grid(row=2, column=0, columnspan=2, sticky="ew")
         self._subheading(pad, 0, "Controller")
         self._slider(pad, 1, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
@@ -759,7 +800,7 @@ class SettingsView(tk.Frame):
         self.pad_map = tk.Frame(pad, bg=PANEL)
         self.pad_map.grid(row=5, column=0, columnspan=2, sticky="ew")
         kbm = self.kbm_settings = tk.Frame(box, bg=PANEL)
-        kbm.columnconfigure(1, weight=1)
+        two_columns(kbm)
         kbm.grid(row=3, column=0, columnspan=2, sticky="ew")
         self._subheading(kbm, 0, "Keyboard and mouse")
         self._slider(kbm, 1, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
@@ -773,43 +814,47 @@ class SettingsView(tk.Frame):
         self._input_device_changed()
 
         box = self._page("Multiplayer")
-        tk.Label(box, text=tr("Gamertag"), font=("Segoe UI", 10), fg=FG, bg=PANEL).grid(row=0, column=0, sticky="w")
+        setting_name(box, 0, "Gamertag")
         v = self.vars["gamertag"] = tk.StringVar(value=self.s["gamertag"])
-        ttk.Entry(box, textvariable=v, width=24).grid(row=0, column=1, sticky="e", pady=2)
+        ttk.Entry(box, textvariable=v, width=1).grid(row=0, column=1, sticky="ew", pady=2)
         note(box, 1, "Your name in System Link games: letters, digits and spaces, up to 15 characters. Every player "
                      "in a game needs a different one.")
         # The profile's XUID (made once, load_settings): shown so players can tell profiles apart, not editable.
-        tk.Label(box, text=tr("XUID"), font=("Segoe UI", 10), fg=FG, bg=PANEL).grid(row=2, column=0, sticky="w")
+        setting_name(box, 2, "XUID")
         tk.Label(box, text=self.s.get("xuid", ""), font=("Consolas", 10), fg=FG, bg=PANEL).grid(
-            row=2, column=1, sticky="e", pady=2)
+            row=2, column=1, sticky="w", pady=2)
         note(box, 3, "Your profile's ID, made for this install. The game tells players apart by it.")
         note(box, 4, "Start multiplayer from MULTIPLAYER on the game's main menu; leaving it returns to single player. "
                      "System Link over your local network. Display and controller settings are shared with single player.")
         self._subheading(box, 5, "Downloadable content")
         v = self.vars["dlc_folder"] = tk.StringVar(value=self.s.get("dlc_folder", ""))
-        shown = tk.Label(box, font=("Segoe UI", 9), fg=FG, bg=PANEL, anchor="w", justify="left", wraplength=640)
-        shown.grid(row=6, column=0, columnspan=2, sticky="w")
-        packs = tk.Label(box, font=("Segoe UI", 9), fg=DIM, bg=PANEL, anchor="w", justify="left", wraplength=640)
-        packs.grid(row=7, column=0, columnspan=2, sticky="w")
+        # Laid out like Game files (user, 27 Nov): the folder, what's in it and the note on the left, the buttons on
+        # the right.
+        setting_name(box, 6, "DLC folder")
+        cell = box.setting_cells[6]
+        shown = wrapping(tk.Label(cell, font=("Segoe UI", 9), fg=FG, bg=PANEL))
+        shown.pack(fill="x", pady=(1, 0))
+        packs = wrapping(tk.Label(cell, font=("Segoe UI", 9), fg=DIM, bg=PANEL))
+        packs.pack(fill="x")
 
         def show_dlc(*_):
             folder = v.get()
             shown.config(text=folder or tr("No folder chosen"))
             if not folder:
                 packs.config(text="")
+                packs.pack_forget()
                 return
+            if not packs.winfo_ismapped():
+                packs.pack(fill="x", after=shown)
             names = sorted(set(dlc_packages(folder)))
             packs.config(text=tr("Found: {names}", names=", ".join(names)) if names else tr("No DLC found in this folder"))
 
         v.trace_add("write", show_dlc)
         show_dlc()
-        line = tk.Frame(box, bg=PANEL)
-        line.grid(row=8, column=0, columnspan=2, sticky="w", pady=(4, 4))
-        self._link(line, tr("Choose folder..."), self.choose_dlc_folder).pack(side="left")
-        self._link(line, tr("Clear"), lambda: v.set("")).pack(side="left", padx=8)
-        note(box, 9, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
+        note(box, 7, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
                      "whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few "
                      "seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.")
+        self._button_stack(box, 6, [(tr("Choose folder..."), self.choose_dlc_folder), (tr("Clear"), lambda: v.set(""))])
 
         box = self._page("Saves", scroll=False)
         line = tk.Frame(box, bg=PANEL)
@@ -841,6 +886,19 @@ class SettingsView(tk.Frame):
         self._page("Achievements", scroll=False)
         self.achievements_box = tk.Frame(self.pages["Achievements"], bg=PANEL)
         self.achievements_box.pack(fill="both", expand=True)
+
+        # Credits (user, 27 Nov): what the port is built on, as in the README's "Credits and licences", laid out like
+        # the settings: what it is on the left, its website on the right.
+        box = self._page("Credits")
+        row = 0
+        for title, text, url in CREDITS:
+            setting_name(box, row, title)
+            note(box, row + 1, text)
+            if url:
+                self._button_stack(box, row, [(tr("Website"), lambda u=url: webbrowser.open(u))])
+            row += 2
+        note(box, row, "007: Quantum of Solace is a trademark of its owners. This project is not affiliated with or "
+                       "endorsed by Activision, Treyarch, MGM, Danjaq or Microsoft.")
         self.show_tab(self.s.get("tab") if self.s.get("tab") in TABS else "Display")
 
         foot = tk.Frame(self, bg=BG)
@@ -859,7 +917,7 @@ class SettingsView(tk.Frame):
                   bd=0, pady=6).pack(side="right")
         v = self.vars["close_on_play"] = tk.BooleanVar(value=self.s["close_on_play"])
         # A switch too, without the Enabled/Disabled word: the footer has no room for it.
-        self._switch(foot, v, BG, show_state=False).pack(side="right", padx=(6, 10))
+        self._slide_switch(foot, v, BG).pack(side="right", padx=(6, 10))
         tk.Label(foot, text=tr("Close launcher when the game starts"), font=("Segoe UI", 9), fg=DIM, bg=BG
                  ).pack(side="right")
 
@@ -904,7 +962,7 @@ class SettingsView(tk.Frame):
         canvas.bind("<Configure>", lambda e: (canvas.itemconfigure(window, width=e.width), fit()))
         box = tk.Frame(inner, bg=PANEL)
         box.pack(fill="x")
-        box.columnconfigure(1, weight=1)
+        two_columns(box)
         self.pages[title] = page
         self.scrollers[title] = canvas
         return box
@@ -939,8 +997,32 @@ class SettingsView(tk.Frame):
     def _link(self, parent, text, cmd):
         return link_button(parent, text, cmd)
 
-    def _switch(self, parent, v, bg, on="Enabled", off="Disabled", invert=False, show_state=True):
-        """An on/off switch for the BooleanVar v, in a frame on background bg, with its state written beside it
+    def _button(self, parent, bg, text, cmd):
+        """A button in the toggle-button-group style (an unlit button of a group): dark, thin grey border, gold focus
+        outline. Click, or Space/Return when it has focus."""
+        holder = tk.Frame(parent, bg="#4a505a", padx=1, pady=1, highlightthickness=1, highlightbackground=bg,
+                          highlightcolor=ACCENT_HOVER, takefocus=1)
+        face = tk.Label(holder, text=text, font=("Segoe UI", 9), bg="#2a2d35", fg=FG, width=1, pady=2,
+                        cursor="hand2")
+        face.pack(fill="x")
+        face.bind("<Enter>", lambda _: face.config(bg="#353a43"))
+        face.bind("<Leave>", lambda _: face.config(bg="#2a2d35"))
+        face.bind("<ButtonRelease-1>", lambda _: (cmd(), "break")[1])
+        for key in ("<space>", "<Return>"):
+            holder.bind(key, lambda _: (cmd(), "break")[1])
+        return holder
+
+    def _button_stack(self, box, row, buttons, pady=2):
+        """The right-hand column of a row: one or more buttons, one under another, as wide as the column."""
+        stack = tk.Frame(box, bg=PANEL)
+        stack.grid(row=row, column=1, sticky="ew", pady=pady)
+        for i, (text, cmd) in enumerate(buttons):
+            self._button(stack, PANEL, text, cmd).pack(fill="x", pady=(0 if i == 0 else 4, 0))
+        return stack
+
+    def _slide_switch(self, parent, v, bg, on="Enabled", off="Disabled", invert=False, show_state=False):
+        """The 26 Nov slide switch, kept for "Close launcher when the game starts" in the bottom bar (user, 27 Nov:
+        not a button group there). An on/off switch for the BooleanVar v, in a frame on background bg, with its state written beside it
         (user, 26 Nov: tick boxes weren't clear). Click the switch or its word, or Space when it has focus. invert: the
         setting is stored the other way round (hide_achievements under "Achievement pop-ups")."""
         holder = tk.Frame(parent, bg=bg)
@@ -973,43 +1055,91 @@ class SettingsView(tk.Frame):
         draw()
         return holder
 
+
+    def _buttons(self, parent, bg, labels, current, choose, var):
+        """A toggle button group: joined buttons, one per label, the current one lit (user, 27 Nov). current() gives
+        the lit button's index, choose(i) picks one; redrawn whenever var changes. Click a button, or Left/Right when
+        the group has focus (Space moves to the next one)."""
+        holder = tk.Frame(parent, bg="#4a505a", padx=1, pady=1, highlightthickness=1, highlightbackground=bg,
+                          highlightcolor=ACCENT_HOVER, takefocus=1)
+        buttons = []
+        for i, label in enumerate(labels):
+            # The group fills the control column, its buttons sharing it equally (user, 27 Nov).
+            holder.columnconfigure(i, weight=1, uniform="buttons")
+            b = tk.Label(holder, text=label, font=("Segoe UI", 9), width=1, pady=2, cursor="hand2")
+            b.grid(row=0, column=i, sticky="nsew", padx=(0, 1) if i < len(labels) - 1 else 0)
+            buttons.append(b)
+
+        def draw(*_):
+            lit = current()
+            for i, b in enumerate(buttons):
+                b.config(bg=ACCENT if i == lit else "#2a2d35", fg=FG if i == lit else DIM)
+
+        def pick(i):
+            choose(max(0, min(len(buttons) - 1, i)))
+            holder.focus_set()
+            return "break"
+
+        def hover(i, entering):
+            if i != current():
+                buttons[i].config(bg="#353a43" if entering else "#2a2d35")
+
+        for i, b in enumerate(buttons):
+            b.bind("<Button-1>", lambda _, i=i: pick(i))
+            b.bind("<Enter>", lambda _, i=i: hover(i, True))
+            b.bind("<Leave>", lambda _, i=i: hover(i, False))
+        holder.bind("<Left>", lambda _: pick(current() - 1))
+        holder.bind("<Right>", lambda _: pick(current() + 1))
+        holder.bind("<space>", lambda _: pick((current() + 1) % len(buttons)))
+        var.trace_add("write", draw)
+        draw()
+        return holder
+
+    def _switch(self, parent, v, bg, on="Enabled", off="Disabled", invert=False, show_state=True):
+        """An on/off setting for the BooleanVar v: a two-button group, Enabled | Disabled. invert: the setting is
+        stored the other way round (hide_achievements under "Achievement pop-ups"). show_state is kept for callers
+        of the 26 Nov switch; both words are always shown now."""
+        return self._buttons(parent, bg, [tr(on), tr(off)],
+                             lambda: 0 if bool(v.get()) != invert else 1,
+                             lambda i: v.set((i == 0) != invert), v)
+
+    def _choice(self, box, row, key, text, values, labels=None):
+        """A settings row choosing one of a few values with a toggle button group. labels: shorter words for the
+        buttons than the saved values (which stay as they were, so existing settings keep working)."""
+        values = list(values)
+        labels = list(labels) if labels else values
+        v = self.vars[key] = tk.StringVar(value=self.s[key] if self.s[key] in values else DEFAULTS[key])
+        setting_name(box, row, text)
+        self._buttons(box, PANEL, [tr_label(x) for x in labels],
+                      lambda: values.index(v.get()) if v.get() in values else 0,
+                      lambda i: v.set(values[i]), v).grid(row=row, column=1, sticky="ew", pady=2)
+
     def _toggle(self, box, row, key, text, invert=False):
         """A settings row: its name on the left, the switch on the right (like the drop-downs)."""
         v = self.vars[key] = tk.BooleanVar(value=self.s[key])
-        tk.Label(box, text=tr(text), font=("Segoe UI", 10), fg=FG, bg=PANEL).grid(row=row, column=0, sticky="w", pady=2)
-        self._switch(box, v, PANEL, invert=invert).grid(row=row, column=1, sticky="e", pady=2)
+        setting_name(box, row, text)
+        self._switch(box, v, PANEL, invert=invert).grid(row=row, column=1, sticky="ew", pady=2)
 
     def _combo(self, box, row, key, text, values):
+        """A settings row with a drop-down, styled and sized like the toggle button groups (user, 27 Nov)."""
+        values = list(values)
         v = self.vars[key] = tk.StringVar(value=self.s[key] if self.s[key] in values else DEFAULTS[key])
-        label = tk.Label(box, text=tr(text), font=("Segoe UI", 10), fg=FG, bg=PANEL)
-        label.grid(row=row, column=0, sticky="w", pady=2)
-        combo = ttk.Combobox(box, state="readonly", width=36)
-        combo.grid(row=row, column=1, sticky="e", pady=2)
+        label = setting_name(box, row, text)
+        combo = dropdown(box, PANEL, [tr_label(x) for x in values],
+                         lambda: values.index(v.get()) if v.get() in values else 0,
+                         lambda i: v.set(values[i]))
+        combo.grid(row=row, column=1, sticky="ew", pady=2)
         self.combos[key] = combo
         self.combo_labels[key] = label
-        combo.bind("<<ComboboxSelected>>", lambda e, k=key: self._combo_picked(k))
-        # The wheel over a closed list scrolls the page, not the setting (it would change it unseen).
-        combo.bind("<MouseWheel>", lambda e: (self._wheel(e), "break")[1])
-        v.trace_add("write", lambda *_, k=key: self._combo_show(k))
-        self.combo_values[key] = list(values)
-        combo["values"] = [tr_label(x) for x in values]
-        self._combo_show(key)
-
-    def _combo_show(self, key):
-        if key in self.combos:
-            self.combos[key].set(tr_label(self.vars[key].get()))
-
-    def _combo_picked(self, key):
-        i = self.combos[key].current()
-        if 0 <= i < len(self.combo_values[key]):
-            self.vars[key].set(self.combo_values[key][i])
+        self.combo_values[key] = values
+        v.trace_add("write", lambda *_: combo.refresh())
 
     def _slider(self, box, row, key, text, lo, hi, step):
         v = self.vars[key] = tk.IntVar(value=int(self.s[key]))
-        tk.Label(box, text=tr(text), font=("Segoe UI", 10), fg=FG, bg=PANEL).grid(row=row, column=0, sticky="w")
-        tk.Scale(box, variable=v, from_=lo, to=hi, resolution=step, orient="horizontal", length=230,
+        setting_name(box, row, text, pady=0)
+        tk.Scale(box, variable=v, from_=lo, to=hi, resolution=step, orient="horizontal", length=120,
                  bg=PANEL, fg=FG, troughcolor="#2a2d35", highlightthickness=0, bd=0, activebackground=ACCENT
-                 ).grid(row=row, column=1, sticky="e")
+                 ).grid(row=row, column=1, sticky="ew")  # as wide as the column, like the button groups
 
     def _launcher_language(self, choice):
         """A launcher language picked: saved at once on its own, then the launcher is drawn again in it."""

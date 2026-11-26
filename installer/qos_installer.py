@@ -777,6 +777,110 @@ ON_ACCENT = "#121212"
 BG, FG, DIM, ACCENT, FIELD = "#101215", "#e8e4da", "#9b978d", "#c9a24a", "#ffffff"
 
 
+def dropdown(parent, bg, labels, current, choose, width=None):
+    """A drop-down in the launcher's toggle-button-group style (user, 27 Nov): a dark field with a thin grey
+    border, the chosen label and an arrow; a click opens the list. current() gives the chosen index, choose(i) picks
+    one. Up/Down change it and Space/Return open the list when it has focus. width: in characters; without it the
+    field takes the width its layout gives it. The returned frame's refresh() shows a change made elsewhere."""
+    field, hover, border = "#2a2d35", "#353a43", "#4a505a"
+    holder = tk.Frame(parent, bg=border, padx=1, pady=1, highlightthickness=1, highlightbackground=bg,
+                      highlightcolor="#e0bd6a", takefocus=1)
+    face = tk.Label(holder, font=("Segoe UI", 9), bg=field, fg=FG, anchor="w", padx=8, pady=2, cursor="hand2",
+                    width=width or 1)
+    arrow = tk.Label(holder, text="\u25be", font=("Segoe UI", 9), bg=field, fg=DIM, padx=8, pady=2, cursor="hand2")
+    face.pack(side="left", fill="x", expand=True)
+    arrow.pack(side="right")
+
+    def refresh():
+        i = current()
+        face.config(text=labels[i] if 0 <= i < len(labels) else "")
+
+    def pick(i):
+        if 0 <= i < len(labels) and i != current():
+            choose(i)
+        if holder.winfo_exists():
+            refresh()
+
+    def open_list(_=None):
+        """The list of choices: a borderless window exactly as wide as the field, just below it (above it when it
+        wouldn't fit on the screen), the current choice lit. A click picks, a click outside or Escape closes it;
+        Up/Down/Return work too."""
+        holder.focus_set()
+        popup = tk.Toplevel(holder)
+        popup.overrideredirect(True)
+        popup.attributes("-topmost", True)
+        frame = tk.Frame(popup, bg=border, padx=1, pady=1)
+        frame.pack(fill="both", expand=True)
+        rows, lit_row = [], [current()]
+
+        def paint():
+            for j, row in enumerate(rows):
+                on = j == lit_row[0]
+                row.config(bg=ACCENT if on else field, fg=ON_ACCENT if on else FG)
+
+        def close(_=None):
+            if popup.winfo_exists():
+                popup.grab_release()
+                popup.destroy()
+            if holder.winfo_exists():
+                holder.focus_set()
+            return "break"
+
+        def choose_row(j):
+            close()
+            pick(j)
+            return "break"
+
+        for j, label in enumerate(labels):
+            row = tk.Label(frame, text=label, font=("Segoe UI", 9), anchor="w", padx=8, pady=3, cursor="hand2")
+            row.pack(fill="x")
+            row.bind("<Enter>", lambda _, j=j: (lit_row.__setitem__(0, j), paint()))
+            row.bind("<ButtonRelease-1>", lambda _, j=j: choose_row(j))
+            rows.append(row)
+        paint()
+
+        def outside(event):
+            inside = popup.winfo_containing(event.x_root, event.y_root)
+            if inside is None or inside.winfo_toplevel() is not popup:
+                close()
+
+        def move(step):
+            lit_row[0] = max(0, min(len(rows) - 1, lit_row[0] + step))
+            paint()
+            return "break"
+
+        popup.bind("<Button-1>", outside)
+        popup.bind("<Escape>", close)
+        popup.bind("<Up>", lambda _: move(-1))
+        popup.bind("<Down>", lambda _: move(1))
+        popup.bind("<Return>", lambda _: choose_row(lit_row[0]))
+        popup.update_idletasks()
+        width, height = holder.winfo_width(), popup.winfo_reqheight()
+        x, y = holder.winfo_rootx(), holder.winfo_rooty() + holder.winfo_height()
+        if y + height > holder.winfo_screenheight():
+            y = holder.winfo_rooty() - height
+        popup.geometry(f"{width}x{height}+{x}+{y}")
+        popup.focus_set()
+        popup.grab_set()
+        return "break"
+
+    def lit(on):
+        for w in (face, arrow):
+            w.config(bg=hover if on else field)
+
+    for w in (face, arrow):
+        w.bind("<Button-1>", open_list)
+        w.bind("<Enter>", lambda _: lit(True))
+        w.bind("<Leave>", lambda _: lit(False))
+    for key in ("<space>", "<Return>"):
+        holder.bind(key, open_list)
+    holder.bind("<Up>", lambda _: (pick(current() - 1), "break")[1])
+    holder.bind("<Down>", lambda _: (pick(current() + 1), "break")[1])
+    holder.refresh = refresh
+    refresh()
+    return holder
+
+
 LAUNCHER_HOME = DEFAULT_DIR.parent / "QuantumOfSolacePC"
 
 
@@ -849,11 +953,10 @@ class InstallView(tk.Frame):
             import launcher_text
             choices = ["same"] + list(launcher_text.LANGUAGE_CODES)
             names = [tr("Same as game")] + [launcher_text.NATIVE_NAMES[c] for c in launcher_text.LANGUAGE_CODES]
-            picker = ttk.Combobox(head, values=names, state="readonly", width=16)
-            picker.current(choices.index(language_choice) if language_choice in choices else 0)
-            picker.pack(side="right", anchor="n", pady=(8, 0))
-            picker.bind("<<ComboboxSelected>>", lambda e: not self.busy() and on_language(
-                choices[picker.current()], self.iso_var.get(), self.dir_var.get()))
+            start = choices.index(language_choice) if language_choice in choices else 0
+            dropdown(head, BG, names, lambda: start,
+                     lambda i: not self.busy() and on_language(choices[i], self.iso_var.get(), self.dir_var.get()),
+                     width=16).pack(side="right", anchor="n", pady=(8, 0))
             tk.Label(head, text=tr("Launcher language"), font=("Segoe UI", 9), fg=DIM, bg=BG
                      ).pack(side="right", anchor="n", padx=(0, 6), pady=(10, 0))
         tk.Label(self, text=tr("Your disc. One installer. Ready to play."), font=("Segoe UI", 12),

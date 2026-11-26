@@ -377,6 +377,16 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
      (Tailscale), or home networks that block them (guest Wi-Fi, client isolation, separate segments). Not needed on
      one PC, a normal home LAN or ZeroTier-style virtual LANs: the field's note says so. Then update docs/multiplayer.md
      (it says the launcher doesn't offer it yet).
+  - **Launcher layout (27 Nov, user, committed):** every settings tab is a grid of two columns 2:1 (two_columns):
+    left the setting's name with its note under it in one cell (setting_name + note, which joins the cell of row - 1),
+    wrapping at the column width (wrapping()); right the control, filling the column and centred vertically.
+    Controls: toggle button groups (_buttons: on/off settings, Game language, resolutions, AA, upscaling, frame
+    rate, FPS counter, texture filtering, render threads, detail distance, sun shadow range; short labels, saved
+    values unchanged), drop-downs drawn in the same style (qos_installer.dropdown, with its own full-width list window;
+    Input device, both launcher-language pickers), sliders and the Gamertag field full width, buttons in the same style
+    (_button/_button_stack) on Game files (Install location, Help, SP/MP shader cache) and Multiplayer (DLC folder).
+    "Close launcher" keeps the slide switch (_slide_switch). New Credits tab (CREDITS list, Website buttons, trademark
+    note; the Skullburglar line left the Display tab). Tab list level with the page. New strings in launcher_text.py.
   9. ~~Launcher: repair a missing or broken desktop shortcut at start~~ done (user, 25 Nov 23:34: fixed by 0.2.1).
   10. **Upload hoisting done 26 Nov 19:35 (native patch 0102-upload-hoisting, works, no glitches):** an upload no
       GPU work recorded so far in the submission reads (per-4 KB-page stamps set in MemorySync::Request) goes into a

@@ -1875,11 +1875,11 @@ TEXT = {
     'Very far (4x)': ('Sehr weit (4x)', 'Très loin (4x)', 'Muy lejos (4x)', 'Molto lontano (4x)'),
     'Maximum (always detailed)': ('Maximum (immer detailliert)', 'Maximum (toujours détaillé)',
                                   'Máximo (siempre detallado)', 'Massimo (sempre dettagliato)'),
-    'How far away people, plants and objects keep their full detail, so less pops in. Further costs frame rate in big, busy areas; Maximum the most.': (
+    'How far away people, plants and objects keep their full detail, so less pops in. Further costs frame rate in big, busy areas; Max the most.': (
         'Wie weit entfernt Personen, Pflanzen und Objekte ihre volle Detailstufe behalten, damit weniger auftaucht. '
-        'Weiter kostet Bildrate in großen, belebten Bereichen; Maximum am meisten.',
+        'Weiter kostet Bildrate in großen, belebten Bereichen; Max am meisten.',
         'Jusqu\'à quelle distance personnages, plantes et objets gardent tous leurs détails, pour moins d\'apparitions. '
-        'Plus loin coûte des images par seconde dans les grandes zones chargées ; Maximum le plus.',
+        'Plus loin coûte des images par seconde dans les grandes zones chargées ; Max le plus.',
         'Hasta qué distancia personas, plantas y objetos mantienen todo su detalle, para que aparezcan menos de golpe. '
         'Más lejos cuesta fotogramas en zonas grandes y concurridas; Máximo, el que más.',
         'Fino a che distanza persone, piante e oggetti mantengono tutti i dettagli, così compaiono meno di colpo. '
@@ -1888,15 +1888,83 @@ TEXT = {
                          'Portata delle ombre del sole'),
     'Longer (2x)': ('Weiter (2x)', 'Plus loin (2x)', 'Más lejos (2x)', 'Più lontano (2x)'),
     'Longest (4x)': ('Am weitesten (4x)', 'Le plus loin (4x)', 'Lo más lejos (4x)', 'Il più lontano (4x)'),
-    'How far from you outdoor shadows are drawn. Longer makes them softer unless the render resolution is raised: Longer looks as sharp as the original with 2560×1440; Longest stays a little softer even with 3840×2160.': (
+    'How far from you outdoor shadows are drawn. Further makes them softer unless the render resolution is raised: 2x looks as sharp as the original with 1440p; 4x stays a little softer even with 2160p.': (
         'Wie weit entfernt Schatten im Freien gezeichnet werden. Weiter macht sie weicher, außer die Renderauflösung wird '
-        'erhöht: Weiter sieht mit 2560×1440 so scharf aus wie das Original; Am weitesten bleibt selbst mit 3840×2160 etwas weicher.',
+        'erhöht: 2x sieht mit 1440p so scharf aus wie das Original; 4x bleibt selbst mit 2160p etwas weicher.',
         'Jusqu\'à quelle distance les ombres extérieures sont dessinées. Plus loin les rend plus douces, sauf si la '
-        'résolution de rendu est augmentée : Plus loin est aussi net que l\'original en 2560×1440 ; Le plus loin reste un peu plus doux même en 3840×2160.',
+        'résolution de rendu est augmentée : 2x est aussi net que l\'original en 1440p ; 4x reste un peu plus doux même en 2160p.',
         'Hasta qué distancia se dibujan las sombras en exteriores. Más lejos las suaviza, salvo que se suba la '
-        'resolución de renderizado: Más lejos se ve tan nítido como el original con 2560×1440; Lo más lejos sigue algo más suave incluso con 3840×2160.',
+        'resolución de renderizado: 2x se ve tan nítido como el original con 1440p; 4x sigue algo más suave incluso con 2160p.',
         'Fino a che distanza vengono disegnate le ombre all\'aperto. Più lontano le rende più morbide, a meno che la '
-        'risoluzione di rendering non venga alzata: Più lontano è nitido come l\'originale con 2560×1440; Il più lontano resta un po\' più morbido anche con 3840×2160.'),
+        'risoluzione di rendering non venga alzata: 2x è nitido come l\'originale con 1440p; 4x resta un po\' più morbido anche con 2160p.'),
+    'Install location': ('Installationsort', "Emplacement d'installation", 'Ubicación de la instalación',
+                         'Percorso di installazione'),
+    'If the game crashes or misbehaves: the logs show what happened, and a crash report gathers them into one file to send with a bug report.': (
+        'Wenn das Spiel abstürzt oder Fehler macht: Die Protokolle zeigen, was passiert ist, und ein Absturzbericht '
+        'fasst sie in einer Datei zusammen, die du einer Fehlermeldung beilegen kannst.',
+        "Si le jeu plante ou se comporte mal : les journaux montrent ce qui s'est passé, et un rapport de plantage "
+        'les rassemble dans un seul fichier à joindre à un signalement de bug.',
+        'Si el juego se cuelga o falla: los registros muestran qué pasó, y un informe de fallo los reúne en un solo '
+        'archivo para enviar con un informe de error.',
+        'Se il gioco si blocca o non funziona bene: i log mostrano cosa è successo, e un rapporto di crash li riunisce '
+        'in un unico file da allegare a una segnalazione di bug.'),
+    'DLC folder': ('DLC-Ordner', 'Dossier des DLC', 'Carpeta de DLC', 'Cartella DLC'),
+    # Credits tab (27 Nov).
+    'Credits': ('Mitwirkende', 'Crédits', 'Créditos', 'Riconoscimenti'),
+    'Website': ('Website', 'Site web', 'Sitio web', 'Sito web'),
+    'Launcher': ('Launcher', 'Lanceur', 'Lanzador', 'Launcher'),
+    'The recompiler and runtime that turn the Xbox 360 game into a PC program, built from the Xenia emulator.': (
+        'Der Recompiler und die Laufzeitumgebung, die das Xbox-360-Spiel zu einem PC-Programm machen, entstanden aus '
+        'dem Xenia-Emulator.',
+        "Le recompilateur et l'environnement d'exécution qui font du jeu Xbox 360 un programme PC, issus de "
+        "l'émulateur Xenia.",
+        'El recompilador y el entorno de ejecución que convierten el juego de Xbox 360 en un programa de PC, '
+        'derivados del emulador Xenia.',
+        "Il ricompilatore e il runtime che trasformano il gioco Xbox 360 in un programma per PC, derivati "
+        "dall'emulatore Xenia."),
+    'The native Vulkan renderer and SDK performance patches. BSD 3-Clause licence.': (
+        'Der native Vulkan-Renderer und Leistungs-Patches für das SDK. BSD-3-Clause-Lizenz.',
+        'Le moteur de rendu Vulkan natif et des correctifs de performances du SDK. Licence BSD 3-Clause.',
+        'El renderizador Vulkan nativo y parches de rendimiento del SDK. Licencia BSD 3-Clause.',
+        'Il renderer Vulkan nativo e patch di prestazioni per lo SDK. Licenza BSD 3-Clause.'),
+    "The Xbox 360 emulator the SDK's runtime comes from. Xenia Canary's game patch notes (by Sowa_95) pointed to the frame limiter.": (
+        'Der Xbox-360-Emulator, aus dem die Laufzeitumgebung des SDK stammt. Die Spiel-Patch-Notizen von Xenia '
+        'Canary (von Sowa_95) führten zum Bildratenbegrenzer.',
+        "L'émulateur Xbox 360 dont vient l'environnement d'exécution du SDK. Les notes de correctifs de Xenia "
+        'Canary (par Sowa_95) ont mené au limiteur d\'images.',
+        'El emulador de Xbox 360 del que procede el entorno de ejecución del SDK. Las notas de parches de Xenia '
+        'Canary (de Sowa_95) señalaron el limitador de fotogramas.',
+        "L'emulatore Xbox 360 da cui deriva il runtime dello SDK. Le note delle patch di Xenia Canary (di Sowa_95) "
+        'hanno indicato il limitatore di frame.'),
+    'FSR 1 upscaling and CAS sharpening.': (
+        'FSR-1-Hochskalierung und CAS-Schärfung.',
+        'Mise à l\'échelle FSR 1 et netteté CAS.',
+        'Escalado FSR 1 y nitidez CAS.',
+        'Upscaling FSR 1 e nitidezza CAS.'),
+    "Decompression for the game's files. MIT licence.": (
+        'Dekomprimierung für die Spieldateien. MIT-Lizenz.',
+        'Décompression des fichiers du jeu. Licence MIT.',
+        'Descompresión de los archivos del juego. Licencia MIT.',
+        'Decompressione dei file del gioco. Licenza MIT.'),
+    "Adapted from this author's Eat Lead and The Bourne Conspiracy ports.": (
+        'Übernommen aus den Portierungen Eat Lead und The Bourne Conspiracy desselben Autors.',
+        'Adapté des portages Eat Lead et The Bourne Conspiracy du même auteur.',
+        'Adaptado de los ports Eat Lead y The Bourne Conspiracy del mismo autor.',
+        'Adattato dai port Eat Lead e The Bourne Conspiracy dello stesso autore.'),
+    '007: Quantum of Solace is a trademark of its owners. This project is not affiliated with or endorsed by Activision, Treyarch, MGM, Danjaq or Microsoft.': (
+        '007: Ein Quantum Trost ist eine Marke ihrer Inhaber. Dieses Projekt steht in keiner Verbindung zu '
+        'Activision, Treyarch, MGM, Danjaq oder Microsoft und wird von ihnen nicht unterstützt.',
+        "007 : Quantum of Solace est une marque de ses propriétaires. Ce projet n'est ni affilié à Activision, "
+        'Treyarch, MGM, Danjaq ou Microsoft, ni approuvé par eux.',
+        '007: Quantum of Solace es una marca de sus propietarios. Este proyecto no está afiliado a Activision, '
+        'Treyarch, MGM, Danjaq ni Microsoft, ni cuenta con su respaldo.',
+        '007: Quantum of Solace è un marchio dei rispettivi proprietari. Questo progetto non è affiliato né '
+        'approvato da Activision, Treyarch, MGM, Danjaq o Microsoft.'),
+    # Toggle button group labels (27 Nov).
+    'FXAA strong': ('FXAA stark', 'FXAA fort', 'FXAA fuerte', 'FXAA forte'),
+    'Detailed': ('Detailliert', 'Détaillé', 'Detallado', 'Dettagliato'),
+    'Bilinear': ('Bilinear', 'Bilinéaire', 'Bilineal', 'Bilineare'),
+    'Max': ('Max', 'Max', 'Máx.', 'Max'),
     'Hit markers': ('Treffermarkierungen', 'Marqueurs de touche', 'Marcadores de impacto', 'Indicatori di colpo'),
     'The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.': (
         'Die Markierung am Fadenkreuz, wenn ein Schuss einen Gegner trifft. Im Mehrspieler bleibt der Ton.',
