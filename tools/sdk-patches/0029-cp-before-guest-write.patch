@@ -1,0 +1,96 @@
+# CommandProcessor::OnBeforeGuestWrite() (virtual, empty): called just before the command processor writes guest
+# memory (read pointer / scratch / event write-backs, MEM_WRITE, REG_TO_MEM, COND_WRITE, EVENT_WRITE_ZPD) or raises an
+# interrupt. After one of these the game may reuse memory the GPU work so far read, so a renderer that copies guest
+# memory in the background (native patch 0103's upload worker) finishes its copies here.
+diff --git a/include/rex/graphics/command_processor.h b/include/rex/graphics/command_processor.h
+index eff81ea..cc739c0 100644
+--- a/include/rex/graphics/command_processor.h
++++ b/include/rex/graphics/command_processor.h
+@@ -185,6 +185,11 @@ class CommandProcessor {
+ 
+   uint32_t ExecutePrimaryBuffer(uint32_t start_index, uint32_t end_index);
+   virtual void OnPrimaryBufferEnd() {}
++  // own 0029: called just before the command processor writes guest memory (fences, read pointer and scratch
++  // write-backs, MEM_WRITE / REG_TO_MEM / COND_WRITE, event write-backs) or raises an interrupt: after one of these
++  // the game may reuse memory the GPU work so far read. A renderer that reads guest memory in the background
++  // finishes those reads here.
++  virtual void OnBeforeGuestWrite() {}
+   // Virtual so a backend can tell indirect-buffer packets from primary-ring ones.
+   virtual void ExecuteIndirectBuffer(uint32_t ptr, uint32_t length);
+   bool ExecutePacket(memory::RingBuffer* reader);
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index a947cc6..93a6f6d 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -263,6 +263,7 @@ void CommandProcessor::WorkerThreadMain() {
+     // TODO(benvanik): use reader->Read_update_freq_ and only issue after moving
+     //     that many indices.
+     if (read_ptr_writeback_ptr_) {
++      OnBeforeGuestWrite();  // own 0029
+       memory::store_and_swap<uint32_t>(memory_->TranslatePhysical(read_ptr_writeback_ptr_),
+                                        read_ptr_index_);
+     }
+@@ -395,6 +396,7 @@ void CommandProcessor::WriteRegister(uint32_t index, uint32_t value) {
+       // Enabled - write to address.
+       uint32_t scratch_addr = regs.values[XE_GPU_REG_SCRATCH_ADDR];
+       uint32_t mem_addr = scratch_addr + (scratch_reg * 4);
++      OnBeforeGuestWrite();  // own 0029
+       memory::store_and_swap<uint32_t>(memory_->TranslatePhysical(mem_addr), value);
+     }
+   } else {
+@@ -950,6 +952,7 @@ bool CommandProcessor::ExecutePacketType3_INTERRUPT(memory::RingBuffer* reader,
+ 
+   // generate interrupt from the command stream
+   uint32_t cpu_mask = reader->ReadAndSwap<uint32_t>();
++  OnBeforeGuestWrite();  // own 0029
+   for (int n = 0; n < 6; n++) {
+     if (cpu_mask & (1 << n)) {
+       if (graphics_system_) {
+@@ -1204,6 +1207,7 @@ bool CommandProcessor::ExecutePacketType3_REG_TO_MEM(memory::RingBuffer* reader,
+   auto endianness = static_cast<xenos::Endian>(mem_addr & 0x3);
+   mem_addr &= ~0x3;
+   reg_val = GpuSwap(reg_val, endianness);
++  OnBeforeGuestWrite();  // own 0029
+   memory::store(memory_->TranslatePhysical(mem_addr), reg_val);
+ 
+   return true;
+@@ -1218,6 +1222,7 @@ bool CommandProcessor::ExecutePacketType3_MEM_WRITE(memory::RingBuffer* reader,
+     auto endianness = static_cast<xenos::Endian>(write_addr & 0x3);
+     auto addr = write_addr & ~0x3;
+     write_data = GpuSwap(write_data, endianness);
++    OnBeforeGuestWrite();  // own 0029
+     memory::store(memory_->TranslatePhysical(addr), write_data);
+     write_addr += 4;
+   }
+@@ -1279,6 +1284,7 @@ bool CommandProcessor::ExecutePacketType3_COND_WRITE(memory::RingBuffer* reader,
+       auto endianness = static_cast<xenos::Endian>(write_reg_addr & 0x3);
+       write_reg_addr &= ~0x3;
+       write_data = GpuSwap(write_data, endianness);
++      OnBeforeGuestWrite();  // own 0029
+       memory::store(memory_->TranslatePhysical(write_reg_addr), write_data);
+     } else {
+       // Register.
+@@ -1324,6 +1330,7 @@ bool CommandProcessor::ExecutePacketType3_EVENT_WRITE_SHD(memory::RingBuffer* re
+   auto endianness = static_cast<xenos::Endian>(address & 0x3);
+   address &= ~0x3;
+   data_value = GpuSwap(data_value, endianness);
++  OnBeforeGuestWrite();  // own 0029
+   memory::store(memory_->TranslatePhysical(address), data_value);
+   return true;
+ }
+@@ -1351,6 +1358,7 @@ bool CommandProcessor::ExecutePacketType3_EVENT_WRITE_EXT(memory::RingBuffer* re
+       1,                                         // max z
+   };
+   assert_true(endianness == xenos::Endian::k8in16);
++  OnBeforeGuestWrite();  // own 0029
+   memory::copy_and_swap_16_unaligned(memory_->TranslatePhysical(address), extents,
+                                      rex::countof(extents));
+   return true;
+@@ -1382,6 +1390,7 @@ bool CommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(memory::RingBuffer* re
+     // Older versions of D3D also checks for ZFail (4D5307D5).
+     bool is_end_via_z_fail =
+         pSampleCounts->ZFail_A == kQueryFinished || pSampleCounts->ZFail_B == kQueryFinished;
++    OnBeforeGuestWrite();  // own 0029
+     std::memset(pSampleCounts, 0, sizeof(xe_gpu_depth_sample_counts));
+     if (is_end_via_z_pass || is_end_via_z_fail) {
+       pSampleCounts->ZPass_A = fake_sample_count;

@@ -1,0 +1,310 @@
+# Upload worker (26 Nov): BOTS_GFX_UPLOAD_WORKER=1 starts a thread that does the CPU copy of guest-memory uploads of
+# BOTS_GFX_UPLOAD_WORKER_MIN_KB or more (default 4; upload_worker.h, lock-free, one producer and one consumer), while
+# the render thread goes on with the draw. Drained before each submission (Flush) and before the command processor
+# writes guest memory or raises an interrupt (SDK patch 0029, OnBeforeGuestWrite), so the game never sees a fence
+# while a copy of its data is pending. First test at 16 KB: 3-4% less renderer time per draw. Per-frame log line:
+# "copies (MB) on the upload worker". Needs SDK patch 0029 (tools\build_native.bat builds both).
+ src/gfx/native.cpp         |  17 ++++++-
+ src/gfx/vk/draw.cpp        |   7 +++
+ src/gfx/vk/renderer.cpp    |  16 +++++-
+ src/gfx/vk/renderer.h      |  12 +++++
+ src/gfx/vk/upload_worker.h | 118 +++++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 166 insertions(+), 4 deletions(-)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 4fe0df5..b9edd72 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -198,7 +198,8 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         REXLOG_INFO(
+             "gfx native: per frame over {} frames: {:.2f} ms wall, {:.2f} ms in draws, {:.2f} ms textures, {:.2f} ms "
+             "GPU wait, {:.1f} flushes, {:.0f} draws, {:.1f} resolves, {:.1f} render passes, {:.1f} transfers, {:.1f} barriers, "
+-            "{:.1f} draws waiting on shaders, {:.1f} uploads moved ahead, {:.1f} in place",
++            "{:.1f} draws waiting on shaders, {:.1f} uploads moved ahead, {:.1f} in place, {:.1f} copies ({:.2f} MB) on "
++            "the upload worker",
+             frames_ - last_.frames,
+             std::chrono::duration<double, std::milli>(now - last_.time).count() / n, ms(st.draw_us, last_.draw_us),
+             ms(st.texture_us, last_.texture_us), ms(st.wait_us, last_.wait_us), double(st.flushes - last_.flushes) / n,
+@@ -206,7 +207,9 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+             double(st.render_passes - last_.render_passes) / n, double(st.transfers - last_.transfers) / n,
+             double(st.barriers - last_.barriers) / n, double(st.pending_draws - last_.pending_draws) / n,
+             double(st.uploads_hoisted - last_.uploads_hoisted) / n,
+-            double(st.uploads_in_place - last_.uploads_in_place) / n);
++            double(st.uploads_in_place - last_.uploads_in_place) / n,
++            double(renderer_->upload_worker_jobs() - last_.upload_worker_jobs) / n,
++            double(renderer_->upload_worker_bytes() - last_.upload_worker_bytes) / 1048576.0 / n);
+         if (renderer_->draw_profile()) {
+           std::string phases;
+           for (size_t i = 0; i < std::size(st.draw_phase_ns); ++i) {
+@@ -291,6 +294,8 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+       last_.sampler_memo_hits = st.sampler_memo_hits, last_.set_binds_skipped = st.set_binds_skipped;
+       last_.invalidations = st.invalidations;
+       last_.uploads_hoisted = st.uploads_hoisted, last_.uploads_in_place = st.uploads_in_place;
++      last_.upload_worker_jobs = renderer_->upload_worker_jobs();
++      last_.upload_worker_bytes = renderer_->upload_worker_bytes();
+       last_.index_bytes_converted = st.index_bytes_converted, last_.index_expanded = st.index_expanded;
+       last_.texture_loads = st.texture_loads, last_.texture_loads_evicted = st.texture_loads_evicted;
+       last_.texture_reloads = st.texture_reloads, last_.texture_evictions = st.texture_evictions;
+@@ -1100,6 +1105,12 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+   // Copies arrive as draws in EDRAM copy mode, which the renderer resolves itself.
+   bool IssueCopy() override { return true; }
+ 
++  // qos (patch 0103, with SDK patch 0029): the command processor is about to write guest memory or raise an
++  // interrupt, after which the game may change what the uploads so far read: the upload worker's copies finish first.
++  void OnBeforeGuestWrite() override {
++    if (renderer_) renderer_->DrainUploads();
++  }
++
+   // Occlusion queries (renderer.h; BOTS_GFX_OCCLUSION=0/1). The SDK reports every query visible, so the game's
+   // occlusion culling culls nothing. D3D marks a query's end by writing 0xFFFFFEED into the sample-count struct
+   // before the event; a begin has no marker and starts from zero.
+@@ -1116,6 +1127,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     const uint32_t marker = rex::byte_swap(0xFFFFFEEDu);
+     const bool end = counts->ZPass_A == marker || counts->ZPass_B == marker || counts->ZFail_A == marker ||
+                      counts->ZFail_B == marker;
++    OnBeforeGuestWrite();  // qos (patch 0103): the counts below are guest memory
+     if (end) {
+       if (capture_) capture_->OnOcclusionEnd(address);
+       renderer_->EndOcclusionQuery(address);
+@@ -1173,6 +1185,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     uint64_t texture_reloads_skipped = 0;
+     uint64_t texture_levels_split = 0;  // qos (0099)
+     uint64_t uploads_hoisted = 0, uploads_in_place = 0;  // qos (0102)
++    uint64_t upload_worker_jobs = 0, upload_worker_bytes = 0;  // qos (0103)
+   } last_;
+   // Frame-time diagnostics (issue #12): the interval between swaps on this thread, what each slow one did (a "gfx
+   // hitch" line, at most kHitchLines per stats interval), and a histogram per interval. BOTS_HITCH_MS sets the
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 4ce96d4..3b44d6f 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -252,6 +252,13 @@ bool Renderer::InitDrawing() {
+     REXLOG_INFO("gfx native: texture worker thread on (BOTS_GFX_WORKER): texture levels of 64 KB or more are copied "
+                 "in two halves at once");
+   }
++  if (const char* v = std::getenv("BOTS_GFX_UPLOAD_WORKER"); v && *v == '1') {
++    size_t min_bytes = UploadWorker::kDefaultMinBytes;
++    if (const char* k = std::getenv("BOTS_GFX_UPLOAD_WORKER_MIN_KB"); k && *k) min_bytes = size_t(std::atoi(k)) * 1024;
++    upload_worker_ = std::make_unique<UploadWorker>(min_bytes);
++    REXLOG_INFO("gfx native: upload worker thread on (BOTS_GFX_UPLOAD_WORKER=1): guest-memory uploads of {} KB or "
++                "more are copied on it (BOTS_GFX_UPLOAD_WORKER_MIN_KB)", min_bytes / 1024);
++  }
+   if (const char* v = std::getenv("BOTS_GFX_MAX_ANISO"); v && *v) max_anisotropy_ = uint32_t(std::atoi(v));
+   if (const char* v = std::getenv("BOTS_GFX_FORCE_ANISO"); v && *v) force_anisotropy_ = uint32_t(std::atoi(v));
+   if (force_anisotropy_) REXLOG_INFO("gfx native: anisotropic filtering at least {}x on 3D textures", force_anisotropy_);
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index 70317a6..dbb2cb6 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -840,7 +840,7 @@ bool Renderer::HoistUpload(uint32_t start, uint32_t length) {
+   VkDeviceSize offset;
+   uint8_t* staging = Upload(length, 16, offset);
+   if (!staging) return false;
+-  std::memcpy(staging, memory_(start), length);
++  StageGuestMemory(staging, start, length);
+   const VkBufferCopy region{offset, start, length};
+   vk_.vkCmdCopyBuffer(s.pre_cmd, ring_.buffer, shared_memory_.buffer, 1, &region);
+   stats_.uploaded_bytes += length;
+@@ -848,6 +848,16 @@ bool Renderer::HoistUpload(uint32_t start, uint32_t length) {
+   return true;
+ }
+ 
++// qos (patch 0103): the CPU copy of an upload into the staging ring, on the upload worker when it's big enough. The
++// GPU copy from the ring runs only once the submission is submitted, and Flush drains the worker first.
++void Renderer::StageGuestMemory(uint8_t* staging, uint32_t start, uint32_t length) {
++  if (upload_worker_ && length >= upload_worker_->min_bytes()) {
++    upload_worker_->Push(staging, memory_(start), length);
++  } else {
++    std::memcpy(staging, memory_(start), length);
++  }
++}
++
+ bool Renderer::UploadGuestMemory(uint32_t start, uint32_t length) {
+   if (zero_copy_) return true;  // the buffer is guest memory itself
+   if (HoistUpload(start, length)) return true;
+@@ -865,7 +875,7 @@ bool Renderer::UploadGuestMemory(uint32_t start, uint32_t length) {
+       staging = Upload(chunk, 16, offset);
+       if (!staging) return false;
+     }
+-    std::memcpy(staging, memory_(start), chunk);
++    StageGuestMemory(staging, start, chunk);
+     const VkBufferCopy region{offset, start, chunk};
+     Rec([this, src = ring_.buffer, dst = shared_memory_.buffer, region](VkCommandBuffer cmd) {
+       vk_.vkCmdCopyBuffer(cmd, src, dst, 1, &region);
+@@ -935,6 +945,7 @@ std::string Renderer::PipelineLibrarySupport() const {
+ }
+ 
+ Renderer::~Renderer() {
++  upload_worker_.reset();  // qos (patch 0103): finishes its copies (into the staging rings freed below), then stops
+   recorder_.reset();  // records what it was handed, then stops
+   if (!device_) return;
+   if (shaders_) shaders_->StopWorkers();  // their jobs use the pipeline cache and shader modules
+@@ -1113,6 +1124,7 @@ void Renderer::Flush() {
+   }
+   EndRendering("flush");
+   GpuMark(kGpuOther, true);  // closes the last span
++  DrainUploads();  // qos (patch 0103): the staging ring holds every upload's bytes before it's submitted
+   if (ring_used_) vmaFlushAllocation(allocator_, ring_.allocation, 0, ring_used_);
+   if (index_heap_used_ > index_heap_flushed_) {
+     vmaFlushAllocation(allocator_, index_heap_.allocation, index_heap_flushed_, index_heap_used_ - index_heap_flushed_);
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index 63e48f7..9da34e1 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -38,6 +38,7 @@
+ #include "../pm4.h"
+ #include "recorder.h"
+ #include "texture_worker.h"
++#include "upload_worker.h"
+ #include "shaders.h"
+ #include "vk_api.h"
+ 
+@@ -161,6 +162,13 @@ class Renderer : public Pm4Sink {
+   // qos (patch 0102): [start, start + length) of the shared-memory buffer is read by GPU work recorded from now on
+   // in this submission (MemorySync::Request), so an upload there can't be moved ahead of it (UploadGuestMemory).
+   void NoteSharedRead(uint32_t start, uint32_t length);
++  // qos (patch 0103): waits for the upload worker's copies (before the command processor writes guest memory or
++  // raises an interrupt: SDK patch 0029's OnBeforeGuestWrite; and before a submission).
++  void DrainUploads() {
++    if (upload_worker_) upload_worker_->Drain();
++  }
++  uint64_t upload_worker_jobs() const { return upload_worker_ ? upload_worker_->jobs() : 0; }
++  uint64_t upload_worker_bytes() const { return upload_worker_ ? upload_worker_->bytes() : 0; }
+   // Live: after each guest frame's Flush. Evicts guest textures no draw used for a while.
+   void EndFrame();
+   // Native present: the front buffer resolved to `address` (else the latest resolve), through the 256-entry
+@@ -735,6 +743,10 @@ class Renderer : public Pm4Sink {
+   std::unique_ptr<Recorder> recorder_;
+   // qos (patch 0099): BOTS_GFX_WORKER=1, a third thread that copies half of each big texture level (texture_worker.h).
+   std::unique_ptr<TextureWorker> texture_worker_;
++  // qos (patch 0103): BOTS_GFX_UPLOAD_WORKER=1, a thread that does the CPU copy of big guest-memory uploads
++  // (upload_worker.h). StageGuestMemory hands a copy to it; DrainUploads waits for them all.
++  std::unique_ptr<UploadWorker> upload_worker_;
++  void StageGuestMemory(uint8_t* staging, uint32_t start, uint32_t length);
+   void RecBeginRendering(const VkRenderingInfo& info);  // vkCmdBeginRendering with the info copied (Rec)
+  public:
+   uint64_t recorder_packets() const { return recorder_ ? recorder_->pushed() : 0; }
+diff --git a/src/gfx/vk/upload_worker.h b/src/gfx/vk/upload_worker.h
+new file mode 100644
+index 0000000..e1bea6d
+--- /dev/null
++++ b/src/gfx/vk/upload_worker.h
+@@ -0,0 +1,118 @@
++// qos (patch 0103): a worker thread for the CPU half of guest-memory uploads. BOTS_GFX_UPLOAD_WORKER=1 starts it.
++// An upload copies the pages the game rewrote into the submission's staging ring, then records the GPU copy from
++// there; that memcpy ran on the render thread, between the draw that needed the pages and everything after it. Now a
++// copy of min_bytes() or more is handed to this worker and the render thread goes on with the draw (textures,
++// descriptors, constants...) while it runs. Its result is needed only when the submission is submitted, and the
++// game may change the source only after the GPU work signals it (a fence or other write-back, an interrupt), so the
++// render thread waits for the copies (Drain) before submitting (Renderer::Flush) and before the command processor
++// writes guest memory or raises an interrupt (SDK patch 0029, CommandProcessor::OnBeforeGuestWrite).
++//
++// One producer (the render thread), one consumer. A ring of jobs with two counters; each side sleeps (atomic wait)
++// only after spinning a little, and the other wakes it only when it says it's asleep.
++#pragma once
++
++#include <atomic>
++#include <cstdint>
++#include <cstring>
++#include <thread>
++
++#if defined(_MSC_VER)
++#include <intrin.h>
++#define BOTS_UPLOAD_PAUSE() _mm_pause()
++#elif defined(__x86_64__) || defined(__i386__)
++#include <immintrin.h>
++#define BOTS_UPLOAD_PAUSE() _mm_pause()
++#else
++#define BOTS_UPLOAD_PAUSE() std::this_thread::yield()
++#endif
++
++namespace bots::gfx::vk {
++
++class UploadWorker {
++ public:
++  // Copies smaller than this are done in place (handing one over costs more than copying it).
++  // BOTS_GFX_UPLOAD_WORKER_MIN_KB sets it (default 4; 16 in the first test, 26 Nov: 3-4% per draw, most copies smaller).
++  static constexpr size_t kDefaultMinBytes = 4 * 1024;
++
++  explicit UploadWorker(size_t min_bytes = kDefaultMinBytes) : min_bytes_(min_bytes), thread_([this] { Run(); }) {}
++  size_t min_bytes() const { return min_bytes_; }
++  ~UploadWorker() {
++    quit_.store(true);
++    Push(nullptr, nullptr, 0);  // an empty job: a sleeping worker wakes only for a new count
++    thread_.join();
++  }
++  UploadWorker(const UploadWorker&) = delete;
++  UploadWorker& operator=(const UploadWorker&) = delete;
++
++  void Push(void* dst, const void* src, size_t bytes) {
++    const uint64_t p = pushed_.load(std::memory_order_relaxed);
++    if (p - done_.load(std::memory_order_acquire) >= kSlots) Drain();  // full
++    jobs_[p % kSlots] = {static_cast<uint8_t*>(dst), static_cast<const uint8_t*>(src), bytes};
++    pushed_.store(p + 1);
++    if (worker_asleep_.load()) pushed_.notify_one();
++    ++jobs_pushed_;
++    bytes_pushed_ += bytes;
++  }
++
++  // Returns once every copy handed over so far is done.
++  void Drain() {
++    const uint64_t target = pushed_.load(std::memory_order_relaxed);
++    for (int spin = 0; done_.load(std::memory_order_acquire) != target; ++spin) {
++      if (spin < 4000) {
++        BOTS_UPLOAD_PAUSE();
++        continue;
++      }
++      drainer_asleep_.store(true);
++      const uint64_t seen = done_.load();
++      if (seen != target) done_.wait(seen);
++      drainer_asleep_.store(false);
++    }
++  }
++
++  uint64_t jobs() const { return jobs_pushed_; }
++  uint64_t bytes() const { return bytes_pushed_; }
++
++ private:
++  struct Job {
++    uint8_t* dst;
++    const uint8_t* src;
++    size_t bytes;
++  };
++  static constexpr uint64_t kSlots = 4096;
++
++  void Run() {
++    uint64_t next = 0;
++    for (;;) {
++      uint64_t available = pushed_.load(std::memory_order_acquire);
++      for (int spin = 0; available == next && spin < 20000; ++spin) {
++        BOTS_UPLOAD_PAUSE();
++        available = pushed_.load(std::memory_order_acquire);
++      }
++      if (available == next) {
++        if (quit_.load()) return;
++        worker_asleep_.store(true);
++        available = pushed_.load();
++        if (available == next && !quit_.load()) pushed_.wait(next);
++        worker_asleep_.store(false);
++        continue;
++      }
++      if (quit_.load() && available == next + 1 && !jobs_[next % kSlots].bytes) return;
++      while (next != available) {
++        const Job& job = jobs_[next % kSlots];
++        if (job.bytes) std::memcpy(job.dst, job.src, job.bytes);
++        ++next;
++        done_.store(next);
++        if (drainer_asleep_.load()) done_.notify_all();
++      }
++    }
++  }
++
++  Job jobs_[kSlots];
++  std::atomic<uint64_t> pushed_{0}, done_{0};
++  std::atomic<bool> worker_asleep_{false}, drainer_asleep_{false}, quit_{false};
++  uint64_t jobs_pushed_ = 0, bytes_pushed_ = 0;  // render thread only
++  const size_t min_bytes_;
++  std::thread thread_;
++};
++
++}  // namespace bots::gfx::vk

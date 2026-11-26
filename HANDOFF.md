@@ -388,6 +388,18 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       rest are pages already read earlier in the submission. Next (user, 19:52): upload copies on a worker thread (CPU
       half of the uploads, ~1-1.5 ms), then PM4 parsing on its own thread (~2.4 ms), then per-draw trims (setup from
       changed registers, constants by changed ranges, descriptor reuse, tracker skip).
+      **Upload worker done 26 Nov 20:45 (native 0103-upload-worker + SDK 0029-cp-before-guest-write, OWN_PATCHES
+      own29; works, no glitches):** BOTS_GFX_UPLOAD_WORKER=1 starts a lock-free SPSC thread (upload_worker.h) that does
+      the memcpy of uploads >= BOTS_GFX_UPLOAD_WORKER_MIN_KB (default 4) into the staging ring; drained in Flush and
+      in NativeCommandProcessor::OnBeforeGuestWrite (SDK 0029: a virtual called before every CP guest-memory write -
+      read pointer / scratch / event write-backs, MEM_WRITE, REG_TO_MEM, COND_WRITE, ZPD - and before interrupts), so
+      the game never sees a fence with a copy pending. A/B same session: 3-4% less renderer time per draw at 16 KB;
+      4 KB and 1 KB no further gain (noise): the copies were cheap, the rest of "tracker" is bookkeeping. Not yet in
+      the launcher (env var only). Heavy-stretch finding: ~7,400 draws at 1.85-1.96 us/draw with ~1,150 render passes
+      vs 8,500 draws at 1.29-1.31 us with ~470 elsewhere: the extra pass splits (uploads in place) cost ~2-3 ms there.
+      Next (proposed 20:47): let an upload move ahead even if its pages were read this submission, as long as no
+      OnBeforeGuestWrite (fence) happened since the read (the game appends to a page; the bytes read earlier can't
+      change without a fence) - check the read-pointer write-back's role (dynamic data in the ring). Then PM4 thread.
       Earlier order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
       its render pass, so uploads stop splitting passes; ~300 passes a frame now), then copying uploads on a worker
       thread (needs exact copy timing, or the 24 Nov zero-copy glitch comes back), then the command stream (PM4)
