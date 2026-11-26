@@ -323,9 +323,25 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   docs/releases/0.2.1.md. Idea for later: the launcher could repair a missing/broken shortcut at start, so players
   needn't reinstall for it.
 - **To do, 26 Nov (user, 25 Nov 21:44), in this order:**
-  1. Launcher: fixed window size, vertical scroll bar on each tab (the Display tab overflows).
-  2. Depth of field off option (r_dof_enable + weaponDof, held every frame).
-  3. Hit markers off option (enemy hit indicator: find its drawing; hud_fade_enemyhit).
+  1. ~~Launcher: fixed window size, scroll bar~~ done 26 Nov (works, user 18:17): window not resizable, settings tabs
+     in a canvas whose scroll bar shows only when needed, the wheel scrolls the shown tab, the wheel over a closed
+     drop-down scrolls instead of changing it. Every on/off setting is now a switch (_switch/_toggle) with
+     Enabled/Disabled beside it (user: tick boxes weren't clear); "Hide achievement pop-ups" became "Achievement
+     pop-ups" (inverted switch, same saved key).
+  2. ~~Depth of field off~~ done 26 Nov (SP works, user 18:03): src/dof.cpp, shared by both programs, holds r_dof_enable
+     at 0 (SP dvar ptr 0x84055E40, MP 0x8518C0E0); the renderer's R_SetDof (SP 0x82561A58) zeroes the view's DoF when
+     it's 0, cutscenes and aiming alike. On: set back to 1 once (it's a saved dvar). --depth_of_field, Graphics tab.
+  3. ~~Hit markers off~~ done 26 Nov (SP works, user 18:03): SP's is a HUD owner-draw (sub_82183188, fade
+     hud_fade_enemyhit), skipped; MP's is _damagefeedback.gsc's hud element: the script source is patched as it's read
+     (sub_82274EE0) so updateDamageFeedback sets alpha 0 (the sound stays). --hit_markers, Graphics tab. MP untested:
+     the first MP test died earlier, see the DLC memory fix below.
+  - **DLC zone out of memory (26 Nov 18:01, fixed, not yet tested):** with a DLC folder, starting a match failed
+    ("Need 47906831 more bytes of ram", Sys_Error Out of memory, mp_barge): dlc_content.cpp's "content" zone was
+    loaded with allocFlags 1 after ui_mp and never freed, and zone memory is a stack, so unloading ui_mp for the map
+    freed nothing usable. Now it takes ui_mp's flags (34 at start, 2 from the front end) and every later ui_mp load
+    gets "content" appended (DB_LoadXAssets hook). 0.2.1 has the bug: release 0.2.2 once it's confirmed.
+  - **Testing note:** the launcher's Play runs the installed build (launcher.json), not the repo's; test new game code
+    with the repo's qos.exe directly.
   4. LOD distance option (Original / Far / Maximum: r_highLodDist..r_lowestLodDist, r_lodScale/r_lodBias); check
      frame times in busy areas.
   5. Shadow quality option (sm_sunSampleSizeNear and sun shadow distance; sm_maxLights; test for flicker).
