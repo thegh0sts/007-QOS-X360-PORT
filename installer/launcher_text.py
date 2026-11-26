@@ -440,11 +440,11 @@ TEXT = {
         "Cadence d'images de la Xbox 360 d'origine (plus lente)",
         'Ritmo de fotogramas original de Xbox 360 (más lento)',
         'Cadenza fotogrammi originale Xbox 360 (più lenta)'),
-    'Hide achievement pop-ups': (
-        'Erfolgs-Pop-ups ausblenden',
-        'Masquer les notifications de succès',
-        'Ocultar avisos de logros',
-        'Nascondi i popup degli obiettivi'),
+    'Achievement pop-ups': (
+        'Erfolgs-Pop-ups',
+        'Notifications de succès',
+        'Avisos de logros',
+        'Popup degli obiettivi'),
     'Native renderer by the Skullburglar project (github.com/nlwstein/skullburglar, BSD 3-Clause).': (
         'Nativer Renderer vom Skullburglar-Projekt (github.com/nlwstein/skullburglar, BSD 3-Clause).',
         'Moteur de rendu natif par le projet Skullburglar (github.com/nlwstein/skullburglar, BSD 3-Clause).',
@@ -1867,4 +1867,17 @@ TEXT = {
         'Désactivé : les cinématiques en jeu restent en plein écran. Les cinématiques vidéo gardent leurs bandes.',
         'Desactivado: las escenas del juego siguen a pantalla completa. Los vídeos conservan sus propias franjas.',
         'Disattivato: le scene di gioco restano a schermo intero. I video mantengono le proprie bande.'),
+    'Enabled': ('Aktiviert', 'Activé', 'Activado', 'Attivato'),
+    'Disabled': ('Deaktiviert', 'Désactivé', 'Desactivado', 'Disattivato'),
+    'Hit markers': ('Treffermarkierungen', 'Marqueurs de touche', 'Marcadores de impacto', 'Indicatori di colpo'),
+    'The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.': (
+        'Die Markierung am Fadenkreuz, wenn ein Schuss einen Gegner trifft. Im Mehrspieler bleibt der Ton.',
+        'La marque au réticule quand un tir touche un ennemi. En multijoueur, son bruit reste.',
+        'La marca en la mira cuando un disparo alcanza a un enemigo. En multijugador su sonido se mantiene.',
+        'Il segno sul mirino quando un colpo va a segno. In multigiocatore il suono resta.'),
+    'The blur on distant or close things in cutscenes and when aiming. Off: everything stays sharp.': (
+        'Die Unschärfe ferner oder naher Dinge in Zwischensequenzen und beim Zielen. Aus: alles bleibt scharf.',
+        'Le flou des objets lointains ou proches dans les cinématiques et en visant. Désactivé : tout reste net.',
+        'El desenfoque de lo lejano o cercano en las escenas y al apuntar. Desactivado: todo se ve nítido.',
+        'La sfocatura degli oggetti lontani o vicini nelle scene e mirando. Disattivata: tutto resta nitido.'),
 }

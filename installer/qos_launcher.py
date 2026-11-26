@@ -161,6 +161,10 @@ DEFAULTS = {
     "dlc_folder": "",
     # In-game cutscenes' black bars (src/letterbox.cpp): off keeps the view full screen.
     "cutscene_letterbox": False,
+    # Depth of field blur (src/dof.cpp: r_dof_enable), in single player and multiplayer.
+    "depth_of_field": True,
+    # The hit marker when a shot lands (src/hit_markers.cpp, mp/src/hit_markers.cpp).
+    "hit_markers": True,
 }
 
 
@@ -464,6 +468,10 @@ def game_args(s, screen=None):
         args.append("--achievement_popups=false")
     if s.get("cutscene_letterbox"):
         args.append("--cutscene_letterbox=true")
+    if not s.get("depth_of_field", True):
+        args.append("--depth_of_field=false")
+    if not s.get("hit_markers", True):
+        args.append("--hit_markers=false")
     if int(s.get("brightness", 100)) != 100:
         args.append(f"--brightness={int(s['brightness']) / 100:.2f}")  # the native renderer's last pass
     effect = UPSCALING_EFFECT.get(s.get("upscaling"))
@@ -594,6 +602,10 @@ class SettingsView(tk.Frame):
         self.s = dict(settings) if settings else load_settings()
         self.on_language = on_language
         self.vars, self.combos, self.combo_values, self.combo_labels = {}, {}, {}, {}
+        # The window has a fixed size, so each tab scrolls when its settings don't fit (user, 25 Nov). The wheel
+        # scrolls the tab that's showing, wherever the pointer is in it.
+        self.scrollers = {}
+        self.bind_all("<MouseWheel>", self._wheel)
 
         head = tk.Frame(self, bg=BG)
         head.pack(fill="x", padx=28, pady=(20, 4))
@@ -671,7 +683,7 @@ class SettingsView(tk.Frame):
         note(box, 13, "Multiplayer keeps its own, built the same way at its first start.")
 
         box = self._page("Display")
-        self._check(box, 0, "fullscreen", "Fullscreen")
+        self._toggle(box, 0, "fullscreen", "Fullscreen")
         self._combo(box, 1, "resolution", "Output resolution", RESOLUTIONS)
         self._combo(box, 2, "render_scale", "Render resolution (sharper, slower)", SCALES)
         note(box, 3, "The game draws at 1280×720; the render resolution is what the native renderer draws it at. "
@@ -683,13 +695,13 @@ class SettingsView(tk.Frame):
         self._combo(box, 7, "fps", "Frame rate", FPS)
         note(box, 8, "30 is the original. The game runs at normal speed at any rate, but some scripted moments may "
                      "misbehave above 30.")
-        self._check(box, 9, "vsync", "V-sync")
+        self._toggle(box, 9, "vsync", "V-sync")
         note(box, 10, "Off can smooth heavy scenes at 60 FPS, with some tearing.")
         self._slider(box, 11, "fov", "Field of view (degrees)", 65, 110, 1)
         note(box, 12, "65 is the original.")
         self._combo(box, 13, "fps_counter", "FPS counter", FPS_COUNTER)
-        self._check(box, 14, "hide_achievements", "Hide achievement pop-ups")
-        self._check(box, 15, "cutscene_letterbox", "Black bars in in-game cutscenes")
+        self._toggle(box, 14, "hide_achievements", "Achievement pop-ups", invert=True)
+        self._toggle(box, 15, "cutscene_letterbox", "Black bars in in-game cutscenes")
         note(box, 16, "Off: in-game cutscenes stay full screen. Video cutscenes keep their own bars.")
         self.vars["language"].trace_add("write", lambda *_: self._game_language_changed())
         tk.Label(box, text=tr("Native renderer by the Skullburglar project (github.com/nlwstein/skullburglar, "
@@ -705,6 +717,10 @@ class SettingsView(tk.Frame):
         note(box, 5, "2 records the drawing on a second thread: faster in busy scenes. 3 also copies textures on a "
                      "third thread, for fewer hitches when areas load. Go back to 1 if the picture flickers or objects "
                      "go missing.")
+        self._toggle(box, 6, "depth_of_field", "Depth of field")
+        note(box, 7, "The blur on distant or close things in cutscenes and when aiming. Off: everything stays sharp.")
+        self._toggle(box, 8, "hit_markers", "Hit markers")
+        note(box, 9, "The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.")
 
         box = self._page("Controls")
         self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)
@@ -717,7 +733,7 @@ class SettingsView(tk.Frame):
         self._subheading(pad, 0, "Controller")
         self._slider(pad, 1, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
         note(pad, 2, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
-        self._check(pad, 3, "vibration", "Controller vibration")
+        self._toggle(pad, 3, "vibration", "Controller vibration")
         self._subheading(pad, 4, "Controller map")
         self.pad_map = tk.Frame(pad, bg=PANEL)
         self.pad_map.grid(row=5, column=0, columnspan=2, sticky="ew")
@@ -727,7 +743,7 @@ class SettingsView(tk.Frame):
         self._subheading(kbm, 0, "Keyboard and mouse")
         self._slider(kbm, 1, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
         note(kbm, 2, "100 is the PC game's default speed.")
-        self._check(kbm, 3, "mouse_invert", "Invert mouse up/down")
+        self._toggle(kbm, 3, "mouse_invert", "Invert mouse up/down")
         self._subheading(kbm, 4, "Keyboard and mouse map")
         kbm_map = tk.Frame(kbm, bg=PANEL)
         kbm_map.grid(row=5, column=0, columnspan=2, sticky="ew")
@@ -774,7 +790,7 @@ class SettingsView(tk.Frame):
                      "whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few "
                      "seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.")
 
-        box = self._page("Saves")
+        box = self._page("Saves", scroll=False)
         line = tk.Frame(box, bg=PANEL)
         line.grid(row=0, column=0, columnspan=2, sticky="w")
         self._link(line, tr("Open saves folder"), self.open_saves).pack(side="left")
@@ -801,7 +817,7 @@ class SettingsView(tk.Frame):
         bar.pack(side="right", fill="y")
         self.saves_tree.bind("<Double-1>", lambda e: self.open_save_folder())
 
-        self._page("Achievements")
+        self._page("Achievements", scroll=False)
         self.achievements_box = tk.Frame(self.pages["Achievements"], bg=PANEL)
         self.achievements_box.pack(fill="both", expand=True)
         self.show_tab(self.s.get("tab") if self.s.get("tab") in TABS else "Display")
@@ -820,10 +836,11 @@ class SettingsView(tk.Frame):
                   bd=0, pady=8).pack(side="left", padx=10)
         tk.Button(foot, text=tr("Defaults"), width=10, command=self.reset, font=("Segoe UI", 11),
                   bd=0, pady=6).pack(side="right")
-        self.vars["close_on_play"] = tk.BooleanVar(value=self.s["close_on_play"])
-        tk.Checkbutton(foot, text=tr("Close launcher when the game starts"), variable=self.vars["close_on_play"],
-                       font=("Segoe UI", 9), fg=DIM, bg=BG, selectcolor=BG, activebackground=BG,
-                       activeforeground=FG).pack(side="right", padx=10)
+        v = self.vars["close_on_play"] = tk.BooleanVar(value=self.s["close_on_play"])
+        # A switch too, without the Enabled/Disabled word: the footer has no room for it.
+        self._switch(foot, v, BG, show_state=False).pack(side="right", padx=(6, 10))
+        tk.Label(foot, text=tr("Close launcher when the game starts"), font=("Segoe UI", 9), fg=DIM, bg=BG
+                 ).pack(side="right")
 
         self.status = tk.StringVar(value=tr("Settings are saved with Save settings, or when you press Play."))
         tk.Label(self, textvariable=self.status, font=("Segoe UI", 9), fg=DIM, bg=BG, wraplength=700,
@@ -832,14 +849,55 @@ class SettingsView(tk.Frame):
         self.saved = saved if saved is not None else self._snapshot()
 
     # widgets ------------------------------------------------------------
-    def _page(self, title):
-        page = tk.Frame(self.pages_frame, bg=PANEL, padx=22, pady=18)
+    def _page(self, title, scroll=True):
+        """A tab's page. With scroll, its settings sit in a canvas with a scroll bar that shows when they don't fit;
+        without (Saves, Achievements), the page lays out its own scrolling list."""
+        if not scroll:
+            page = tk.Frame(self.pages_frame, bg=PANEL, padx=22, pady=18)
+            page.place(relx=0, rely=0, relwidth=1, relheight=1)
+            box = tk.Frame(page, bg=PANEL)
+            box.pack(fill="x")
+            box.columnconfigure(1, weight=1)
+            self.pages[title] = page
+            return box
+        page = tk.Frame(self.pages_frame, bg=PANEL)
         page.place(relx=0, rely=0, relwidth=1, relheight=1)
-        box = tk.Frame(page, bg=PANEL)
+        canvas = tk.Canvas(page, bg=PANEL, highlightthickness=0, bd=0)
+        bar = ttk.Scrollbar(page, orient="vertical", command=canvas.yview)
+        inner = tk.Frame(canvas, bg=PANEL, padx=22, pady=18)
+        window = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=bar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+
+        def fit(_=None):
+            canvas.configure(scrollregion=(0, 0, inner.winfo_reqwidth(), inner.winfo_reqheight()))
+            if inner.winfo_reqheight() > canvas.winfo_height() > 1:
+                if not bar.winfo_ismapped():
+                    bar.pack(side="right", fill="y", before=canvas)
+            else:
+                if bar.winfo_ismapped():
+                    bar.pack_forget()
+                canvas.yview_moveto(0)
+
+        inner.bind("<Configure>", fit)
+        canvas.bind("<Configure>", lambda e: (canvas.itemconfigure(window, width=e.width), fit()))
+        box = tk.Frame(inner, bg=PANEL)
         box.pack(fill="x")
         box.columnconfigure(1, weight=1)
         self.pages[title] = page
+        self.scrollers[title] = canvas
         return box
+
+    def _wheel(self, event):
+        canvas = self.scrollers.get(self.s.get("tab"))
+        try:
+            if canvas is None or not canvas.winfo_exists():
+                return
+            first, last = canvas.yview()
+            if first > 0 or last < 1:
+                canvas.yview_scroll(-1 * (event.delta // 120 or (1 if event.delta > 0 else -1)), "units")
+        except tk.TclError:  # a view the launcher has already swapped out
+            pass
 
     def _subheading(self, box, row, text):
         tk.Label(box, text=tr(text), font=("Segoe UI", 9, "bold"), fg=DIM, bg=PANEL
@@ -860,11 +918,45 @@ class SettingsView(tk.Frame):
     def _link(self, parent, text, cmd):
         return link_button(parent, text, cmd)
 
-    def _check(self, box, row, key, text):
+    def _switch(self, parent, v, bg, on="Enabled", off="Disabled", invert=False, show_state=True):
+        """An on/off switch for the BooleanVar v, in a frame on background bg, with its state written beside it
+        (user, 26 Nov: tick boxes weren't clear). Click the switch or its word, or Space when it has focus. invert: the
+        setting is stored the other way round (hide_achievements under "Achievement pop-ups")."""
+        holder = tk.Frame(parent, bg=bg)
+        state = tk.Label(holder, font=("Segoe UI", 9), bg=bg, anchor="e", cursor="hand2")
+        if show_state:
+            state.pack(side="left", padx=(0, 8))
+        switch = tk.Canvas(holder, width=44, height=22, bg=bg, highlightthickness=1, highlightbackground=bg,
+                           highlightcolor=ACCENT_HOVER, cursor="hand2", takefocus=1)
+        switch.pack(side="left")
+
+        def draw(*_):
+            on_now = bool(v.get()) != invert
+            track = ACCENT if on_now else "#3a3f46"
+            switch.delete("all")
+            switch.create_oval(1, 1, 21, 21, fill=track, outline=track)
+            switch.create_oval(23, 1, 43, 21, fill=track, outline=track)
+            switch.create_rectangle(11, 1, 33, 21, fill=track, outline=track)
+            x = 25 if on_now else 4
+            switch.create_oval(x, 4, x + 15, 19, fill=FG, outline="")
+            state.config(text=tr(on if on_now else off), fg=FG if on_now else DIM)
+
+        def flip(_=None):
+            v.set(not v.get())
+            return "break"
+
+        for w in (switch, state):
+            w.bind("<Button-1>", flip)
+        switch.bind("<space>", flip)
+        v.trace_add("write", draw)
+        draw()
+        return holder
+
+    def _toggle(self, box, row, key, text, invert=False):
+        """A settings row: its name on the left, the switch on the right (like the drop-downs)."""
         v = self.vars[key] = tk.BooleanVar(value=self.s[key])
-        tk.Checkbutton(box, text=tr(text), variable=v, font=("Segoe UI", 10), fg=FG, bg=PANEL, selectcolor=PANEL,
-                       activebackground=PANEL, activeforeground=FG, anchor="w"
-                       ).grid(row=row, column=0, columnspan=2, sticky="w")
+        tk.Label(box, text=tr(text), font=("Segoe UI", 10), fg=FG, bg=PANEL).grid(row=row, column=0, sticky="w", pady=2)
+        self._switch(box, v, PANEL, invert=invert).grid(row=row, column=1, sticky="e", pady=2)
 
     def _combo(self, box, row, key, text, values):
         v = self.vars[key] = tk.StringVar(value=self.s[key] if self.s[key] in values else DEFAULTS[key])
@@ -875,6 +967,8 @@ class SettingsView(tk.Frame):
         self.combos[key] = combo
         self.combo_labels[key] = label
         combo.bind("<<ComboboxSelected>>", lambda e, k=key: self._combo_picked(k))
+        # The wheel over a closed list scrolls the page, not the setting (it would change it unseen).
+        combo.bind("<MouseWheel>", lambda e: (self._wheel(e), "break")[1])
         v.trace_add("write", lambda *_, k=key: self._combo_show(k))
         self.combo_values[key] = list(values)
         combo["values"] = [tr_label(x) for x in values]
@@ -1193,9 +1287,7 @@ class SettingsView(tk.Frame):
         canvas.configure(yscrollcommand=bar.set)
         canvas.pack(side="left", fill="both", expand=True)
         bar.pack(side="right", fill="y")
-        scroll = lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units")
-        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", scroll))
-        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        self.scrollers["Achievements"] = canvas
         self.achievement_images = []
         items = sorted(got, key=lambda a: time.mktime(a["unlocked"]), reverse=True) + \
             [a for a in items if not a["unlocked"]]
@@ -1320,9 +1412,10 @@ class SettingsView(tk.Frame):
 class Launcher:
     def __init__(self):
         self.root = make_root(APP_NAME)
+        # A fixed size: the settings tabs scroll instead (user, 25 Nov).
         height = min(720, self.root.winfo_screenheight() - 80)
         self.root.geometry(f"980x{height}")
-        self.root.minsize(900, 640)
+        self.root.resizable(False, False)
         self.view = None
         s = load_settings()
         launcher_text.set_language(launcher_text.resolve(s.get("launcher_language", "same"),
