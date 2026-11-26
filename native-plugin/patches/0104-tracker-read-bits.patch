@@ -1,0 +1,243 @@
+# Cheaper guest-memory tracking per draw (26 Nov). The profile put the tracker phase at 0.40 us a draw, up from 0.23
+# before upload hoisting (0102): marking a range read wrote one stamp per 4 KB page, 256 of them for a 1 MB vertex
+# buffer, on every draw that requested it. Now the read marks are a bitmap (64 pages a word, with a per-word
+# generation so nothing is cleared between submissions). And MemorySync::Request keeps a small memo of ranges found
+# current: the same range again, with no invalidation since, skips the valid-bit checks, and within one submission
+# also the read marking. BOTS_GFX_TRACKER_MEMO=0 turns the memo off. The hitch log line now counts memo hits.
+ src/gfx/native.cpp         | 12 +++++++-----
+ src/gfx/vk/memory_sync.cpp | 23 +++++++++++++++++++++--
+ src/gfx/vk/memory_sync.h   | 15 +++++++++++++++
+ src/gfx/vk/renderer.cpp    | 30 +++++++++++++++++++++++-------
+ src/gfx/vk/renderer.h      |  9 +++++++--
+ 5 files changed, 73 insertions(+), 16 deletions(-)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index b9edd72..c8c2b07 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -551,14 +551,15 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+   struct FrameMark {
+     std::chrono::steady_clock::time_point time;
+     vk::Renderer::Stats stats;
+-    uint64_t idle_us = 0, query_idle_us = 0, sync_requests = 0, sync_locked = 0, sync_uploaded = 0, write_faults = 0;
++    uint64_t idle_us = 0, query_idle_us = 0, sync_requests = 0, sync_locked = 0, sync_uploaded = 0, write_faults = 0,
++             sync_memo = 0;
+   };
+ 
+   FrameMark MarkFrame() const {
+     FrameMark m{std::chrono::steady_clock::now(), renderer_->stats(), idle_us_, query_idle_us_};
+     if (sync_) {
+       m.sync_requests = sync_->requests(), m.sync_locked = sync_->locked(), m.sync_uploaded = sync_->uploaded();
+-      m.write_faults = sync_->invalidations();
++      m.write_faults = sync_->invalidations(), m.sync_memo = sync_->memo_hits();
+     }
+     return m;
+   }
+@@ -932,8 +933,8 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+     REXLOG_INFO(
+         "gfx hitch: frame {} took {:.1f} ms: draws {:.1f} ms (textures {:.1f} ms: {} new, {} evicted earlier, {} "
+         "rewritten, longest {:.1f} ms{}), GPU wait {:.1f} ms, CP idle {:.1f} ms ({:.1f} after queries); {} draws, {} "
+-        "flushes, {:.2f} MB uploaded, {} ranges invalidated, {} write faults, {} memory syncs ({} locked, {} "
+-        "uploaded), {} draws waiting on shaders or pipelines, {} new pipelines started, {} draws dropped for failed "
++        "flushes, {:.2f} MB uploaded, {} ranges invalidated, {} write faults, {} memory syncs ({} memo hits, {} "
++        "locked, {} uploaded), {} draws waiting on shaders or pipelines, {} new pipelines started, {} draws dropped for failed "
+         "pipelines",
+         frames_, ms, t(a.draw_us, b.draw_us), t(a.texture_us, b.texture_us), loads - evicted, evicted,
+         b.texture_reloads - a.texture_reloads, load_max_us / 1000.0,
+@@ -942,7 +943,8 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         t(frame_mark_.idle_us, now.idle_us), t(frame_mark_.query_idle_us, now.query_idle_us), b.draws - a.draws,
+         b.flushes - a.flushes, double(b.uploaded_bytes - a.uploaded_bytes) / 1048576.0,
+         b.invalidations - a.invalidations, now.write_faults - frame_mark_.write_faults,
+-        now.sync_requests - frame_mark_.sync_requests, now.sync_locked - frame_mark_.sync_locked,
++        now.sync_requests - frame_mark_.sync_requests, now.sync_memo - frame_mark_.sync_memo,
++        now.sync_locked - frame_mark_.sync_locked,
+         now.sync_uploaded - frame_mark_.sync_uploaded, b.pending_draws - a.pending_draws,
+         b.live_pipelines - a.live_pipelines, b.failed_pipeline_draws - a.failed_pipeline_draws);
+   }
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index 8e8f6c2..ca70421 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -1,5 +1,7 @@
+ #include "memory_sync.h"
+ 
++#include <cstdlib>
++
+ #include <rex/logging.h>
+ 
+ namespace bots::gfx::vk {
+@@ -10,6 +12,8 @@ MemorySync::MemorySync(rex::memory::Memory& memory, Renderer& renderer) : Shared
+   valid_ = std::make_unique<std::atomic<uint64_t>[]>(blocks);
+   for (size_t i = 0; i < blocks; ++i) valid_[i].store(0, std::memory_order_relaxed);
+   watch_ = RegisterGlobalWatch(OnInvalidated, this);
++  if (const char* v = std::getenv("BOTS_GFX_TRACKER_MEMO"); v && *v == '0') memo_enabled_ = false;
++  REXLOG_INFO("gfx native: tracker memo {}", memo_enabled_ ? "on" : "off (BOTS_GFX_TRACKER_MEMO=0)");
+ }
+ 
+ MemorySync::~MemorySync() {
+@@ -43,6 +47,19 @@ bool MemorySync::IsCurrent(uint32_t start, uint32_t length) {
+ 
+ bool MemorySync::Request(uint32_t start, uint32_t length) {
+   if (!length || start >= kBufferSize || kBufferSize - start < length) return RequestRange(start, length);
++  // Read before the bits (see invalidations_): a later invalidation of the range changes it.
++  const uint64_t invalidations = invalidations_.load(std::memory_order_acquire);
++  MemoEntry& memo = memo_[((start >> 8) ^ (length * 0x9E3779B1u)) % kMemoSize];
++  if (memo_enabled_ && memo.start == start && memo.length == length && memo.invalidations == invalidations) {
++    ++memo_hits_;
++    ++requests_;
++    const uint32_t stamp = renderer_.read_stamp();
++    if (memo.read_stamp != stamp) {
++      renderer_.NoteSharedRead(start, length);
++      memo.read_stamp = stamp;
++    }
++    return true;
++  }
+   const uint32_t page_first = start >> page_size_log2(), page_last = (start + length - 1) >> page_size_log2();
+   bool all_valid = true;
+   for (uint32_t block = page_first >> 6; all_valid && block <= page_last >> 6; ++block) {
+@@ -52,10 +69,12 @@ bool MemorySync::Request(uint32_t start, uint32_t length) {
+     all_valid = (valid_[block].load(std::memory_order_acquire) & bits) == bits;
+   }
+   if (++requests_ % 10000000 == 0) {
+-    REXLOG_INFO("gfx memory sync: {} requests, {} took the lock, {} of those uploaded", requests_, locked_, uploaded_);
++    REXLOG_INFO("gfx memory sync: {} requests, {} memo hits, {} took the lock, {} of those uploaded", requests_,
++                memo_hits_, locked_, uploaded_);
+   }
+   if (all_valid) {
+     renderer_.NoteSharedRead(start, length);  // qos (patch 0102)
++    memo = {start, length, invalidations, renderer_.read_stamp()};
+     return true;
+   }
+   ++locked_;
+@@ -87,8 +106,8 @@ bool MemorySync::UploadRanges(const std::vector<std::pair<uint32_t, uint32_t>>&
+ void MemorySync::OnInvalidated(const std::unique_lock<std::recursive_mutex>&, void* context, uint32_t address_first,
+                                uint32_t address_last, bool) {
+   auto* self = static_cast<MemorySync*>(context);
+-  self->invalidations_.fetch_add(1, std::memory_order_relaxed);
+   self->SetValidBits(address_first >> self->page_size_log2(), address_last >> self->page_size_log2(), false);
++  self->invalidations_.fetch_add(1, std::memory_order_release);  // after the bits: see invalidations_
+   std::lock_guard lock(self->mutex_);
+   if (!self->invalidated_.empty() && self->invalidated_.back().second + 1 == address_first) {
+     self->invalidated_.back().second = address_last;
+diff --git a/src/gfx/vk/memory_sync.h b/src/gfx/vk/memory_sync.h
+index bee1a19..49bad06 100644
+--- a/src/gfx/vk/memory_sync.h
++++ b/src/gfx/vk/memory_sync.h
+@@ -37,6 +37,7 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   uint64_t requests() const { return requests_; }
+   uint64_t locked() const { return locked_; }
+   uint64_t uploaded() const { return uploaded_; }
++  uint64_t memo_hits() const { return memo_hits_; }
+   uint64_t invalidations() const { return invalidations_.load(std::memory_order_relaxed); }
+ 
+  protected:
+@@ -57,8 +58,22 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   void SetValidBits(uint32_t page_first, uint32_t page_last, bool valid);
+   // Command-processor thread only: requests, ones that took the lock, and ones of those that uploaded.
+   uint64_t requests_ = 0, locked_ = 0, uploaded_ = 0;
++  // Counted after the valid bits are cleared (release), so a request that read the count before checking the bits
++  // and found them all set can trust that result for as long as the count stays the same.
+   std::atomic<uint64_t> invalidations_{0};
+   bool uploading_ = false;
++  // qos (patch 0104): ranges recently found current, keyed by (start, length). A hit with the same invalidation count
++  // skips the valid-bit checks; with the same read stamp too, the range is already marked read in this submission.
++  // Most draws request the same few vertex and index ranges as the draw before. BOTS_GFX_TRACKER_MEMO=0 turns it off.
++  struct MemoEntry {
++    uint32_t start = 0, length = 0;
++    uint64_t invalidations = ~uint64_t(0);
++    uint32_t read_stamp = 0;
++  };
++  static constexpr size_t kMemoSize = 256;
++  MemoEntry memo_[kMemoSize];
++  bool memo_enabled_ = true;
++  uint64_t memo_hits_ = 0;
+ };
+ 
+ }  // namespace bots::gfx::vk
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index dbb2cb6..1e72d28 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -232,7 +232,9 @@ Renderer::Renderer(const rex::ui::vulkan::VulkanDevice* device, PhysicalMemory m
+     }
+   }
+   if (const char* v = std::getenv("BOTS_GFX_HOIST_UPLOADS"); v && *v == '0') hoist_uploads_ = false;
+-  page_read_stamp_.assign(size_t(512) << 20 >> 12, 0);  // the shared-memory buffer (kSharedMemorySize) in 4 KB pages
++  // The shared-memory buffer (kSharedMemorySize) in 4 KB pages, 64 to a word.
++  read_bits_.assign((size_t(512) << 20 >> 12) / 64, 0);
++  read_gen_.assign(read_bits_.size(), 0);
+   REXLOG_INFO("gfx native: upload hoisting {}", hoist_uploads_ ? "on" : "off (BOTS_GFX_HOIST_UPLOADS=0)");
+   // Intel's Windows driver (seen on Gen9, UHD 620, 31.0.101.2135) crashes in vkCmdBeginRendering when a pass
+   // without a depth attachment follows one with depth in the same command buffer. There every pass gets one: a
+@@ -802,15 +804,29 @@ void Renderer::DropGuestTexture(GuestTexture& texture) {
+ 
+ void Renderer::NoteSharedRead(uint32_t start, uint32_t length) {
+   if (!hoist_uploads_ || !length) return;
+-  const uint64_t end = std::min<uint64_t>(uint64_t(start) + length, uint64_t(page_read_stamp_.size()) << 12);
+-  for (uint64_t page = start >> 12; page < (end + 4095) >> 12; ++page) page_read_stamp_[page] = page_stamp_;
++  const uint64_t end = std::min<uint64_t>(uint64_t(start) + length, uint64_t(read_bits_.size()) << 18);
++  if (end <= start) return;
++  const uint64_t first = start >> 12, last = (end - 1) >> 12;
++  for (uint64_t word = first >> 6; word <= last >> 6; ++word) {
++    const uint32_t lo = word == first >> 6 ? uint32_t(first & 63) : 0;
++    const uint32_t hi = word == last >> 6 ? uint32_t(last & 63) : 63;
++    const uint64_t bits = (hi == 63 ? ~uint64_t(0) : (uint64_t(1) << (hi + 1)) - 1) & ~((uint64_t(1) << lo) - 1);
++    if (read_gen_[word] != page_stamp_) read_gen_[word] = page_stamp_, read_bits_[word] = 0;
++    read_bits_[word] |= bits;
++  }
+ }
+ 
+ bool Renderer::ReadThisSubmission(uint32_t start, uint32_t length) const {
+   const uint64_t end = uint64_t(start) + length;
+-  if (end > uint64_t(page_read_stamp_.size()) << 12) return true;
+-  for (uint64_t page = start >> 12; page < (end + 4095) >> 12; ++page) {
+-    if (page_read_stamp_[page] == page_stamp_) return true;
++  if (end > uint64_t(read_bits_.size()) << 18) return true;
++  if (!length) return false;
++  const uint64_t first = start >> 12, last = (end - 1) >> 12;
++  for (uint64_t word = first >> 6; word <= last >> 6; ++word) {
++    if (read_gen_[word] != page_stamp_) continue;
++    const uint32_t lo = word == first >> 6 ? uint32_t(first & 63) : 0;
++    const uint32_t hi = word == last >> 6 ? uint32_t(last & 63) : 63;
++    const uint64_t bits = (hi == 63 ? ~uint64_t(0) : (uint64_t(1) << (hi + 1)) - 1) & ~((uint64_t(1) << lo) - 1);
++    if (read_bits_[word] & bits) return true;
+   }
+   return false;
+ }
+@@ -1152,7 +1168,7 @@ void Renderer::Flush() {
+   }
+   // The next submission starts with no pages read.
+   if (++page_stamp_ == 0) {
+-    std::fill(page_read_stamp_.begin(), page_read_stamp_.end(), 0);
++    std::fill(read_gen_.begin(), read_gen_.end(), 0);
+     page_stamp_ = 1;
+   }
+   {
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index 9da34e1..e588855 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -161,6 +161,8 @@ class Renderer : public Pm4Sink {
+   bool UploadGuestMemory(uint32_t start, uint32_t length);
+   // qos (patch 0102): [start, start + length) of the shared-memory buffer is read by GPU work recorded from now on
+   // in this submission (MemorySync::Request), so an upload there can't be moved ahead of it (UploadGuestMemory).
++  // qos (patch 0104): changes when a new submission starts (pages read in this one are then forgotten).
++  uint32_t read_stamp() const { return page_stamp_; }
+   void NoteSharedRead(uint32_t start, uint32_t length);
+   // qos (patch 0103): waits for the upload worker's copies (before the command processor writes guest memory or
+   // raises an interrupt: SDK patch 0029's OnBeforeGuestWrite; and before a submission).
+@@ -768,9 +770,12 @@ class Renderer : public Pm4Sink {
+   bool recording_ = false;
+   // qos (patch 0102): upload hoisting. An upload of guest memory that no GPU work recorded so far in this submission
+   // reads goes into the submission's pre_cmd instead of ending the render pass (BOTS_GFX_HOIST_UPLOADS=0 turns it
+-  // off). page_read_stamp_[page] == page_stamp_: the 4 KB page was read in this submission.
++  // off). Pages read in this submission: bit (page & 63) of read_bits_[page >> 6], valid while read_gen_[page >> 6]
++  // == page_stamp_ (qos patch 0104: a bitmap, set and checked a word - 64 pages - at a time; it was one stamp per
++  // page, and marking a 1 MB vertex buffer read wrote 256 of them on every draw that requested it).
+   bool hoist_uploads_ = true;
+-  std::vector<uint32_t> page_read_stamp_;
++  std::vector<uint64_t> read_bits_;
++  std::vector<uint32_t> read_gen_;
+   uint32_t page_stamp_ = 1;
+   bool ReadThisSubmission(uint32_t start, uint32_t length) const;
+   bool HoistUpload(uint32_t start, uint32_t length);

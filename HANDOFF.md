@@ -397,9 +397,21 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       4 KB and 1 KB no further gain (noise): the copies were cheap, the rest of "tracker" is bookkeeping. Not yet in
       the launcher (env var only). Heavy-stretch finding: ~7,400 draws at 1.85-1.96 us/draw with ~1,150 render passes
       vs 8,500 draws at 1.29-1.31 us with ~470 elsewhere: the extra pass splits (uploads in place) cost ~2-3 ms there.
-      Next (proposed 20:47): let an upload move ahead even if its pages were read this submission, as long as no
-      OnBeforeGuestWrite (fence) happened since the read (the game appends to a page; the bytes read earlier can't
-      change without a fence) - check the read-pointer write-back's role (dynamic data in the ring). Then PM4 thread.
+      **Tried and parked (21:10, user): native 0104-hoist-past-reads** (an upload may go ahead past reads of its pages
+      in this submission if no OnBeforeGuestWrite since the first of them; per-page first-read epoch). Safe (no
+      glitches) but useless: 70-230 guest writes a frame (one every ~35 draws) keep the window shut, only 2-22 extra
+      uploads a frame moved (1.7 in the heaviest stretch). Not kept (patch deleted; in this session's chat). Might pay
+      off if most guest writes are the ring read-pointer write-back (which frees command-ring space, not vertex data):
+      would need SDK 0029 to pass the write's kind, a count by kind, then an epoch that ignores the read pointer.
+      **Tracker cost (native 0104-tracker-read-bits, 26 Nov 22:00, works, no glitches):** the 21:28 profile had
+      tracker at 0.40 us/draw (0.23 on 24 Nov) - 0102's NoteSharedRead wrote one stamp per 4 KB page (256 for a 1 MB
+      vertex buffer) per draw. Now a bitmap (64 pages a word, per-word generation) plus a 256-entry memo in
+      MemorySync::Request keyed on (start, length) and the invalidation count (counted after the valid bits are
+      cleared, release/acquire); same read stamp skips the marking too. BOTS_GFX_TRACKER_MEMO=0 turns the memo off;
+      hitch lines and the 10M-request line count memo hits (54% of requests). Profiled: tracker 0.26-0.33 us/draw
+      (7,500 draws: 2.2 ms vs 3.1), heavy stretch 0.38-0.52 vs 0.45-0.65. Unprofiled: 1.22-1.43 us/draw in draws vs
+      1.32-1.51 (same route, 21:00 run), heavy stretch 1.58-1.80 vs 1.70-1.90; ~0.5-1 ms a busy frame.
+      Next (user, 21:10): PM4 parsing on its own thread; first a BOTS_DRAW_PROFILE=1 run to size it today.
       Earlier order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before
       its render pass, so uploads stop splitting passes; ~300 passes a frame now), then copying uploads on a worker
       thread (needs exact copy timing, or the 24 Nov zero-copy glitch comes back), then the command stream (PM4)
