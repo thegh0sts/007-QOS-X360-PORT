@@ -609,6 +609,14 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       thread (needs exact copy timing, or the 24 Nov zero-copy glitch comes back), then the command stream (PM4)
       parsed on its own thread (up to ~2.4 ms), then faster level loads (native zlib stall) and cheaper texture
       checks. Comparison sheet: https://claude.ai/artifact/HCX3LGF4VVAyR2L5HYT6uW
+  - **Release 0.2.2 prepared (27 Nov 23:10, user):** QOS_RELEASE, launcher VERSION and GAME_VERSION 0.2.2 (installs
+    rebuild), SDK bundle qos12 (native renderer to 0114, SDK own31), notes docs/releases/0.2.2.md. The user builds
+    (build_native, game, installer) and publishes with gh.
+  12. **Rooftop slowdown, level 2 (user, 27 Nov 23:01):** dips into the 50s uncapped (and a few frames just under 60
+      at 60) on the rooftop chase. Game-bound, not the renderer (qos_223: ~6 ms drawing, then 9-14 ms waiting for the
+      game; the game thread needs 12-20 ms a frame there). Next: a Tracy capture there (TRACY_ON_DEMAND is built in;
+      Tracy viewer on the PC) to see which game functions cost it (game logic, a hook of ours, or an emulated kernel
+      call it waits on).
   11. (later) Xbox LIVE via Xenia Web Services (multiplayer to-do item 6 above: the SDK's Live calls - XSession create/
      search/join/leave, the XLIVEBASE messages such as 0x00058035 - talking to Xenia Web Services instead of the LAN
      broadcast; real QoS probes for Live; launcher server address setting; the one-active-XUID rule). Several
