@@ -1,0 +1,156 @@
+# Memory tracker profile (27 Nov): with BOTS_DRAW_PROFILE=1 a line per stats window, "memory sync per frame", splits
+# the time of requests that found an invalid page into the SDK's lock and page scan, MakeRangeValid (global lock,
+# valid bits, write protection) and the upload copies, counts the page runs and pages uploaded, and the CPU's write
+# faults with the pages they invalidated. Explosions upload ~700 single pages a frame; this shows whether the cost is
+# the protection round trip (then: stop protecting pages the game rewrites every frame) or the copies (then: bigger
+# runs). Patch 0108 (uploads past unchanged reads) was dropped: as many pass splits gone, no frame time saved.
+ src/gfx/native.cpp         | 23 +++++++++++++++++++++++
+ src/gfx/vk/memory_sync.cpp | 31 +++++++++++++++++++++++++++++++
+ src/gfx/vk/memory_sync.h   | 14 ++++++++++++++
+ 3 files changed, 68 insertions(+)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 72b5b7f..f793a3d 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -211,6 +211,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+             double(renderer_->upload_worker_jobs() - last_.upload_worker_jobs) / n,
+             double(renderer_->upload_worker_bytes() - last_.upload_worker_bytes) / 1048576.0 / n);
+         renderer_->LogHoistDiag();  // qos (patch 0107)
++        if (renderer_->draw_profile() && sync_) LogSyncProfile(n);  // qos (patch 0109)
+         if (renderer_->draw_profile()) {
+           std::string phases;
+           for (size_t i = 0; i < std::size(st.draw_phase_ns); ++i) {
+@@ -1323,6 +1324,28 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+   bool query_wait_ = false;
+   std::chrono::steady_clock::time_point wait_start_;
+   uint64_t idle_us_ = 0, query_idle_us_ = 0, last_idle_us_ = 0, last_query_idle_us_ = 0;
++  // qos (patch 0109): the memory tracker's slow path per frame (BOTS_DRAW_PROFILE=1), and the CPU's write faults.
++  struct SyncMark {
++    uint64_t slow_ns = 0, scan_ns = 0, protect_ns = 0, copy_ns = 0, runs = 0, pages = 0, fault_pages = 0, faults = 0,
++             locked = 0;
++  } sync_mark_;
++
++  void LogSyncProfile(double n) {
++    const auto& p = sync_->profile();
++    SyncMark now{p.slow_ns, p.scan_ns, p.protect_ns, p.copy_ns, p.runs, p.pages,
++                 p.fault_pages.load(std::memory_order_relaxed), sync_->invalidations(), sync_->locked()};
++    const SyncMark& a = sync_mark_;
++    auto ms = [&](uint64_t b, uint64_t x) { return double(b - x) / 1e6 / n; };
++    auto per = [&](uint64_t b, uint64_t x) { return double(b - x) / n; };
++    REXLOG_INFO("gfx native: memory sync per frame: {:.0f} requests found an invalid page, {:.2f} ms in them (SDK "
++                "lock and page scan {:.2f}, valid bits and write protection {:.2f}, upload copies {:.2f}); {:.0f} "
++                "page runs uploaded ({:.0f} pages); CPU write faults {:.0f}, invalidating {:.0f} pages",
++                per(now.locked, a.locked), ms(now.slow_ns, a.slow_ns), ms(now.scan_ns, a.scan_ns),
++                ms(now.protect_ns, a.protect_ns), ms(now.copy_ns, a.copy_ns), per(now.runs, a.runs),
++                per(now.pages, a.pages), per(now.faults, a.faults), per(now.fault_pages, a.fault_pages));
++    sync_mark_ = now;
++  }
++
+   // qos (SDK 0030): the command-processor thread's time by PM4 packet type, exclusive of nested packets (an
+   // indirect buffer's own packets count as theirs), over the report window. Draw packets include IssueDraw, the
+   // shader-load packets the shader loads and XE_SWAP the swap, so those are shown with them taken out: what is left
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index ca70421..e2f1621 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -1,5 +1,6 @@
+ #include "memory_sync.h"
+ 
++#include <chrono>
+ #include <cstdlib>
+ 
+ #include <rex/logging.h>
+@@ -14,8 +15,17 @@ MemorySync::MemorySync(rex::memory::Memory& memory, Renderer& renderer) : Shared
+   watch_ = RegisterGlobalWatch(OnInvalidated, this);
+   if (const char* v = std::getenv("BOTS_GFX_TRACKER_MEMO"); v && *v == '0') memo_enabled_ = false;
+   REXLOG_INFO("gfx native: tracker memo {}", memo_enabled_ ? "on" : "off (BOTS_GFX_TRACKER_MEMO=0)");
++  if (const char* v = std::getenv("BOTS_DRAW_PROFILE"); v && *v == '1') profile_on_ = true;  // qos (patch 0109)
+ }
+ 
++namespace {
++uint64_t NowNs() {
++  return uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
++                      std::chrono::steady_clock::now().time_since_epoch())
++                      .count());
++}
++}  // namespace
++
+ MemorySync::~MemorySync() {
+   if (watch_) UnregisterGlobalWatch(watch_);
+ }
+@@ -81,7 +91,14 @@ bool MemorySync::Request(uint32_t start, uint32_t length) {
+   uploading_ = false;
+   // Set before the SDK validates the pages: an invalidation from here on clears the bits again.
+   SetValidBits(page_first, page_last, true);
++  const uint64_t slow_start = profile_on_ ? NowNs() : 0;
++  const uint64_t inner_before = profile_.protect_ns + profile_.copy_ns;
+   const bool ok = RequestRange(start, length);
++  if (profile_on_) {  // qos (patch 0109)
++    const uint64_t spent = NowNs() - slow_start;
++    profile_.slow_ns += spent;
++    profile_.scan_ns += spent - std::min(spent, profile_.protect_ns + profile_.copy_ns - inner_before);
++  }
+   uploaded_ += uploading_;
+   if (ok) {
+     renderer_.NoteSharedRead(start, length);  // qos (patch 0102): after its uploads, which may go ahead of it
+@@ -97,6 +114,16 @@ bool MemorySync::UploadRanges(const std::vector<std::pair<uint32_t, uint32_t>>&
+   for (const auto& [page_first, page_count] : page_ranges) {
+     const uint32_t start = page_first << page_log2, length = page_count << page_log2;
+     // Valid (and watched) before the copy: a write during it invalidates the pages again.
++    if (profile_on_) {  // qos (patch 0109)
++      const uint64_t t0 = NowNs();
++      MakeRangeValid(start, length, false);
++      const uint64_t t1 = NowNs();
++      const bool ok = renderer_.UploadGuestMemory(start, length);
++      profile_.protect_ns += t1 - t0, profile_.copy_ns += NowNs() - t1;
++      ++profile_.runs, profile_.pages += page_count;
++      if (!ok) return false;
++      continue;
++    }
+     MakeRangeValid(start, length, false);
+     if (!renderer_.UploadGuestMemory(start, length)) return false;
+   }
+@@ -108,6 +135,10 @@ void MemorySync::OnInvalidated(const std::unique_lock<std::recursive_mutex>&, vo
+   auto* self = static_cast<MemorySync*>(context);
+   self->SetValidBits(address_first >> self->page_size_log2(), address_last >> self->page_size_log2(), false);
+   self->invalidations_.fetch_add(1, std::memory_order_release);  // after the bits: see invalidations_
++  if (self->profile_on_) {  // qos (patch 0109)
++    self->profile_.fault_pages.fetch_add(((address_last - address_first) >> self->page_size_log2()) + 1,
++                                         std::memory_order_relaxed);
++  }
+   std::lock_guard lock(self->mutex_);
+   if (!self->invalidated_.empty() && self->invalidated_.back().second + 1 == address_first) {
+     self->invalidated_.back().second = address_last;
+diff --git a/src/gfx/vk/memory_sync.h b/src/gfx/vk/memory_sync.h
+index 49bad06..0bc558f 100644
+--- a/src/gfx/vk/memory_sync.h
++++ b/src/gfx/vk/memory_sync.h
+@@ -38,6 +38,18 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   uint64_t locked() const { return locked_; }
+   uint64_t uploaded() const { return uploaded_; }
+   uint64_t memo_hits() const { return memo_hits_; }
++
++  // qos (patch 0109): with BOTS_DRAW_PROFILE=1, where a request that has to upload spends its time, and how much of
++  // the game's memory the CPU writes back into (write faults). Totals since start; the caller logs per frame.
++  struct Profile {
++    uint64_t slow_ns = 0;      // whole slow path (requests that found an invalid page)
++    uint64_t scan_ns = 0;      // in the SDK's RequestRange outside our upload callback: global lock, page scan
++    uint64_t protect_ns = 0;   // MakeRangeValid: global lock again, valid bits, write protection (OS call)
++    uint64_t copy_ns = 0;      // Renderer::UploadGuestMemory: staging copy and the GPU copy command
++    uint64_t runs = 0, pages = 0;                  // uploaded page runs, pages in them
++    std::atomic<uint64_t> fault_pages{0};          // pages invalidated by write faults (any thread)
++  };
++  const Profile& profile() const { return profile_; }
+   uint64_t invalidations() const { return invalidations_.load(std::memory_order_relaxed); }
+ 
+  protected:
+@@ -74,6 +86,8 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   MemoEntry memo_[kMemoSize];
+   bool memo_enabled_ = true;
+   uint64_t memo_hits_ = 0;
++  bool profile_on_ = false;
++  Profile profile_;
+ };
+ 
+ }  // namespace bots::gfx::vk

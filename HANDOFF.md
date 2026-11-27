@@ -443,6 +443,38 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       hoisting can't move them. Next: a diagnostic logging in-place uploads (address, size, which part of the page
       was read) to choose between finer read tracking and checking the read bytes are unchanged. Note: manual runs
       had BOTS_GFX_RECORD_THREAD unset ("recorder 0 packets"); the launcher sets 1: set it in test runs.
+      **0107 diagnostic result (27 Nov 11:10, qos_197, BOTS_GFX_HOIST_DIAG=1):** of ~4 million in-place uploads in
+      the run, >99.9% were over pages read this submission whose read bytes were unchanged (~800 changed, ~2,000 with
+      a read over 256 KB). Reads are small (84 B - 5 KB, e.g. 1F7xxxxx+84, 09CFxxxx+576) in pages the game appends to.
+      **Native 0108-hoist-past-unchanged-reads (11:18, written, on the PC, NOT built or tested; 0107 also on the PC,
+      uncommitted):** hot pages (once uploaded in place; persistent bitmap) get their reads kept with an XXH3
+      (reads <= 64 KB); an upload over read pages moves ahead (CopyAhead into pre_cmd) when every kept read of its
+      pages hashes the same, no read of them went unkept this submission (unchecked_reads_) and none of them was
+      uploaded in place this submission (in_place_pages_). BOTS_GFX_HOIST_UNCHANGED=0 off. Stats line: "uploads moved
+      ahead (N past unchanged reads)". Test: build_native + game build; at the explosion, RECORD_THREAD=1,
+      UPLOAD_WORKER=1, no diag/profile: run 1 default, run 2 BOTS_GFX_HOIST_UNCHANGED=0; compare render passes,
+      barriers, frames > 20 ms; watch particles/smoke for flicker.
+      **0108 result: dropped** (three versions; as many pass splits gone, no frame time saved; kept on the renderer
+      tree's branch try-0108). Pass splits cost ~0.3 ms CPU on the test PC: not the explosion's cost.
+      **Native 0109-memory-sync-profile (committed 27 Nov):** BOTS_DRAW_PROFILE=1 logs "memory sync per frame" (SDK
+      lock + page scan, valid bits + write protection, upload copies, page runs/pages, CPU write faults and pages).
+      Result at explosions: ~700-1,350 single-page uploads a frame, write protection ~75% of the slow path (up to
+      3.15 ms at the peak, ~2.3 us per protect), ~100-230 write faults a frame on the game thread; draws request whole
+      vertex buffers (6-7 MB fetch-constant ranges). Tried and dropped (branch try-0110-0111): 0110 streaming pages
+      (stop protecting pages rewritten every frame: no net gain) and 0111 narrowing vertex requests (memo misses,
+      tracker 0.26-0.33 -> 0.47-0.81 us/draw). Real fix, deferred: streamed vertex data in its own GPU buffer.
+      **Native 0110-texture-index (27 Nov, committed, NOT yet tested):** "setup" (1.4-3 ms/frame at explosions,
+      2.99 ms at 8,495 draws in qos_208) is mostly ProcessInvalidations, not register work: every non-empty batch of
+      CPU writes walked all kept guest textures (thousands). Textures are now listed by 64 KB block
+      (texture_blocks_, IndexTexture/UnindexTexture: indexed at the end of TextureView, unlisted in DropGuestTexture)
+      and MemorySync::TakeInvalidated skips its lock when nothing is queued (pending_). BOTS_GFX_TEXTURE_INDEX=0: the
+      old walk (A/B). Profile line "CPU-write checks per frame". Test: build_native + game build, explosion spot,
+      BOTS_DRAW_PROFILE=1 + all three render threads; run 1 default, run 2 BOTS_GFX_TEXTURE_INDEX=0; compare setup ms.
+      **Launcher after 922fbcf (committed 27 Nov):** SlimScrollbar (qos_installer.py) replaces ttk scroll bars;
+      Multiplayer "Host addresses (optional)" (`--netplay_peers`, cleaned by clean_host_addresses); Input device is
+      a button group (Auto/KBM/XBOX/PS); Saves tab in two columns, buttons on the right.
+      Proposed, not answered: render threads on by default (3 on CPUs with >= 6 cores, else 2) and the upload worker
+      under "Render threads".
       Committed 27 Nov.
       Earlier next (user, 21:10): PM4 parsing on its own thread (sized at 22:20, see above).
       Earlier order (user, 25 Nov 23:29): upload hoisting first (1-2 sessions: copy each upload before

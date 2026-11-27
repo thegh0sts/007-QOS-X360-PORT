@@ -1,0 +1,189 @@
+# In-place upload diagnostic (27 Nov): BOTS_GFX_HOIST_DIAG=1. Explosions triple the render passes (~580 vs 200-350):
+# their uploads stay in place because earlier draws of the submission read the same pages. This records every read
+# range of a submission with an XXH3 of its bytes (up to 256 KB) and, at an in-place upload, hashes the overlapping
+# ones again: unchanged means moving the upload ahead would have been safe. Logs window totals with the stats and the
+# first 16 in-place uploads of each window in detail. Diagnostic only: it hashes every read, so frames get slower.
+ src/gfx/native.cpp      |  1 +
+ src/gfx/vk/renderer.cpp | 92 +++++++++++++++++++++++++++++++++++++++++
+ src/gfx/vk/renderer.h   | 25 +++++++++++
+ 3 files changed, 118 insertions(+)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 2bf2b93..72b5b7f 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -210,6 +210,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+             double(st.uploads_in_place - last_.uploads_in_place) / n,
+             double(renderer_->upload_worker_jobs() - last_.upload_worker_jobs) / n,
+             double(renderer_->upload_worker_bytes() - last_.upload_worker_bytes) / 1048576.0 / n);
++        renderer_->LogHoistDiag();  // qos (patch 0107)
+         if (renderer_->draw_profile()) {
+           std::string phases;
+           for (size_t i = 0; i < std::size(st.draw_phase_ns); ++i) {
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index 1e72d28..15dd1d2 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -8,6 +8,8 @@
+ #include <cstdlib>
+ #include <cstring>
+ 
++#include <xxhash.h>
++
+ #ifdef __APPLE__
+ #include <TargetConditionals.h>
+ #endif
+@@ -236,6 +238,10 @@ Renderer::Renderer(const rex::ui::vulkan::VulkanDevice* device, PhysicalMemory m
+   read_bits_.assign((size_t(512) << 20 >> 12) / 64, 0);
+   read_gen_.assign(read_bits_.size(), 0);
+   REXLOG_INFO("gfx native: upload hoisting {}", hoist_uploads_ ? "on" : "off (BOTS_GFX_HOIST_UPLOADS=0)");
++  if (const char* v = std::getenv("BOTS_GFX_HOIST_DIAG"); v && *v == '1' && hoist_uploads_) {
++    hoist_diag_ = true;
++    REXLOG_INFO("gfx native: in-place upload diagnostic on (BOTS_GFX_HOIST_DIAG=1)");
++  }
+   // Intel's Windows driver (seen on Gen9, UHD 620, 31.0.101.2135) crashes in vkCmdBeginRendering when a pass
+   // without a depth attachment follows one with depth in the same command buffer. There every pass gets one: a
+   // scratch depth image that is never loaded or stored. BOTS_GFX_DUMMY_DEPTH=0/1 overrides.
+@@ -804,6 +810,7 @@ void Renderer::DropGuestTexture(GuestTexture& texture) {
+ 
+ void Renderer::NoteSharedRead(uint32_t start, uint32_t length) {
+   if (!hoist_uploads_ || !length) return;
++  if (hoist_diag_) DiagNoteRead(start, length);
+   const uint64_t end = std::min<uint64_t>(uint64_t(start) + length, uint64_t(read_bits_.size()) << 18);
+   if (end <= start) return;
+   const uint64_t first = start >> 12, last = (end - 1) >> 12;
+@@ -864,6 +871,90 @@ bool Renderer::HoistUpload(uint32_t start, uint32_t length) {
+   return true;
+ }
+ 
++// qos (patch 0107): see hoist_diag_.
++void Renderer::DiagNoteRead(uint32_t start, uint32_t length) {
++  if (diag_stamp_ != page_stamp_) {
++    diag_stamp_ = page_stamp_;
++    diag_reads_.clear();
++    diag_page_reads_.clear();
++  }
++  if (uint64_t(start) + length > uint64_t(read_bits_.size()) << 18) return;
++  const bool hashed = length <= (256u << 10);
++  const uint32_t index = uint32_t(diag_reads_.size());
++  diag_reads_.push_back({start, length, hashed ? XXH3_64bits(memory_(start), length) : 0, hashed});
++  ++diag_.reads;
++  for (uint32_t page = start >> 12, last = (start + length - 1) >> 12; page <= last; ++page) {
++    diag_page_reads_[page].push_back(index);
++  }
++}
++
++void Renderer::DiagInPlace(uint32_t start, uint32_t length) {
++  ++diag_.in_place;
++  if (diag_stamp_ != page_stamp_ || !ReadThisSubmission(start, length)) {
++    ++diag_.other;  // ring space, not a read
++    return;
++  }
++  ++diag_.by_reads;
++  const uint32_t first = start >> 12, last = (start + length - 1) >> 12;
++  diag_.pages += last - first + 1;
++  std::vector<uint32_t> seen;
++  uint32_t changed = 0, unchanged = 0, too_big = 0;
++  const DiagRead* example = nullptr;
++  bool example_changed = false;
++  for (uint32_t page = first; page <= last; ++page) {
++    const auto it = diag_page_reads_.find(page);
++    if (it == diag_page_reads_.end()) continue;
++    bool page_changed = false;
++    for (const uint32_t index : it->second) {
++      if (std::find(seen.begin(), seen.end(), index) != seen.end()) continue;
++      seen.push_back(index);
++      const DiagRead& read = diag_reads_[index];
++      bool is_changed;
++      if (!read.hashed) {
++        ++too_big;
++        is_changed = true;
++      } else if (XXH3_64bits(memory_(read.start), read.length) != read.hash) {
++        ++changed;
++        is_changed = true;
++      } else {
++        ++unchanged;
++        is_changed = false;
++      }
++      page_changed = page_changed || is_changed;
++      if (!example || (is_changed && !example_changed)) example = &read, example_changed = is_changed;
++    }
++    diag_.read_pages_changed += page_changed;
++  }
++  if (too_big) {
++    ++diag_.too_big;
++  } else if (changed) {
++    ++diag_.changed;
++  } else {
++    ++diag_.unchanged;
++  }
++  if (diag_samples_ < 16) {
++    ++diag_samples_;
++    REXLOG_INFO("gfx native: in-place upload {:08X}+{} ({} pages): {} earlier reads of the submission overlap ({} bytes "
++                "unchanged, {} changed, {} too big to hash), e.g. {:08X}+{} {}; {} reads so far",
++                start, length, last - first + 1, seen.size(), unchanged, changed, too_big, example ? example->start : 0,
++                example ? example->length : 0, example_changed ? "changed" : "unchanged", diag_reads_.size());
++  }
++}
++
++void Renderer::LogHoistDiag() {
++  if (!hoist_diag_) return;
++  const DiagStats& a = diag_last_;
++  const DiagStats& b = diag_;
++  REXLOG_INFO("gfx native: in-place uploads (diagnostic, window totals): {} - {} for pages read this submission: {} "
++              "with the read bytes unchanged (could move ahead), {} changed, {} with a read too big to hash; {} for "
++              "other reasons. {} pages in them ({} with a changed read); {} reads recorded",
++              b.in_place - a.in_place, b.by_reads - a.by_reads, b.unchanged - a.unchanged, b.changed - a.changed,
++              b.too_big - a.too_big, b.other - a.other, b.pages - a.pages, b.read_pages_changed - a.read_pages_changed,
++              b.reads - a.reads);
++  diag_last_ = diag_;
++  diag_samples_ = 0;
++}
++
+ // qos (patch 0103): the CPU copy of an upload into the staging ring, on the upload worker when it's big enough. The
+ // GPU copy from the ring runs only once the submission is submitted, and Flush drains the worker first.
+ void Renderer::StageGuestMemory(uint8_t* staging, uint32_t start, uint32_t length) {
+@@ -878,6 +969,7 @@ bool Renderer::UploadGuestMemory(uint32_t start, uint32_t length) {
+   if (zero_copy_) return true;  // the buffer is guest memory itself
+   if (HoistUpload(start, length)) return true;
+   ++stats_.uploads_in_place;
++  if (hoist_diag_) DiagInPlace(start, length);
+   BeginCommands(kGpuUpload);
+   EndRendering("upload");
+   Barrier();
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index e588855..2a73f4a 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -780,6 +780,31 @@ class Renderer : public Pm4Sink {
+   bool ReadThisSubmission(uint32_t start, uint32_t length) const;
+   bool HoistUpload(uint32_t start, uint32_t length);
+ 
++  // qos (patch 0107): BOTS_GFX_HOIST_DIAG=1. An upload that stays in place because an earlier draw of the submission
++  // read its pages: would moving it ahead have been safe anyway, because the bytes those draws read are unchanged?
++  // Every read range of the submission is kept with an XXH3 of its bytes (ranges up to 256 KB), and an in-place upload
++  // hashes the overlapping ones again. Logged per stats window, with the first uploads of each window in detail.
++ public:
++  void LogHoistDiag();
++
++ private:
++  struct DiagRead {
++    uint32_t start, length;
++    uint64_t hash;
++    bool hashed;
++  };
++  bool hoist_diag_ = false;
++  uint32_t diag_stamp_ = 0;
++  std::vector<DiagRead> diag_reads_;
++  std::unordered_map<uint32_t, std::vector<uint32_t>> diag_page_reads_;  // page -> diag_reads_ indices
++  struct DiagStats {
++    uint64_t in_place = 0, by_reads = 0, unchanged = 0, changed = 0, too_big = 0, other = 0, pages = 0, reads = 0,
++             read_pages_changed = 0;
++  } diag_, diag_last_;
++  uint32_t diag_samples_ = 0;
++  void DiagNoteRead(uint32_t start, uint32_t length);
++  void DiagInPlace(uint32_t start, uint32_t length);
++
+   std::map<SurfaceKey, std::unique_ptr<Image>> surfaces_;
+   std::map<TextureKey, std::unique_ptr<Image>> textures_;
+   std::unordered_map<uint32_t, Image*> texture_at_;  // guest address -> latest resolve destination there

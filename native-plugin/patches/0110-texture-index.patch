@@ -1,0 +1,252 @@
+# CPU-write checks by block (27 Nov): every draw asked the memory tracker for the ranges the CPU wrote (taking its
+# lock), and every non-empty answer walked all the guest textures kept (thousands: ~5 minutes of them) to mark the
+# ones on those ranges. Explosions write guest memory between most draws, so that walk ran hundreds of times a frame
+# inside the "setup" phase. Textures are now listed by the 64 KB blocks of their ranges and a write checks only the
+# textures on its blocks; the tracker skips its lock when nothing is queued. BOTS_GFX_TEXTURE_INDEX=0: the full walk
+# (A/B). With BOTS_DRAW_PROFILE=1 a line per stats window, "CPU-write checks per frame": batches, ranges, time,
+# textures checked and marked changed.
+ src/gfx/native.cpp         |   1 +
+ src/gfx/vk/memory_sync.cpp |   3 ++
+ src/gfx/vk/memory_sync.h   |   3 ++
+ src/gfx/vk/renderer.cpp    | 100 +++++++++++++++++++++++++++++++++++--
+ src/gfx/vk/renderer.h      |  19 +++++++
+ src/gfx/vk/texture.cpp     |   1 +
+ 6 files changed, 122 insertions(+), 5 deletions(-)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index f793a3d..380878e 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -212,6 +212,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+             double(renderer_->upload_worker_bytes() - last_.upload_worker_bytes) / 1048576.0 / n);
+         renderer_->LogHoistDiag();  // qos (patch 0107)
+         if (renderer_->draw_profile() && sync_) LogSyncProfile(n);  // qos (patch 0109)
++        if (renderer_->draw_profile()) renderer_->LogInvalidationProfile(n);  // qos (patch 0110)
+         if (renderer_->draw_profile()) {
+           std::string phases;
+           for (size_t i = 0; i < std::size(st.draw_phase_ns); ++i) {
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index e2f1621..97a710b 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -145,10 +145,13 @@ void MemorySync::OnInvalidated(const std::unique_lock<std::recursive_mutex>&, vo
+   } else {
+     self->invalidated_.emplace_back(address_first, address_last);
+   }
++  self->pending_.store(true, std::memory_order_release);
+ }
+ 
+ void MemorySync::TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ranges) {
++  if (!pending_.load(std::memory_order_acquire)) return;  // qos (patch 0110): a range queued after this is next draw's
+   std::lock_guard lock(mutex_);
++  pending_.store(false, std::memory_order_relaxed);
+   ranges.swap(invalidated_);
+   invalidated_.clear();
+ }
+diff --git a/src/gfx/vk/memory_sync.h b/src/gfx/vk/memory_sync.h
+index 0bc558f..ce16681 100644
+--- a/src/gfx/vk/memory_sync.h
++++ b/src/gfx/vk/memory_sync.h
+@@ -64,6 +64,9 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   GlobalWatchHandle watch_ = nullptr;
+   std::mutex mutex_;
+   std::vector<std::pair<uint32_t, uint32_t>> invalidated_;
++  // qos (patch 0110): set under mutex_ when invalidated_ gains a range, so TakeInvalidated skips the lock when it's
++  // empty (every draw asks; most find nothing).
++  std::atomic<bool> pending_{false};
+   // A page's bit is set before the SDK makes it valid and cleared whenever it is invalidated (OnInvalidated sees
+   // every invalidation), so a set bit can be stale-cleared but never stale-set.
+   std::unique_ptr<std::atomic<uint64_t>[]> valid_;
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index 15dd1d2..f08dd20 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -238,6 +238,10 @@ Renderer::Renderer(const rex::ui::vulkan::VulkanDevice* device, PhysicalMemory m
+   read_bits_.assign((size_t(512) << 20 >> 12) / 64, 0);
+   read_gen_.assign(read_bits_.size(), 0);
+   REXLOG_INFO("gfx native: upload hoisting {}", hoist_uploads_ ? "on" : "off (BOTS_GFX_HOIST_UPLOADS=0)");
++  if (const char* v = std::getenv("BOTS_GFX_TEXTURE_INDEX"); v && *v == '0') {  // qos (patch 0110)
++    texture_index_ = false;
++    REXLOG_INFO("gfx native: texture block index off (BOTS_GFX_TEXTURE_INDEX=0): CPU writes check every texture");
++  }
+   if (const char* v = std::getenv("BOTS_GFX_HOIST_DIAG"); v && *v == '1' && hoist_uploads_) {
+     hoist_diag_ = true;
+     REXLOG_INFO("gfx native: in-place upload diagnostic on (BOTS_GFX_HOIST_DIAG=1)");
+@@ -609,6 +613,18 @@ void Renderer::ProcessInvalidations() {
+   tracker_->TakeInvalidated(invalidated_);
+   if (invalidated_.empty()) return;
+   stats_.invalidations += invalidated_.size();
++  // qos (patch 0110): timed with BOTS_DRAW_PROFILE=1.
++  const auto prof_start = draw_profile_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
++  struct ProfileEnd {
++    Renderer& r;
++    std::chrono::steady_clock::time_point start;
++    ~ProfileEnd() {
++      if (!r.draw_profile_) return;
++      ++r.inval_prof_.batches, r.inval_prof_.ranges += r.invalidated_.size();
++      r.inval_prof_.ns += uint64_t(
++          std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count());
++    }
++  } profile_end{*this, prof_start};
+   // qos: every range against each texture in one pass (was a pass over all textures per range).
+   auto overlaps_any = [&](uint32_t start, uint32_t end) {
+     if (start >= end) return false;
+@@ -617,15 +633,40 @@ void Renderer::ProcessInvalidations() {
+     }
+     return false;
+   };
+-  for (auto& [key, texture] : guest_textures_) {
+-    if (texture->dirty) continue;
+-    for (const auto& [start, end] : texture->ranges) {
++  // qos (patch 0110): the textures listed on the written ranges' 64 KB blocks; a range spanning more blocks than are
++  // listed walks the list instead. Unlisted textures (none while the index is on) are checked as before.
++  auto check = [&](GuestTexture& texture) {
++    if (texture.dirty) return;
++    if (draw_profile_) ++inval_prof_.checked;
++    for (const auto& [start, end] : texture.ranges) {
+       if (overlaps_any(start, end)) {
+-        texture->dirty = true;
++        texture.dirty = true;
+         BumpTextureMemo();
+-        break;
++        if (draw_profile_) ++inval_prof_.dirtied;
++        return;
++      }
++    }
++  };
++  if (texture_index_) {
++    for (const auto& [first, last] : invalidated_) {
++      if (last < first) continue;
++      const uint32_t block_first = first >> kTextureBlockShift, block_last = last >> kTextureBlockShift;
++      if (uint64_t(block_last - block_first) + 1 > texture_blocks_.size()) {
++        for (auto& [block, textures] : texture_blocks_) {
++          if (block < block_first || block > block_last) continue;
++          for (GuestTexture* texture : textures) check(*texture);
++        }
++        continue;
++      }
++      for (uint32_t block = block_first;; ++block) {
++        if (const auto bucket = texture_blocks_.find(block); bucket != texture_blocks_.end()) {
++          for (GuestTexture* texture : bucket->second) check(*texture);
++        }
++        if (block == block_last) break;
+       }
+     }
++  } else {
++    for (auto& [key, texture] : guest_textures_) check(*texture);
+   }
+   // A resolve destination the CPU wrote over is no longer what a fetch of that address reads.
+   for (auto* map : {&texture_at_, &depth_texture_at_}) {
+@@ -801,7 +842,55 @@ void Renderer::InitTexturePool() {
+   vmaSetPoolName(allocator_, texture_pool_, "guest textures");
+ }
+ 
++// qos (patch 0110): list a texture under the 64 KB blocks of its ranges (again if they changed).
++void Renderer::IndexTexture(GuestTexture& texture) {
++  if (texture.indexed) {
++    if (texture.indexed_ranges == texture.ranges) return;
++    UnindexTexture(texture);
++  }
++  for (const auto& [start, end] : texture.ranges) {
++    if (end <= start) continue;
++    for (uint32_t block = start >> kTextureBlockShift;; ++block) {
++      auto& textures = texture_blocks_[block];
++      if (textures.empty() || textures.back() != &texture) textures.push_back(&texture);
++      if (block == (end - 1) >> kTextureBlockShift) break;
++    }
++  }
++  texture.indexed = true;
++  texture.indexed_ranges = texture.ranges;
++}
++
++void Renderer::UnindexTexture(GuestTexture& texture) {
++  if (!texture.indexed) return;
++  for (const auto& [start, end] : texture.indexed_ranges) {
++    if (end <= start) continue;
++    for (uint32_t block = start >> kTextureBlockShift;; ++block) {
++      if (const auto bucket = texture_blocks_.find(block); bucket != texture_blocks_.end()) {
++        std::erase(bucket->second, &texture);
++        if (bucket->second.empty()) texture_blocks_.erase(bucket);
++      }
++      if (block == (end - 1) >> kTextureBlockShift) break;
++    }
++  }
++  texture.indexed = false;
++  texture.indexed_ranges = {};
++}
++
++void Renderer::LogInvalidationProfile(double frames) {
++  const InvalidationProfile& a = inval_prof_;
++  InvalidationProfile& b = inval_prof_last_;
++  if (frames <= 0) return;
++  REXLOG_INFO("gfx native: CPU-write checks per frame: {:.1f} batches ({:.1f} ranges), {:.3f} ms, {:.0f} textures "
++              "checked, {:.1f} marked changed; {} textures kept, {} blocks listed{}",
++              double(a.batches - b.batches) / frames, double(a.ranges - b.ranges) / frames,
++              double(a.ns - b.ns) / 1e6 / frames, double(a.checked - b.checked) / frames,
++              double(a.dirtied - b.dirtied) / frames, guest_textures_.size(), texture_blocks_.size(),
++              texture_index_ ? "" : " (index off)");
++  b = a;
++}
++
+ void Renderer::DropGuestTexture(GuestTexture& texture) {
++  UnindexTexture(texture);  // qos (patch 0110)
+   BumpTextureMemo();
+   texture_bytes_ -= std::min(texture_bytes_, texture.bytes);
+   texture.bytes = 0;
+@@ -1006,6 +1095,7 @@ void Renderer::DestroyFrameState() {
+   textures_.clear();
+   crops_.clear();
+   guest_textures_.clear();
++  texture_blocks_.clear();  // qos (patch 0110)
+   texture_bytes_ = 0;
+   evicted_keys_.clear();
+   texture_at_.clear();
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index 2a73f4a..e3d75f6 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -342,6 +342,9 @@ class Renderer : public Pm4Sink {
+     // qos (0095): XXH3 of the guest bytes in `ranges` when loaded (0: none). A dirty texture whose bytes hash the
+     // same is kept (the write was elsewhere on its pages, or the same data again) instead of reloaded.
+     uint64_t content_hash = 0;
++    // qos (patch 0110): the ranges it is listed under in texture_blocks_ (indexed: listed at all).
++    bool indexed = false;
++    std::array<std::pair<uint32_t, uint32_t>, 2> indexed_ranges{};
+   };
+   using TextureCacheKey = std::array<uint32_t, 5>;
+   // Filters (mag, min, mip), clamp modes (x, y, z), border colour, mip range, anisotropy.
+@@ -694,6 +697,22 @@ class Renderer : public Pm4Sink {
+   std::vector<Image> retired_;  // the current submission's
+   uint64_t frame_ = 0;
+   std::vector<std::pair<uint32_t, uint32_t>> invalidated_;
++  // qos (patch 0110): guest textures by the 64 KB blocks of their ranges, so a CPU write checks the textures on its
++  // blocks instead of every texture kept (thousands: ~5 minutes of them). BOTS_GFX_TEXTURE_INDEX=0: the full scan.
++  static constexpr uint32_t kTextureBlockShift = 16;
++  bool texture_index_ = true;
++  std::unordered_map<uint32_t, std::vector<GuestTexture*>> texture_blocks_;
++  void IndexTexture(GuestTexture& texture);
++  void UnindexTexture(GuestTexture& texture);
++  // BOTS_DRAW_PROFILE=1: invalidation batches handled, their time, and the textures they checked.
++  struct InvalidationProfile {
++    uint64_t batches = 0, ranges = 0, ns = 0, checked = 0, dirtied = 0, frames = 0;
++  } inval_prof_, inval_prof_last_;
++
++ public:
++  void LogInvalidationProfile(double frames);
++
++ private:
+   Api vk_;
+   bool ok_ = false;
+   std::string failure_;
+diff --git a/src/gfx/vk/texture.cpp b/src/gfx/vk/texture.cpp
+index 3d38802..0818ef0 100644
+--- a/src/gfx/vk/texture.cpp
++++ b/src/gfx/vk/texture.cpp
+@@ -300,6 +300,7 @@ VkImageView Renderer::TextureView(const rg::xenos::xe_gpu_texture_fetch_t& fetch
+     }
+   }
+   GuestTexture& texture = *slot;
++  if (texture_index_) IndexTexture(texture);  // qos (patch 0110): after a load or reload set its ranges
+   texture.last_used = frame_;
+   texture_view_texture_ = texture.prompt_atlas || texture.pad_sheet ? nullptr : &texture;
+   if (!texture.image.image) return VK_NULL_HANDLE;
