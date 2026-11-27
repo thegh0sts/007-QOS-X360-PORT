@@ -1,0 +1,343 @@
+# Hot vertex pages kept current by hash (27 Nov): the 0111 diagnostic showed pages a vertex request re-uploads frame
+# after frame cause ~90-98% of the re-protects at explosions (each an OS protection call under the SDK's global lock,
+# plus a write fault on the game thread), while the draws reading them request only ~2 KB each. A page a vertex
+# request had to upload 3 frames running becomes hot: after its next CPU write it is never protected again; each
+# vertex request that needs it hashes it (XXH3 of 4 KB) and copies it in place only when the hash differs from what
+# the GPU copy holds (hashed before that copy), queueing the change for the texture and index caches since no fault
+# reports it; the index table doesn't reuse conversions over hot pages. A hot page unchanged for 120 frames, or
+# requested by anything but a vertex fetch, goes back to protection. On by default (tested 27 Nov: write faults ~10 a
+# frame instead of ~120-220, ~12% less render-thread time per draw); BOTS_GFX_HOT_PAGES=0 turns it off. With
+# BOTS_DRAW_PROFILE=1 a line per stats window, "hot vertex pages per frame".
+ src/gfx/native.cpp         |   1 +
+ src/gfx/vk/draw.cpp        |   4 +-
+ src/gfx/vk/memory_sync.cpp | 179 +++++++++++++++++++++++++++++++++++++
+ src/gfx/vk/memory_sync.h   |  34 +++++++
+ src/gfx/vk/renderer.cpp    |   2 +
+ src/gfx/vk/renderer.h      |   4 +
+ 6 files changed, 223 insertions(+), 1 deletion(-)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index b3e49d8..4dbeb21 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -214,6 +214,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         if (renderer_->draw_profile() && sync_) LogSyncProfile(n);  // qos (patch 0109)
+         if (renderer_->draw_profile()) renderer_->LogInvalidationProfile(n);  // qos (patch 0110)
+         if (sync_) sync_->LogStreamPages(n);  // qos (patch 0111)
++        if (sync_) sync_->LogHotPages(n);  // qos (patch 0112)
+         renderer_->LogStreamDiag(n);
+         if (renderer_->draw_profile()) {
+           std::string phases;
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 78f299e..9e94e21 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -1184,7 +1184,9 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     for (uint32_t i = 0; i < std::size(vfetch_bitmap); ++i) {
+       for (uint32_t bits = vfetch_bitmap[i]; bits; bits &= bits - 1) {
+         const auto fetch = regs.GetVertexFetch(i * 32 + std::countr_zero(bits));
+-        if (fetch.type == xe::FetchConstantType::kVertex) tracker_->Request(fetch.address << 2, fetch.size << 2);
++        if (fetch.type == xe::FetchConstantType::kVertex) {
++          tracker_->RequestVertex(fetch.address << 2, fetch.size << 2);  // qos (patch 0112)
++        }
+       }
+     }
+     // qos: BOTS_GFX_VFETCH_ANY_TYPE=1 also syncs the memory a vertex fetch reads through a fetch constant that isn't
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index 5138e64..5b15044 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -4,6 +4,7 @@
+ #include <cstdlib>
+ 
+ #include <rex/logging.h>
++#include <xxhash.h>
+ 
+ namespace bots::gfx::vk {
+ 
+@@ -16,6 +17,18 @@ MemorySync::MemorySync(rex::memory::Memory& memory, Renderer& renderer) : Shared
+   if (const char* v = std::getenv("BOTS_GFX_TRACKER_MEMO"); v && *v == '0') memo_enabled_ = false;
+   REXLOG_INFO("gfx native: tracker memo {}", memo_enabled_ ? "on" : "off (BOTS_GFX_TRACKER_MEMO=0)");
+   if (const char* v = std::getenv("BOTS_DRAW_PROFILE"); v && *v == '1') profile_on_ = true;  // qos (patch 0109)
++  if (const char* v = std::getenv("BOTS_GFX_HOT_PAGES"); !(v && *v == '0')) {  // qos (patch 0112): on unless =0
++    hot_on_ = true;
++    const size_t pages = size_t(kBufferSize >> page_size_log2());
++    hot_.assign(pages / 64, 0);
++    hot_known_.assign(pages / 64, 0);
++    hot_hash_.assign(pages, 0);
++    hot_changed_frame_.assign(pages, 0);
++    up_frame_.assign(pages, 0);
++    up_streak_.assign(pages, 0);
++  }
++  REXLOG_INFO("gfx native: hot vertex pages {}", hot_on_ ? "kept current by hash"
++                                                          : "write-protected like the rest (BOTS_GFX_HOT_PAGES=0)");
+   if (const char* v = std::getenv("BOTS_GFX_STREAM_DIAG"); v && *v == '1') {  // qos (patch 0111)
+     stream_diag_ = true;
+     const size_t pages = size_t(kBufferSize >> page_size_log2());
+@@ -94,6 +107,17 @@ bool MemorySync::Request(uint32_t start, uint32_t length) {
+     memo = {start, length, invalidations, renderer_.read_stamp()};
+     return true;
+   }
++  if (hot_on_ && AnyHot(page_first, page_last)) {  // qos (patch 0112)
++    if (vertex_request_) return HotRequest(start, length, page_first, page_last);
++    for (uint32_t page = page_first; page <= page_last; ++page) {
++      if (IsHot(page)) SetHot(page, false), ++hot_stats_.demoted_other;
++    }
++  }
++  return SlowRequest(start, length);
++}
++
++bool MemorySync::SlowRequest(uint32_t start, uint32_t length) {
++  const uint32_t page_first = start >> page_size_log2(), page_last = (start + length - 1) >> page_size_log2();
+   ++locked_;
+   uploading_ = false;
+   // Set before the SDK validates the pages: an invalidation from here on clears the bits again.
+@@ -120,6 +144,9 @@ bool MemorySync::UploadRanges(const std::vector<std::pair<uint32_t, uint32_t>>&
+   if (stream_diag_) {  // qos (patch 0111)
+     for (const auto& [page_first, page_count] : page_ranges) StreamDiagUpload(page_first, page_count);
+   }
++  if (hot_on_ && vertex_request_) {  // qos (patch 0112)
++    for (const auto& [page_first, page_count] : page_ranges) HotNoteUpload(page_first, page_count);
++  }
+   uploading_ = uploading_ || !page_ranges.empty();
+   for (const auto& [page_first, page_count] : page_ranges) {
+     const uint32_t start = page_first << page_log2, length = page_count << page_log2;
+@@ -166,6 +193,158 @@ void MemorySync::TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ran
+   invalidated_.clear();
+ }
+ 
++// qos (patch 0112) -------------------------------------------------------------------------------------------------
++
++uint64_t MemorySync::PageHash(uint32_t page) const {
++  return XXH3_64bits(memory().TranslatePhysical<const uint8_t*>(page << page_size_log2()), size_t(1) << page_size_log2());
++}
++
++void MemorySync::QueueChanged(uint32_t page_first, uint32_t page_count) {
++  const uint32_t first = page_first << page_size_log2(), last = ((page_first + page_count) << page_size_log2()) - 1;
++  std::lock_guard lock(mutex_);
++  if (!invalidated_.empty() && invalidated_.back().second + 1 == first) {
++    invalidated_.back().second = last;
++  } else {
++    invalidated_.emplace_back(first, last);
++  }
++  pending_.store(true, std::memory_order_release);
++}
++
++bool MemorySync::RequestVertex(uint32_t start, uint32_t length) {
++  if (!hot_on_) return Request(start, length);
++  vertex_request_ = true;
++  const bool ok = Request(start, length);
++  vertex_request_ = false;
++  return ok;
++}
++
++bool MemorySync::AnyHot(uint32_t page_first, uint32_t page_last) const {
++  for (uint32_t block = page_first >> 6; block <= page_last >> 6; ++block) {
++    const uint32_t lo = block == page_first >> 6 ? page_first & 63 : 0;
++    const uint32_t hi = block == page_last >> 6 ? page_last & 63 : 63;
++    const uint64_t bits = (hi == 63 ? ~uint64_t(0) : (uint64_t(1) << (hi + 1)) - 1) & ~((uint64_t(1) << lo) - 1);
++    if (hot_[block] & bits) return true;
++  }
++  return false;
++}
++
++bool MemorySync::Unwatched(uint32_t start, uint32_t length) {
++  if (!hot_on_ || !length || start >= kBufferSize) return false;
++  const uint64_t end = std::min<uint64_t>(uint64_t(start) + length, kBufferSize);
++  return AnyHot(start >> page_size_log2(), uint32_t((end - 1) >> page_size_log2()));
++}
++
++void MemorySync::SetHot(uint32_t page, bool hot) {
++  const uint64_t bit = uint64_t(1) << (page & 63);
++  if (hot) {
++    hot_[page >> 6] |= bit;
++    ++hot_stats_.count;
++  } else {
++    hot_[page >> 6] &= ~bit;
++    --hot_stats_.count;
++  }
++  hot_known_[page >> 6] &= ~bit;
++}
++
++// A vertex request's upload through the SDK (protected path): counts frames running; 3 make the page hot.
++void MemorySync::HotNoteUpload(uint32_t page_first, uint32_t page_count) {
++  const uint32_t frame = uint32_t(renderer_.frame_number()) + 1;
++  for (uint32_t page = page_first; page < page_first + page_count; ++page) {
++    const uint32_t last = up_frame_[page];
++    if (last == frame) continue;
++    up_streak_[page] = last == frame - 1 ? uint8_t(std::min(up_streak_[page] + 1, 250)) : 1;
++    up_frame_[page] = frame;
++    if (up_streak_[page] >= 3 && !IsHot(page)) {
++      SetHot(page, true);
++      hot_changed_frame_[page] = frame;
++      ++hot_stats_.promoted;
++    }
++  }
++}
++
++bool MemorySync::HotRequest(uint32_t start, uint32_t length, uint32_t page_first, uint32_t page_last) {
++  const uint32_t page_log2 = page_size_log2();
++  const uint64_t end = uint64_t(start) + length;
++  bool ok = true;
++  for (uint32_t page = page_first; page <= page_last;) {
++    const bool hot = IsHot(page);
++    uint32_t last = page;
++    while (last < page_last && IsHot(last + 1) == hot) ++last;
++    if (hot) {
++      ok = HotCheck(page, last - page + 1) && ok;
++    } else {
++      const uint32_t sub_start = std::max(start, page << page_log2);
++      const uint32_t sub_end = uint32_t(std::min<uint64_t>(end, uint64_t(last + 1) << page_log2));
++      ok = SlowRequest(sub_start, sub_end - sub_start) && ok;
++    }
++    page = last + 1;
++  }
++  renderer_.NoteSharedRead(start, length);  // after its uploads, which may go ahead of it
++  return ok;
++}
++
++bool MemorySync::HotCheck(uint32_t page_first, uint32_t page_count) {
++  const uint32_t page_log2 = page_size_log2();
++  const uint32_t frame = uint32_t(renderer_.frame_number()) + 1;
++  const uint64_t t0 = profile_on_ ? NowNs() : 0;
++  bool ok = true;
++  hot_hashes_.resize(page_count);
++  // Hash first, copy after: a write between the two makes the stored hash older than the copy, never newer.
++  for (uint32_t i = 0; i < page_count; ++i) hot_hashes_[i] = PageHash(page_first + i);
++  hot_stats_.checked += page_count;
++  auto known = [&](uint32_t page) { return (hot_known_[page >> 6] >> (page & 63)) & 1; };
++  auto same = [&](uint32_t i) {
++    const uint32_t page = page_first + i;
++    return known(page) && hot_hash_[page] == hot_hashes_[i];
++  };
++  for (uint32_t i = 0; i < page_count;) {
++    const uint32_t page = page_first + i;
++    if (same(i)) {
++      if (frame - hot_changed_frame_[page] > kHotIdleFrames) {
++        // Quiet: back to protection (uploaded and watched by the SDK; its GPU copy is current, the upload is spare).
++        SetHot(page, false);
++        ++hot_stats_.demoted_idle;
++        ok = SlowRequest(page << page_log2, 1u << page_log2) && ok;
++      }
++      ++i;
++      continue;
++    }
++    uint32_t n = 1;
++    while (i + n < page_count && !same(i + n)) ++n;
++    for (uint32_t k = 0; k < n; ++k) {
++      if (known(page + k)) QueueChanged(page + k, 1);  // no write fault told the caches
++    }
++    if (!renderer_.UploadGuestMemory(page << page_log2, n << page_log2)) {
++      ok = false;
++    } else {
++      for (uint32_t k = 0; k < n; ++k) {
++        hot_hash_[page + k] = hot_hashes_[i + k];
++        hot_known_[(page + k) >> 6] |= uint64_t(1) << ((page + k) & 63);
++        hot_changed_frame_[page + k] = frame;
++      }
++      hot_stats_.copied += n, ++hot_stats_.copy_runs;
++      uploading_ = true;
++    }
++    i += n;
++  }
++  if (profile_on_) hot_stats_.ns += NowNs() - t0;
++  return ok;
++}
++
++void MemorySync::LogHotPages(double frames) {
++  if (!hot_on_ || frames <= 0) return;
++  const HotStats& a = hot_stats_;
++  HotStats& b = hot_stats_last_;
++  auto per = [&](uint64_t x, uint64_t y) { return double(x - y) / frames; };
++  REXLOG_INFO("gfx native: hot vertex pages per frame: {:.0f} checked by hash ({:.2f} ms), {:.0f} copied in {:.0f} "
++              "runs; {:.1f} made hot, {:.1f} back to protection when quiet, {:.1f} when other requests read them; {} hot "
++              "now",
++              per(a.checked, b.checked), per(a.ns, b.ns) / 1e6, per(a.copied, b.copied), per(a.copy_runs, b.copy_runs),
++              per(a.promoted, b.promoted), per(a.demoted_idle, b.demoted_idle), per(a.demoted_other, b.demoted_other),
++              a.count);
++  b = a;
++}
++
+ // qos (patch 0111) -------------------------------------------------------------------------------------------------
+ 
+ void MemorySync::SweepHot(uint32_t frame) {
+diff --git a/src/gfx/vk/memory_sync.h b/src/gfx/vk/memory_sync.h
+index ad10753..86fe5fc 100644
+--- a/src/gfx/vk/memory_sync.h
++++ b/src/gfx/vk/memory_sync.h
+@@ -32,6 +32,9 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   bool IsCurrent(uint32_t start, uint32_t length) override;
+   void TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ranges) override;
+   bool StreamDiagHot(uint32_t start, uint32_t length) override;  // qos (patch 0111)
++  bool RequestVertex(uint32_t start, uint32_t length) override;  // qos (patch 0112)
++  bool Unwatched(uint32_t start, uint32_t length) override;
++  void LogHotPages(double frames);
+   void LogStreamPages(double frames);
+ 
+   // Diagnostics: requests, ones that took the lock and ones of those that uploaded (command-processor thread), and
+@@ -94,6 +97,37 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   bool profile_on_ = false;
+   Profile profile_;
+ 
++  // qos (patch 0112): hot pages (on; BOTS_GFX_HOT_PAGES=0 turns them off). A page a vertex request had to upload 3 frames running is
++  // hot: once a CPU write drops its protection it is never protected again; instead every vertex request that needs
++  // it hashes it (XXH3, 4 KB) and copies it in place only when the hash differs from what the GPU copy holds (hashed
++  // before that copy), reporting the change to the renderer's caches (QueueChanged). No OS protection call, no global
++  // lock, no write fault. A hot page unchanged for kHotIdleFrames, or requested by anything but a vertex fetch
++  // (textures, index heap), goes back to the protected path.
++  static constexpr uint32_t kHotIdleFrames = 120;
++  bool hot_on_ = false;
++  bool vertex_request_ = false;
++  std::vector<uint64_t> hot_, hot_known_;   // bits per page: hot; GPU copy hash known
++  std::vector<uint64_t> hot_hash_;           // per page: hash of the bytes the GPU copy holds
++  std::vector<uint32_t> hot_changed_frame_;  // per page: frame it last changed
++  std::vector<uint32_t> up_frame_;           // per page: frame a vertex request last uploaded it
++  std::vector<uint8_t> up_streak_;           // frames running it was
++  std::vector<uint64_t> hot_hashes_;
++  bool SlowRequest(uint32_t start, uint32_t length);
++  uint64_t PageHash(uint32_t page) const;
++  // A hot page found changed: no write fault reported it, so the renderer's caches (textures, index buffers) hear of
++  // it here, as from OnInvalidated.
++  void QueueChanged(uint32_t page_first, uint32_t page_count);
++  bool HotRequest(uint32_t start, uint32_t length, uint32_t page_first, uint32_t page_last);
++  bool HotCheck(uint32_t page_first, uint32_t page_count);
++  bool IsHot(uint32_t page) const { return (hot_[page >> 6] >> (page & 63)) & 1; }
++  bool AnyHot(uint32_t page_first, uint32_t page_last) const;
++  void SetHot(uint32_t page, bool hot);
++  void HotNoteUpload(uint32_t page_first, uint32_t page_count);
++  struct HotStats {
++    uint64_t checked = 0, copied = 0, copy_runs = 0, promoted = 0, demoted_idle = 0, demoted_other = 0, ns = 0,
++             count = 0;
++  } hot_stats_, hot_stats_last_;
++
+   // qos (patch 0111): BOTS_GFX_STREAM_DIAG=1. Per page: the frame it was last uploaded and how many frames running it
+   // was; a page uploaded 3+ frames running is hot (hot_bits_, dropped again 2 frames after its last upload).
+   bool stream_diag_ = false;
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index dc932e9..a5a926e 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -569,6 +569,8 @@ const Renderer::IndexUpload* Renderer::FindIndexUpload(const IndexKey& key) {
+     for (uint32_t page = key.base >> kIndexPageShift; page <= last; ++page) {
+       if (index_page_stamps_[page] > slot.stamp) return nullptr;  // written since: KeepIndexUpload reuses the slot
+     }
++    // qos (patch 0112): pages kept current by hash report no writes: convert again.
++    if (tracker_ && tracker_->Unwatched(key.base, std::max(slot.upload.bytes, 1u))) return nullptr;
+     return &slot.upload;
+   }
+   return nullptr;
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index 4075a69..a7b7f58 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -64,6 +64,10 @@ class GuestMemoryTracker {
+   virtual void TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ranges) = 0;
+   // qos (patch 0111, BOTS_GFX_STREAM_DIAG=1): whether the range holds a "hot" page (re-uploaded 3+ frames running).
+   virtual bool StreamDiagHot(uint32_t, uint32_t) { return false; }
++  // qos (patch 0112): a draw's vertex data (may be kept current by hash instead of write protection), and whether a
++  // range holds such unprotected pages (CPU writes there aren't reported until a request finds them).
++  virtual bool RequestVertex(uint32_t start, uint32_t length) { return Request(start, length); }
++  virtual bool Unwatched(uint32_t, uint32_t) { return false; }
+ };
+ 
+ class Renderer : public Pm4Sink {

@@ -1,0 +1,344 @@
+# Streamed-vertex diagnostic (27 Nov): BOTS_GFX_STREAM_DIAG=1 sizes the plan to stop write-protecting the vertex
+# memory 007 rewrites every frame and copy each draw's vertices instead. Two lines per stats window: "hot pages per
+# frame" (pages uploaded, how many are hot = uploaded 3+ frames running, their share of page uploads and upload runs,
+# how many pages are hot at once) and "streamed-vertex diagnostic per frame" (draws whose vertex requests hold a hot
+# page, the bytes those requests cover vs the bytes the draw's vertices span: index min/max + VGT_INDX_OFFSET times
+# the widest stride on that fetch constant, and the time the index scan takes).
+ src/gfx/native.cpp         |  2 +
+ src/gfx/vk/draw.cpp        | 79 ++++++++++++++++++++++++++++++++++++++
+ src/gfx/vk/memory_sync.cpp | 77 +++++++++++++++++++++++++++++++++++++
+ src/gfx/vk/memory_sync.h   | 16 ++++++++
+ src/gfx/vk/renderer.cpp    | 21 ++++++++++
+ src/gfx/vk/renderer.h      | 16 ++++++++
+ 6 files changed, 211 insertions(+)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 380878e..b3e49d8 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -213,6 +213,8 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         renderer_->LogHoistDiag();  // qos (patch 0107)
+         if (renderer_->draw_profile() && sync_) LogSyncProfile(n);  // qos (patch 0109)
+         if (renderer_->draw_profile()) renderer_->LogInvalidationProfile(n);  // qos (patch 0110)
++        if (sync_) sync_->LogStreamPages(n);  // qos (patch 0111)
++        renderer_->LogStreamDiag(n);
+         if (renderer_->draw_profile()) {
+           std::string phases;
+           for (size_t i = 0; i < std::size(st.draw_phase_ns); ++i) {
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 3b44d6f..78f299e 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -804,6 +804,84 @@ void Renderer::CaptureFrameDraw(const rg::RegisterFile& regs, const ShaderLoad&
+   TreeCaptureDraw(regs, *vshader, *pshader, draw, count, index32);
+ }
+ 
++// qos (patch 0111): see LogStreamDiag.
++void Renderer::StreamDiagDraw(const rg::RegisterFile& regs, const ShaderCache::Shader& vshader, const Draw& draw,
++                              uint32_t count, bool dma, bool index32) {
++  bool span_known = false, any = false;
++  uint32_t lo = 0, hi = 0;
++  auto span = [&]() -> bool {
++    if (span_known) return lo <= hi;
++    span_known = true;
++    const uint32_t offset = regs.values[rg::XE_GPU_REG_VGT_INDX_OFFSET] & 0xFFFFFF;
++    if (!dma) {
++      lo = offset, hi = (offset + count - 1) & 0xFFFFFF;
++      if (hi < lo) lo = 1, hi = 0;  // wrapped: unknown
++      return lo <= hi;
++    }
++    const uint8_t* src = memory_(draw.index_base);
++    if (!src || !count) {
++      lo = 1, hi = 0;
++      return false;
++    }
++    const auto t0 = std::chrono::steady_clock::now();
++    const bool reset_enabled = regs.Get<reg::PA_SU_SC_MODE_CNTL>().multi_prim_ib_ena;
++    const uint32_t reset_index = regs.Get<reg::VGT_MULTI_PRIM_IB_RESET_INDX>().reset_indx;
++    const xe::Endian endian = IndexEndian(draw.index_endian, index32);
++    uint32_t mn = UINT32_MAX, mx = 0;
++    for (uint32_t i = 0; i < count; ++i) {
++      uint32_t v;
++      if (index32) {
++        std::memcpy(&v, src + size_t(i) * 4, 4);
++        v = xe::GpuSwap(v, endian);
++      } else {
++        uint16_t h;
++        std::memcpy(&h, src + size_t(i) * 2, 2);
++        v = xe::GpuSwap(h, endian);
++      }
++      if (reset_enabled && v == reset_index) continue;
++      mn = std::min(mn, v), mx = std::max(mx, v);
++    }
++    sdiag_.scan_ns += uint64_t(
++        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
++    sdiag_.scanned += count;
++    if (mn > mx) {
++      lo = 1, hi = 0;
++      return false;
++    }
++    lo = (mn + offset) & 0xFFFFFF, hi = (mx + offset) & 0xFFFFFF;
++    if (hi < lo) lo = 1, hi = 0;
++    return lo <= hi;
++  };
++  const auto& vfetch_bitmap = vshader.constant_register_map().vertex_fetch_bitmap;
++  for (uint32_t i = 0; i < std::size(vfetch_bitmap); ++i) {
++    for (uint32_t bits = vfetch_bitmap[i]; bits; bits &= bits - 1) {
++      const uint32_t constant = i * 32 + std::countr_zero(bits);
++      const auto fetch = regs.GetVertexFetch(constant);
++      if (fetch.type != xe::FetchConstantType::kVertex) continue;
++      const uint32_t start = fetch.address << 2, size = fetch.size << 2;
++      if (!tracker_->StreamDiagHot(start, size)) continue;
++      ++sdiag_.requests, sdiag_.requested += size;
++      if (!any) {
++        any = true;
++        ++sdiag_.draws;
++        ++(dma ? sdiag_.indexed : sdiag_.auto_index);
++      }
++      uint32_t stride = 0;
++      for (const auto& binding : vshader.vertex_bindings()) {
++        if (binding.fetch_constant == constant) stride = std::max(stride, binding.stride_words);
++      }
++      if (!stride || !span()) {
++        ++sdiag_.unknown;
++        sdiag_.spanned += size;
++        continue;
++      }
++      const uint64_t bytes = std::min<uint64_t>(uint64_t(hi - lo + 1) * stride * 4, size);
++      sdiag_.spanned += bytes;
++      sdiag_.big += bytes > (256u << 10);
++    }
++  }
++}
++
+ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, const ShaderLoad& ps,
+                          const Draw& draw) {
+   const auto& props = device_->properties();
+@@ -1129,6 +1207,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     if (expanded && source == xe::SourceSelect::kDMA) {
+       tracker_->Request(draw.index_base, draw.index_words * (index32 ? 4 : 2));
+     }
++    if (stream_diag_) StreamDiagDraw(regs, *vshader, draw, count, dma, index32);  // qos (patch 0111)
+   }
+ 
+   profile.Mark(kPhaseTextures);
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index 97a710b..5138e64 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -16,6 +16,13 @@ MemorySync::MemorySync(rex::memory::Memory& memory, Renderer& renderer) : Shared
+   if (const char* v = std::getenv("BOTS_GFX_TRACKER_MEMO"); v && *v == '0') memo_enabled_ = false;
+   REXLOG_INFO("gfx native: tracker memo {}", memo_enabled_ ? "on" : "off (BOTS_GFX_TRACKER_MEMO=0)");
+   if (const char* v = std::getenv("BOTS_DRAW_PROFILE"); v && *v == '1') profile_on_ = true;  // qos (patch 0109)
++  if (const char* v = std::getenv("BOTS_GFX_STREAM_DIAG"); v && *v == '1') {  // qos (patch 0111)
++    stream_diag_ = true;
++    const size_t pages = size_t(kBufferSize >> page_size_log2());
++    page_frame_.assign(pages, 0);
++    page_streak_.assign(pages, 0);
++    hot_bits_.assign(pages / 64, 0);
++  }
+ }
+ 
+ namespace {
+@@ -110,6 +117,9 @@ bool MemorySync::Request(uint32_t start, uint32_t length) {
+ 
+ bool MemorySync::UploadRanges(const std::vector<std::pair<uint32_t, uint32_t>>& page_ranges) {
+   const uint32_t page_log2 = page_size_log2();
++  if (stream_diag_) {  // qos (patch 0111)
++    for (const auto& [page_first, page_count] : page_ranges) StreamDiagUpload(page_first, page_count);
++  }
+   uploading_ = uploading_ || !page_ranges.empty();
+   for (const auto& [page_first, page_count] : page_ranges) {
+     const uint32_t start = page_first << page_log2, length = page_count << page_log2;
+@@ -156,4 +166,71 @@ void MemorySync::TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ran
+   invalidated_.clear();
+ }
+ 
++// qos (patch 0111) -------------------------------------------------------------------------------------------------
++
++void MemorySync::SweepHot(uint32_t frame) {
++  if (frame == sweep_frame_) return;
++  sweep_frame_ = frame;
++  std::erase_if(hot_list_, [&](uint32_t page) {
++    if (frame - page_frame_[page] <= 2) return false;
++    hot_bits_[page >> 6] &= ~(uint64_t(1) << (page & 63));
++    return true;
++  });
++}
++
++void MemorySync::StreamDiagUpload(uint32_t page_first, uint32_t page_count) {
++  const uint32_t frame = uint32_t(renderer_.frame_number()) + 1;  // 0 = never
++  SweepHot(frame);
++  bool all_hot = true;
++  for (uint32_t page = page_first; page < page_first + page_count; ++page) {
++    const uint32_t last = page_frame_[page];
++    if (last != frame) {
++      ++spages_.distinct;
++      page_streak_[page] = last == frame - 1 ? uint8_t(std::min(page_streak_[page] + 1, 250)) : 1;
++      page_frame_[page] = frame;
++      if (page_streak_[page] >= 3 && !(hot_bits_[page >> 6] & (uint64_t(1) << (page & 63)))) {
++        hot_bits_[page >> 6] |= uint64_t(1) << (page & 63);
++        hot_list_.push_back(page);
++      }
++    }
++    const bool hot = page_streak_[page] >= 3;
++    spages_.hot_pages += hot;
++    all_hot = all_hot && hot;
++  }
++  spages_.pages += page_count;
++  ++spages_.runs;
++  spages_.hot_runs += all_hot;
++  spages_.hot_now += hot_list_.size(), ++spages_.samples;
++}
++
++bool MemorySync::StreamDiagHot(uint32_t start, uint32_t length) {
++  if (!stream_diag_ || !length || start >= kBufferSize) return false;
++  SweepHot(uint32_t(renderer_.frame_number()) + 1);
++  if (hot_list_.empty()) return false;
++  const uint32_t page_first = start >> page_size_log2();
++  const uint32_t page_last = uint32_t(std::min<uint64_t>(uint64_t(start) + length, kBufferSize) - 1) >> page_size_log2();
++  for (uint32_t block = page_first >> 6; block <= page_last >> 6; ++block) {
++    const uint32_t lo = block == page_first >> 6 ? page_first & 63 : 0;
++    const uint32_t hi = block == page_last >> 6 ? page_last & 63 : 63;
++    const uint64_t bits = (hi == 63 ? ~uint64_t(0) : (uint64_t(1) << (hi + 1)) - 1) & ~((uint64_t(1) << lo) - 1);
++    if (hot_bits_[block] & bits) return true;
++  }
++  return false;
++}
++
++void MemorySync::LogStreamPages(double frames) {
++  if (!stream_diag_ || frames <= 0) return;
++  const StreamPages& a = spages_;
++  StreamPages& b = spages_last_;
++  auto per = [&](uint64_t x, uint64_t y) { return double(x - y) / frames; };
++  const double pages = per(a.pages, b.pages), runs = per(a.runs, b.runs);
++  REXLOG_INFO("gfx native: hot pages per frame: {:.0f} pages uploaded ({:.0f} different) in {:.0f} runs; {:.0f} of "
++              "those pages ({:.0f}%) and {:.0f} runs ({:.0f}%) hot (uploaded 3+ frames running); ~{:.0f} pages hot",
++              pages, per(a.distinct, b.distinct), runs, per(a.hot_pages, b.hot_pages),
++              pages > 0 ? 100.0 * per(a.hot_pages, b.hot_pages) / pages : 0.0, per(a.hot_runs, b.hot_runs),
++              runs > 0 ? 100.0 * per(a.hot_runs, b.hot_runs) / runs : 0.0,
++              a.samples > b.samples ? double(a.hot_now - b.hot_now) / double(a.samples - b.samples) : 0.0);
++  b = a;
++}
++
+ }  // namespace bots::gfx::vk
+diff --git a/src/gfx/vk/memory_sync.h b/src/gfx/vk/memory_sync.h
+index ce16681..ad10753 100644
+--- a/src/gfx/vk/memory_sync.h
++++ b/src/gfx/vk/memory_sync.h
+@@ -31,6 +31,8 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   bool Request(uint32_t start, uint32_t length) override;
+   bool IsCurrent(uint32_t start, uint32_t length) override;
+   void TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ranges) override;
++  bool StreamDiagHot(uint32_t start, uint32_t length) override;  // qos (patch 0111)
++  void LogStreamPages(double frames);
+ 
+   // Diagnostics: requests, ones that took the lock and ones of those that uploaded (command-processor thread), and
+   // invalidations: CPU writes to watched memory reported by the SDK (any thread; each one a write fault).
+@@ -91,6 +93,20 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   uint64_t memo_hits_ = 0;
+   bool profile_on_ = false;
+   Profile profile_;
++
++  // qos (patch 0111): BOTS_GFX_STREAM_DIAG=1. Per page: the frame it was last uploaded and how many frames running it
++  // was; a page uploaded 3+ frames running is hot (hot_bits_, dropped again 2 frames after its last upload).
++  bool stream_diag_ = false;
++  std::vector<uint32_t> page_frame_;
++  std::vector<uint8_t> page_streak_;
++  std::vector<uint64_t> hot_bits_;
++  std::vector<uint32_t> hot_list_;
++  uint32_t sweep_frame_ = 0;
++  void StreamDiagUpload(uint32_t page_first, uint32_t page_count);
++  void SweepHot(uint32_t frame);
++  struct StreamPages {
++    uint64_t pages = 0, distinct = 0, hot_pages = 0, runs = 0, hot_runs = 0, hot_now = 0, samples = 0;
++  } spages_, spages_last_;
+ };
+ 
+ }  // namespace bots::gfx::vk
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index f08dd20..dc932e9 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -238,6 +238,10 @@ Renderer::Renderer(const rex::ui::vulkan::VulkanDevice* device, PhysicalMemory m
+   read_bits_.assign((size_t(512) << 20 >> 12) / 64, 0);
+   read_gen_.assign(read_bits_.size(), 0);
+   REXLOG_INFO("gfx native: upload hoisting {}", hoist_uploads_ ? "on" : "off (BOTS_GFX_HOIST_UPLOADS=0)");
++  if (const char* v = std::getenv("BOTS_GFX_STREAM_DIAG"); v && *v == '1') {  // qos (patch 0111)
++    stream_diag_ = true;
++    REXLOG_INFO("gfx native: streamed-vertex diagnostic on (BOTS_GFX_STREAM_DIAG=1)");
++  }
+   if (const char* v = std::getenv("BOTS_GFX_TEXTURE_INDEX"); v && *v == '0') {  // qos (patch 0110)
+     texture_index_ = false;
+     REXLOG_INFO("gfx native: texture block index off (BOTS_GFX_TEXTURE_INDEX=0): CPU writes check every texture");
+@@ -876,6 +880,23 @@ void Renderer::UnindexTexture(GuestTexture& texture) {
+   texture.indexed_ranges = {};
+ }
+ 
++void Renderer::LogStreamDiag(double frames) {
++  if (!stream_diag_ || frames <= 0) return;
++  const StreamDiag& a = sdiag_;
++  StreamDiag& b = sdiag_last_;
++  auto per = [&](uint64_t x, uint64_t y) { return double(x - y) / frames; };
++  const double draws = per(a.draws, b.draws);
++  REXLOG_INFO("gfx native: streamed-vertex diagnostic per frame: {:.0f} draws read hot pages ({:.0f} indexed, {:.0f} "
++              "auto-indexed, {:.0f} span unknown), {:.0f} vertex requests on them: {:.2f} MB requested, {:.2f} MB "
++              "spanned by their vertices ({:.1f} KB a draw; {:.0f} draws over 256 KB); index scan {:.3f} ms for "
++              "{:.0f} indices",
++              draws, per(a.indexed, b.indexed), per(a.auto_index, b.auto_index), per(a.unknown, b.unknown),
++              per(a.requests, b.requests), per(a.requested, b.requested) / 1048576.0,
++              per(a.spanned, b.spanned) / 1048576.0, draws > 0 ? per(a.spanned, b.spanned) / 1024.0 / draws : 0.0,
++              per(a.big, b.big), per(a.scan_ns, b.scan_ns) / 1e6, per(a.scanned, b.scanned));
++  b = a;
++}
++
+ void Renderer::LogInvalidationProfile(double frames) {
+   const InvalidationProfile& a = inval_prof_;
+   InvalidationProfile& b = inval_prof_last_;
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index e3d75f6..4075a69 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -62,6 +62,8 @@ class GuestMemoryTracker {
+   virtual bool IsCurrent(uint32_t, uint32_t) { return false; }
+   // Physical ranges [first, last] the CPU wrote since the last call (for the renderer's caches).
+   virtual void TakeInvalidated(std::vector<std::pair<uint32_t, uint32_t>>& ranges) = 0;
++  // qos (patch 0111, BOTS_GFX_STREAM_DIAG=1): whether the range holds a "hot" page (re-uploaded 3+ frames running).
++  virtual bool StreamDiagHot(uint32_t, uint32_t) { return false; }
+ };
+ 
+ class Renderer : public Pm4Sink {
+@@ -163,6 +165,7 @@ class Renderer : public Pm4Sink {
+   // in this submission (MemorySync::Request), so an upload there can't be moved ahead of it (UploadGuestMemory).
+   // qos (patch 0104): changes when a new submission starts (pages read in this one are then forgotten).
+   uint32_t read_stamp() const { return page_stamp_; }
++  uint64_t frame_number() const { return frame_; }  // qos (patch 0111)
+   void NoteSharedRead(uint32_t start, uint32_t length);
+   // qos (patch 0103): waits for the upload worker's copies (before the command processor writes guest memory or
+   // raises an interrupt: SDK patch 0029's OnBeforeGuestWrite; and before a submission).
+@@ -705,12 +708,25 @@ class Renderer : public Pm4Sink {
+   void IndexTexture(GuestTexture& texture);
+   void UnindexTexture(GuestTexture& texture);
+   // BOTS_DRAW_PROFILE=1: invalidation batches handled, their time, and the textures they checked.
++  bool stream_diag_ = false;
++  struct StreamDiag {
++    uint64_t draws = 0, requests = 0, requested = 0, spanned = 0, scan_ns = 0, scanned = 0, indexed = 0, auto_index = 0,
++             big = 0, unknown = 0;
++  } sdiag_, sdiag_last_;
++  void StreamDiagDraw(const rex::graphics::RegisterFile& regs, const ShaderCache::Shader& vshader, const Draw& draw, uint32_t count,
++                      bool dma, bool index32);
+   struct InvalidationProfile {
+     uint64_t batches = 0, ranges = 0, ns = 0, checked = 0, dirtied = 0, frames = 0;
+   } inval_prof_, inval_prof_last_;
+ 
+  public:
+   void LogInvalidationProfile(double frames);
++  // qos (patch 0111): BOTS_GFX_STREAM_DIAG=1. For draws whose vertex requests hold a hot page (the tracker's
++  // StreamDiagHot): the bytes requested (whole fetch constants) vs the bytes the draw's vertices span (index min/max,
++  // VGT_INDX_OFFSET, the widest stride on that constant), and the cost of finding the span by scanning the indices.
++  // Sizes a per-draw copy of streamed vertex data instead of write-protecting it.
++  void LogStreamDiag(double frames);
++  bool stream_diag() const { return stream_diag_; }
+ 
+  private:
+   Api vk_;

@@ -463,13 +463,70 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       vertex buffers (6-7 MB fetch-constant ranges). Tried and dropped (branch try-0110-0111): 0110 streaming pages
       (stop protecting pages rewritten every frame: no net gain) and 0111 narrowing vertex requests (memo misses,
       tracker 0.26-0.33 -> 0.47-0.81 us/draw). Real fix, deferred: streamed vertex data in its own GPU buffer.
-      **Native 0110-texture-index (27 Nov, committed, NOT yet tested):** "setup" (1.4-3 ms/frame at explosions,
+      **Native 0110-texture-index (27 Nov, committed):** "setup" (1.4-3 ms/frame at explosions,
       2.99 ms at 8,495 draws in qos_208) is mostly ProcessInvalidations, not register work: every non-empty batch of
       CPU writes walked all kept guest textures (thousands). Textures are now listed by 64 KB block
       (texture_blocks_, IndexTexture/UnindexTexture: indexed at the end of TextureView, unlisted in DropGuestTexture)
       and MemorySync::TakeInvalidated skips its lock when nothing is queued (pending_). BOTS_GFX_TEXTURE_INDEX=0: the
       old walk (A/B). Profile line "CPU-write checks per frame". Test: build_native + game build, explosion spot,
       BOTS_DRAW_PROFILE=1 + all three render threads; run 1 default, run 2 BOTS_GFX_TEXTURE_INDEX=0; compare setup ms.
+      **0110 works (27 Nov 19:19-19:43, qos_209 index on / qos_210 off, same route incl. the explosion):** CPU-write
+      checks 0.02-0.08 ms a frame (1 texture checked) vs 0.2-1.94 ms (24k-254k textures checked; ~1,000-1,650 kept);
+      setup 0.54 ms at 7,239 draws vs 2.39 at 7,436 (~0.07 vs ~0.32 us/draw). Peak windows: 12.3 ms in draws, 22 of
+      600 frames > 20 ms (max 22) vs 13.9 ms, 145-224 > 20 ms. Whole runs: 589 vs 1,027 frames > 20 ms. Left at the
+      peak: tracker 3.6-4.1 ms (memory sync: write protection), the next target. User (19:46): run 1 felt like it recovered
+      faster and had smaller dips.
+      **SDK 0031-invalidation-pages (27 Nov, own31, default unchanged = 64 pages):** BOTS_GFX_INVALIDATION_PAGES
+      narrows how far a CPU write invalidates. qos_211 (=1): ~800-1,075 faults a frame, re-protects 10+ us each (lock
+      contention with the faults), tracker 8-13 ms, 8,745 frames > 20 ms: unusable. qos_212 (=16): faults ~280 vs
+      ~200, pages invalidated ~4,500 vs ~12,500, pages uploaded ~1,400 vs ~2,000, but requests that re-protect the same
+      (~740 at 7,500 draws) and tracker the same (2.5 ms; 4.64 at 8,065 draws); frames > 20 ms 391 vs 404 (qos_209).
+      So the re-protect count follows the game's write -> draw cycles, not the widening. Left as a switch, default 64.
+      Options next: re-protect on a worker (copy now, protect then compare the page with the copy; a page waiting for
+      its protect is copied again rather than trusted), or the streamed-vertex buffer.
+      **Native 0111-async-protect + SDK 0032-async-protect (own32), 27 Nov 20:30, DROPPED (branches try-0111-async-protect / try-0032 in the cloud trees):**
+      BOTS_GFX_ASYNC_PROTECT=1: UploadRanges hashes each page (XXH3, before the copy), copies, queues; a worker thread
+      protects (WatchRangeForWrites) and, under the global critical region, marks valid the pages still hashing the
+      same with their copy still newest (MakeRangeValidIf; pending_serial_ per page, cleared by OnInvalidated). A
+      pending page is re-hashed by the next request and copied only if changed; changes found that way or by the
+      worker go to invalidated_ (QueueChanged) for the texture/index caches. Profile line "write protection worker
+      per frame". Test: run 1 =1, run 2 unset, explosion route; watch particles/smoke, textures.
+      **Result (20:22-20:33, qos_213 on / qos_214 off):** worse. No glitches; the worker kept up (0 queued, 1.6-3.2 ms
+      of its own, ~1% of pages changed before their protection), but the CP thread's requests rose (1,365 vs 877 at
+      ~7,200 draws: pending pages take the slow path) and each still cost ~2.3 us, now waiting for the global critical
+      region, which EnableAccessCallbacks holds across the OS protection call. Tracker 4.3 vs 2.8 ms; frames > 20 ms
+      806 vs 229; user: run 2 (off) felt better. Lesson: the protection cost is the global lock, not the thread it runs
+      on. Left: the streamed-vertex buffer (no protection for pages rewritten every frame), deferred.
+      **Streamed-vertex plan (user asked, 20:38):** (1) diagnostic; (2) hot pages (re-uploaded 3+ frames running)
+      stop being protected; (3) each draw on them copies its vertex span (index min/max x stride) into a scratch area
+      of the shared-memory buffer the game never uses, hoisted ahead of the pass, and its fetch constant (renderer's
+      copy) points there; (4) index buffers / textures on hot pages re-checked; (5) fallbacks + switch; (6) A/B.
+      **Native 0111-stream-diagnostic (20:50, written, not built):** BOTS_GFX_STREAM_DIAG=1, lines "hot pages per
+      frame" and "streamed-vertex diagnostic per frame" (requested vs spanned MB, KB a draw, index scan ms).
+      **Result (20:49-20:54, qos_215):** hot pages (uploaded 3+ frames running) are ~400-800 at once and cause
+      57-76% of page uploads and 88-98% of upload runs (= re-protects). 3,250-5,000 draws a frame read them (nearly all
+      indexed), but their requests are already tight: 1.6-2.1 KB a draw, requested = spanned (5-9 MB a frame in
+      total, no draw over 256 KB), so no index scan is needed (the scan would cost ~1-1.4 ms). Per-draw copies would be
+      ~4,000-7,000 small copies a frame vs ~550-940 protected runs now: not clearly cheaper. Better variant: hot pages
+      stay unprotected and are checked by hash (per page, what the GPU copy holds) at each request; changed -> copied
+      in place, no protect, no global lock; changes reported to the caches (QueueChanged); a hot page unchanged for N
+      frames goes back to protection. No fetch-constant redirect or scratch area. Est. ~1-1.5 ms off the peak.
+      **Native 0112-hot-pages (21:05; works, 21:18):** BOTS_GFX_HOT_PAGES=1. RequestVertex (draw.cpp's vertex
+      fetch requests) marks vertex_request_; UploadRanges counts per-page upload streaks (HotNoteUpload), 3 -> hot.
+      Request's slow path sends hot ranges to HotRequest (non-hot sub-ranges via SlowRequest = the old slow path; hot
+      runs via HotCheck: XXH3 per page vs hot_hash_, changed -> QueueChanged + UploadGuestMemory in place). Plain
+      Request over hot pages demotes them; 120 frames unchanged demotes. FindIndexUpload skips Unwatched ranges.
+      Profile line "hot vertex pages per frame". Test: run 1 =1, run 2 unset (both BOTS_DRAW_PROFILE=1).
+      **Result (21:06-21:17, qos_216 on / qos_217 off; user: run 1 better, no glitches mentioned):** write faults
+      ~10 a frame vs ~120-220; protected-path requests 300-730 vs 500-960 a frame, ~0.15-0.4 ms vs 1.2-2.8 ms in
+      them; tracker 1.1-2.0 ms vs 1.4-3.2; draws 1.32 vs 1.48-1.52 us each at >= 5,000 draws (~12% less render-thread
+      time). Hash checks 600-4,500 pages a frame (0.15-0.8 ms) of which only ~7-15% had changed: most re-uploads were
+      the 256 KB invalidation widening, not real writes. ~300-1,000 pages hot. Frames > 20 ms per busy window about
+      the same (13-19 vs 13 per 600; different walks). Next: default on (BOTS_GFX_HOT_PAGES=0 off) once confirmed
+      glitch-free; maybe a per-page "checked this draw batch" skip to trim repeated hashes.
+      **Default on (21:22, user: no new glitches):** 0112 now on unless BOTS_GFX_HOT_PAGES=0; log "hot vertex pages
+      kept current by hash". **Known, older issue (user, 21:20): some z-fighting**, seen since well before this work;
+      not caused by 0112. To look at later (where it shows: level/surfaces; compare Xenos; depth format/bias).
       **Launcher after 922fbcf (committed 27 Nov):** SlimScrollbar (qos_installer.py) replaces ttk scroll bars;
       Multiplayer "Host addresses (optional)" (`--netplay_peers`, cleaned by clean_host_addresses); Input device is
       a button group (Auto/KBM/XBOX/PS); Saves tab in two columns, buttons on the right.
