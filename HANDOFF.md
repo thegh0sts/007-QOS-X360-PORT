@@ -550,6 +550,38 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       7,000 draws): layout 0.038 vs 0.054 us/draw (most of what's left is the sub-profile's own clock reads), hot-page
       hashing 0.127 vs 0.140 us/draw (~990 second hashes a frame skipped). Kept (harmless, small). Per-draw trims are
       now at diminishing returns.
+      **Detail distance / Sun shadow range (user, 22:04):** left to player feedback rather than our own testing
+      (hard to judge where to look): ask for it in the next release's notes (what changed visibly, any FPS cost, where).
+      **Uncapped frame rate (22:03, src/fps_unlock.cpp, written in the cloud repo; the write to the PC was stopped
+      mid-call, so the PC copy may be old or new):** --frame_rate 20-1000, 0 = com_maxfps 1000; above 60 r_vsync held
+      at 0 and swaps passed as D3DPRESENT_INTERVAL_IMMEDIATE (0x80000000 -> swap interval 0). Not built or tested.
+      **Test (22:09, user):** smoother at 120 / uncapped, but the balance beam breaks with a controller (wobble runs
+      away at high FPS). **Fix (22:15, not built):** while balancing the cap drops to 60. Found from SetBalanceForce
+      sub_82262C60 (string 0x82037078): g_entities 0x82B5CC58 (stride 0x298), gentity +316 = gclient; client pm_flags
+      (+12) & 0x8 = in a traversal, traversal type (+2260) 1 = balance; balance force stored at client +2324. Balance
+      dvars bal_* (bal_wobble_accel/decel/sensitivity/levels, bal_move_level/speed, bal_force_*). Log "frame rate: on a
+      balance beam, capped at 60" / "off the balance beam". Multiplayer (mp/src/frame_rate_fov.cpp) still 20-60.
+      **Replaced (22:25) by a real fix, src/balance_fix.cpp (--balance_fix, on; works, user 22:23: "fixed it nicely, very doable with controller" at uncapped FPS):** the balance update is
+      sub_8215F070 (r3 pmove, r4 pml; pml msec at +40; balance float at traversal state = ps +2260 +60). Per update:
+      drift (stick + forces) x msec x 0.001 x bal_wobble_sensitivity is added (frame-rate independent), but the balance
+      is first multiplied by bal_wobble_decel 0.93 (zones 3-5, middle) or bal_wobble_accel 1.02 (zones <= 2 or >= 6,
+      outer; zones from sub_82159330 and bal_wobble_levels 0.06/0.27/0.8) once per update regardless of its length:
+      tuned at 30 FPS (x1.8/s and x0.11/s), at 60 x3.3 and x0.013, at 120 x10.8 and x0.0002. The hook raises both to
+      the power msec/33.3 for each update (dvar values at +12; dvar table 0x826596A0: decel +24, accel +72; registered
+      in sub_82158AE0), restored after: every rate behaves like the original 30. Note: this also changes 60 FPS (now
+      as the original 30, easier than before at 60). The 60 cap in fps_unlock.cpp was removed. Log "balance: ...".
+      Next for uncapped: other frame-rate-sensitive things (play more levels at 120+), then launcher choices above 60
+      (e.g. 90 / 120 / 144 / Unlimited, marked experimental) and multiplayer's frame_rate_fov.cpp.
+      **Launcher 120 (22:40, user asked; not run):** Frame rate gets "120" (FPS/FPS_RATE), note says experimental, busy
+      scenes can drop below, multiplayer stays at 60. mp/src/frame_rate_fov.cpp: cvar range now 0-1000 (so SP's
+      values passed on by the launcher / title switching parse), anything above 60 or 0 counts as 60.
+      **User (22:34): dips into the 50s on level 2's rooftop** (qos_222 22:25:53-22:26:31: ~3,200 draws, 4.7 ms in
+      draws but 10-12 ms frames, worst 23-24 ms: not drawing; suspect the game thread). Profiled run asked
+      (BOTS_DRAW_PROFILE=1, BOTS_HITCH_MS=16). Busy scenes at 10-11k draws: ~85-95 FPS, renderer-bound (9.4-10 ms).
+      **Rooftop result (22:38-22:42, qos_223, profiled):** game-bound. ~3,000 draws, 5.2-6.0 ms drawing, CP idle 5.7
+      ms a frame on average; the slow frames (16-21 ms) are ~6 ms drawing + 9-14 ms CP idle (waiting for the game):
+      the game thread needs 12-20 ms there. GPU 3.7 ms, no GPU wait. Later (user: "another time"): a Tracy capture
+      (TRACY_ON_DEMAND is built in) at the rooftop to see which game functions cost it.
       Bigger ideas left: system constants memo by inputs (hard), texture sets kept across submissions (views are
       retired per submission: needs lifetime work), PM4 parsing thread.
       **Launcher after 922fbcf (committed 27 Nov):** SlimScrollbar (qos_installer.py) replaces ttk scroll bars;

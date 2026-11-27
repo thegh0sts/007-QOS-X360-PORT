@@ -1570,6 +1570,11 @@ TEXT = {
         "2 enregistre le rendu sur un deuxième thread : plus rapide dans les scènes chargées. 3 copie aussi les textures sur un troisième thread, pour moins d'à-coups au chargement des zones. 4 copie en plus les données changeantes du jeu sur un quatrième. Auto choisit {n} sur ce PC. Revenez à 1 si l'image scintille ou si des objets disparaissent.",
         '2 graba el dibujado en un segundo hilo: más rápido en escenas cargadas. 3 también copia las texturas en un tercer hilo, para menos tirones al cargar zonas. 4 copia además los datos cambiantes del juego en un cuarto. Automático elige {n} en este PC. Vuelve a 1 si la imagen parpadea o faltan objetos.',
         "2 registra il disegno su un secondo thread: più veloce nelle scene affollate. 3 copia anche le texture su un terzo thread, per meno scatti quando si caricano le zone. 4 copia inoltre i dati che cambiano del gioco su un quarto. Automatico sceglie {n} su questo PC. Torna a 1 se l'immagine sfarfalla o mancano oggetti."),
+    '30 is the original. The game runs at normal speed at any rate, but some scripted moments may misbehave above 30. 120 is experimental: busy scenes can drop below it, and multiplayer stays at 60.': (
+        '30 ist das Original. Das Spiel läuft bei jeder Bildrate in normaler Geschwindigkeit, aber manche geskripteten Momente können über 30 Probleme machen. 120 ist experimentell: Volle Szenen können darunter fallen, und der Mehrspielermodus bleibt bei 60.',
+        "30 est l'original. Le jeu tourne à vitesse normale à toutes les cadences, mais certains moments scriptés peuvent mal se comporter au-delà de 30. 120 est expérimental : les scènes chargées peuvent descendre en dessous, et le multijoueur reste à 60.",
+        '30 es el original. El juego va a velocidad normal a cualquier tasa, pero algunos momentos guionizados pueden fallar por encima de 30. 120 es experimental: las escenas cargadas pueden bajar de ahí, y el multijugador se queda en 60.',
+        "30 è l'originale. Il gioco va a velocità normale a qualsiasi frequenza, ma alcuni momenti scriptati possono comportarsi male sopra 30. 120 è sperimentale: le scene affollate possono scendere sotto, e il multigiocatore resta a 60."),
     'Controller map': (
         'Controller-Belegung',
         'Commandes de la manette',

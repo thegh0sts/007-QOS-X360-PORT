@@ -98,8 +98,9 @@ extern "C" REX_FUNC(sub_822BBF00) {
 
 REXCVAR_DEFINE_INT32(frame_rate, 30, "Game",
                      "Frame rate cap (com_maxfps), 20 to 60: 30 is the original, 60 is smoother (some missions may "
-                     "softlock above 30)")
-    .range(20, 60);
+                     "softlock above 30). Higher values (single player's range, passed on by the launcher and "
+                     "single player <-> multiplayer switching) count as 60 here.")
+    .range(0, 1000);
 
 REX_EXTERN(__imp__sub_822BBEB8);  // Dvar_RegisterInt
 REX_EXTERN(__imp__sub_8225E8B8);  // Com_Frame
@@ -112,6 +113,7 @@ std::atomic<uint32_t> g_maxfps{0};  // guest address of the com_maxfps dvar, 0 u
 
 int32_t FrameRate() {
   const int32_t fps = REXCVAR_GET(frame_rate);
+  if (fps == 0) return 60;  // single player's "no cap"
   return fps < 20 ? 20 : fps > 60 ? 60 : fps;
 }
 

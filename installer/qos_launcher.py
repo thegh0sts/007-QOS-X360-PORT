@@ -73,10 +73,12 @@ UPSCALING_EFFECT = {UPSCALING[1]: "fsr", UPSCALING[2]: "cas"}
 FXAA_MODE = {"FXAA": "1", "FXAA (strong)": "2"}
 TEXTURE_FILTERING = ["Game's own", "Anisotropic 4x", "Anisotropic 8x", "Anisotropic 16x"]
 ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERING[3]: 16}
-# --frame_rate (src/fps_unlock.cpp: com_maxfps, 20-60): the engine times its frames in real milliseconds, so any
-# rate runs at normal speed. Above 30 some scripted moments may misbehave (Xenia Canary's notes for its 60 FPS patch).
-FPS = ["30 (original)", "40", "50", "60"]
-FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60}
+# --frame_rate (src/fps_unlock.cpp: com_maxfps): the engine times its frames in real milliseconds, so any rate runs at
+# normal speed. Above 30 some scripted moments may misbehave (Xenia Canary's notes for its 60 FPS patch). 120 (user,
+# 27 Nov): no refresh waits (fps_unlock.cpp) and balance beams scaled (balance_fix.cpp); busy scenes may drop below
+# it. Multiplayer counts anything above 60 as 60 (mp/src/frame_rate_fov.cpp).
+FPS = ["30 (original)", "40", "50", "60", "120"]
+FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60, FPS[4]: 120}
 FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
 # Input device (Controls tab). Auto: controllers only, with Xbox or PlayStation prompts to match the one connected
 # (keyboard and mouse off, user 24 Nov). The others pick one device and fix the prompts to it
@@ -779,9 +781,10 @@ class SettingsView(tk.Frame):
         self._choice(box, 5, "upscaling", "Upscaling", UPSCALING, ["Bilinear", "FSR 1", "CAS"])
         note(box, 6, "How the picture is scaled to your screen. FSR 1 upscales with sharper edges than bilinear: "
                      "best with a render resolution below the output (e.g. 1440p on a 4K screen).")
-        self._choice(box, 7, "fps", "Frame rate", FPS, ["30", "40", "50", "60"])
+        self._choice(box, 7, "fps", "Frame rate", FPS, ["30", "40", "50", "60", "120"])
         note(box, 8, "30 is the original. The game runs at normal speed at any rate, but some scripted moments may "
-                     "misbehave above 30.")
+                     "misbehave above 30. 120 is experimental: busy scenes can drop below it, and multiplayer stays "
+                     "at 60.")
         self._toggle(box, 9, "vsync", "V-sync")
         note(box, 10, "Off can smooth heavy scenes at 60 FPS, with some tearing.")
         self._slider(box, 11, "fov", "Field of view (degrees)", 65, 110, 1)

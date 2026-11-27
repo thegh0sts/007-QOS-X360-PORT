@@ -19,6 +19,7 @@ set(QOS_SOURCES
     src/main.cpp
     src/crash_win.cpp
     src/fps_unlock.cpp
+    src/balance_fix.cpp
     src/fov.cpp
     src/letterbox.cpp
     src/dof.cpp
