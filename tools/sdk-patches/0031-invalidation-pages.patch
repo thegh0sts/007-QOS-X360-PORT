@@ -1,0 +1,53 @@
+# CPU-write widening switch (27 Nov): a write the CPU makes to watched memory invalidates up to 256 KB around it (the
+# SDK's choice: fewer faults for games that write big buffers). At 007's explosions that was ~240 faults a frame
+# invalidating ~15,000 pages, and the renderer then re-uploaded and re-protected pages one or two at a time (~1,300
+# protects a frame, ~2 us each). BOTS_GFX_INVALIDATION_PAGES=1/2/4/8/16/32 widens to that many pages (an aligned group,
+# never over GPU-written pages) instead of 64; 1 = only the written pages. Unset or 64: unchanged. For A/B with the
+# native renderer's "memory sync per frame" profile (BOTS_DRAW_PROFILE=1).
+ src/graphics/shared_memory.cpp | 26 +++++++++++++++++++++++++-
+ 1 file changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/src/graphics/shared_memory.cpp b/src/graphics/shared_memory.cpp
+index 5881897..9f2cd0a 100644
+--- a/src/graphics/shared_memory.cpp
++++ b/src/graphics/shared_memory.cpp
+@@ -9,6 +9,7 @@
+  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
+  */
+ 
++#include <cstdlib>
+ #include <algorithm>
+ #include <cstring>
+ #include <utility>
+@@ -494,7 +495,30 @@ std::pair<uint32_t, uint32_t> SharedMemory::MemoryInvalidationCallback(
+ 
+   auto global_lock = global_critical_region_.Acquire();
+ 
+-  if (!exact_range) {
++  // qos (own 0031): BOTS_GFX_INVALIDATION_PAGES=1/2/4/8/16/32 widens a CPU write to that many pages (an aligned
++  // group) instead of the 64 of a 256 KB block; 1 invalidates only the written pages. Default 64 (unchanged).
++  static const uint32_t widen_pages = [] {
++    const char* v = std::getenv("BOTS_GFX_INVALIDATION_PAGES");
++    const unsigned n = v ? unsigned(std::strtoul(v, nullptr, 10)) : 64u;
++    return (n >= 1 && n <= 64 && !(n & (n - 1))) ? uint32_t(n) : 64u;
++  }();
++  if (!exact_range && widen_pages < 64) {
++    // Widen within the aligned group only, and never over GPU-written pages (as below).
++    const uint32_t group_mask = widen_pages - 1;
++    const uint32_t group_first = page_first & ~group_mask, group_last = page_last | group_mask;
++    if (page_first != group_first) {
++      uint64_t gpu_written_start = system_page_flags_valid_and_gpu_written_[block_first];
++      gpu_written_start &= ((uint64_t(1) << (page_first & 63)) - 1) & ~((uint64_t(1) << (group_first & 63)) - 1);
++      page_first = gpu_written_start ? (page_first & ~uint32_t(63)) + (64 - rex::lzcnt(gpu_written_start))
++                                     : group_first;
++    }
++    if (page_last != group_last) {
++      uint64_t gpu_written_end = system_page_flags_valid_and_gpu_written_[block_last];
++      gpu_written_end &= ~((uint64_t(1) << ((page_last & 63) + 1)) - 1);
++      if ((group_last & 63) != 63) gpu_written_end &= (uint64_t(1) << ((group_last & 63) + 1)) - 1;
++      page_last = gpu_written_end ? (page_last & ~uint32_t(63)) + rex::tzcnt(gpu_written_end) - 1 : group_last;
++    }
++  } else if (!exact_range) {
+     // Check if a somewhat wider range (up to 256 KB with 4 KB pages) can be
+     // invalidated - if no GPU-written data nearby that was not intended to be
+     // invalidated since it's not in sync with CPU memory and can't be
