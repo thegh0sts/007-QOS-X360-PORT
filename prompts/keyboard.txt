@@ -2,7 +2,7 @@
 # (native-plugin/patches/0098-keyboard-prompts.patch) while --pad_prompts_active is 2: keyboard or mouse was the last
 # thing player 1 used (src/pad_prompts.cpp). Same syntax as playstation.txt. The keys are 007's default binds
 # (src/kbm_binds.cpp, as the PC game's manual): A E (cover), B C (stance), X F (use; R reloads too), Y Space, LB 1,
-# RB G, LT right mouse button, RT left mouse button, LS Ctrl (sprint), RS Q (take down), START Esc, BACK Tab. A bind
+# RB G, LT right mouse button, RT left mouse button, LS Shift (sprint; Ctrl walks, as in the PC game: user, 28 Nov), RS Q (take down), START Esc, BACK Tab. A bind
 # changed on the Rebind screen still shows its default key here. The tutorial X picture (btn_refresh) shows R: its
 # hint is "Press [[{+usereload}]] to reload" (user, 24 Nov); the HUD's X glyphs stay F (use).
 # The pictures are our own art: tools/make_kbm_keys.py (k_ HUD style, kt_ tutorial style, km_ menu style) and
@@ -28,12 +28,12 @@ replace tutorial_rs   64 64 9849DBEDAA951D82 kbm/km_q
 
 # Hint pictures of their own (src/tutorial_keys.cpp): in keyboard mode some hint commands get spare pictures from the
 # shared platform library, and some hints are reworded (sprint, switch weapons, fire mode, silencer):
-#   [[{+dash}]] -> btn_left (Ctrl), [[{+stance}]] -> btn_right (C), [[{+cover}]] -> btn_navigate_h (E),
+#   [[{+dash}]] -> btn_left (Shift), [[{+stance}]] -> btn_right (C), [[{+cover}]] -> btn_navigate_h (E),
 #   [[{kbm_w}]] -> btn_navigate_all (W), [[{kbm_2}]] -> btn_navigate_v (2; phone: W/S), [[{nextfiretype}]] -> btn_nav_up (X),
 #   [[{togglesilencer}]] -> btn_nav_down (4).
 # So the menus' A picture (btn_accept) can show Enter, as the title screen does. Texture hashes still to come from a
 # texture dump (BOTS_GFX_DUMP_TEXTURES) of those hints (texdump6, 24 Nov):
-replace btn_left         64 64 02836603EC40E4E1 kbm/km_ctrl_sq
+replace btn_left         64 64 02836603EC40E4E1 kbm/km_shift_sq
 replace btn_right        64 64 63408C2EDB77A49B kbm/km_c
 replace btn_navigate_h   64 64 C9B83BD6DF60188B kbm/km_e
 replace btn_navigate_all 64 64 FAEF750EA28E92AC kbm/km_w
@@ -59,7 +59,7 @@ draw 236 193 270 219 kbm/k_1 fit clear
 draw 270 193 304 219 kbm/k_g fit clear
 draw 308 190 334 214 kbm/k_esc fit clear
 draw 342 190 368 214 kbm/k_tab fit clear
-draw 372 190 405 222 kbm/k_ctrl fit clear
+draw 372 190 405 222 kbm/k_shift fit clear
 draw 406 190 439 222 kbm/k_q fit clear
 draw 444 189 470 223 kbm/k_mouse_right fit clear
 draw 4 210 30 244 kbm/k_mouse_left fit clear
@@ -72,7 +72,7 @@ draw 394 424 412 438 kbm/k_1 fit clear
 draw 412 424 430 438 kbm/k_g fit clear
 draw 432 424 446 438 kbm/k_esc fit clear
 draw 450 424 464 438 kbm/k_tab fit clear
-draw 466 422 483 439 kbm/k_ctrl fit clear
+draw 466 422 483 439 kbm/k_shift fit clear
 draw 0 426 17 443 kbm/k_q fit clear
 draw 20 426 34 441 kbm/k_mouse_right fit clear
 draw 38 426 52 441 kbm/k_mouse_left fit clear
@@ -88,7 +88,7 @@ draw 236 193 270 219 kbm/k_1 fit clear
 draw 270 193 304 219 kbm/k_g fit clear
 draw 308 190 334 214 kbm/k_esc fit clear
 draw 342 190 368 214 kbm/k_tab fit clear
-draw 372 190 405 222 kbm/k_ctrl fit clear
+draw 372 190 405 222 kbm/k_shift fit clear
 draw 406 190 439 222 kbm/k_q fit clear
 draw 444 189 470 223 kbm/k_mouse_right fit clear
 draw 4 210 30 244 kbm/k_mouse_left fit clear
@@ -101,7 +101,7 @@ draw 394 424 412 438 kbm/k_1 fit clear
 draw 412 424 430 438 kbm/k_g fit clear
 draw 432 424 446 438 kbm/k_esc fit clear
 draw 450 424 464 438 kbm/k_tab fit clear
-draw 466 422 483 439 kbm/k_ctrl fit clear
+draw 466 422 483 439 kbm/k_shift fit clear
 draw 0 426 17 443 kbm/k_q fit clear
 draw 20 426 34 441 kbm/k_mouse_right fit clear
 draw 38 426 52 441 kbm/k_mouse_left fit clear

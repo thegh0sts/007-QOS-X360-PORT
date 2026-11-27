@@ -6,9 +6,10 @@
 //   A +cover2 (cover)          B +stance (crouch / exit cover)  X +usereload (use, reload)  Y +gostand2 (jump)
 //   D-pad up nextfiretype      down togglesilencer      left/right grenadenext
 // The keys follow the PC version's manual (Quantum of Solace PC, "Movement Controls", user 24 Nov): WASD move,
-// mouse look, mouse 1 fire, mouse 2 aim down sight, G grenade, 3 switch grenade, Q take down, Ctrl sprint, 1 & 2
-// cycle weapon, C stance, Shift walk, R reload, Space jump/mantle, E cover/dash to cover, 4 silencer, X rate of fire,
-// Tab phone, Esc pause, F use. The pad's X is both use and reload (+usereload), so R and F both press it. Shift walks
+// mouse look, mouse 1 fire, mouse 2 aim down sight, G grenade, 3 switch grenade, Q take down, Shift sprint, 1 & 2
+// cycle weapon, C stance, Ctrl walk (the manual says Ctrl sprint / Shift walk, but the PC game itself runs on Shift
+// and walks on Ctrl: user, 28 Nov), R reload, Space jump/mantle, E cover/dash to cover, 4 silencer, X rate of fire,
+// Tab phone, Esc pause, F use. The pad's X is both use and reload (+usereload), so R and F both press it. Ctrl walks
 // through SDK patch 0017 (keybind_walk: the stick keys push the stick part way, mnk_walk_scale). Menus: Return as A
 // too (B is C only: Backspace unbound, user 24 Nov), arrows as the D-pad. The right stick has no keys: the mouse turns the view
 // (mouse_look.cpp). Only binds still at the SDK's compiled-in default are set, so the command line, the config file
@@ -31,7 +32,7 @@ void SetDefaults() {
   static constexpr std::pair<std::string_view, std::string_view> kBinds[] = {
       {"keybind_lstick_up", "W"},           {"keybind_lstick_down", "S"},
       {"keybind_lstick_left", "A"},         {"keybind_lstick_right", "D"},
-      {"keybind_lstick_press", "Control"},  {"keybind_rstick_press", "Q"},
+      {"keybind_lstick_press", "Shift"},  {"keybind_rstick_press", "Q"},
       {"keybind_rstick_up", ""},            {"keybind_rstick_down", ""},
       {"keybind_rstick_left", ""},          {"keybind_rstick_right", ""},
       {"keybind_right_trigger", "LMB"},     {"keybind_left_trigger", "RMB"},
@@ -41,7 +42,7 @@ void SetDefaults() {
       {"keybind_dpad_up", "X,Up"},          {"keybind_dpad_down", "4,Down"},
       {"keybind_dpad_left", "3,Left"},      {"keybind_dpad_right", "Right"},
       {"keybind_back", "Tab"},              {"keybind_start", "Escape"},
-      {"keybind_walk", "Shift"},
+      {"keybind_walk", "Control"},
   };
   int set = 0;
   for (const auto& [name, keys] : kBinds) {

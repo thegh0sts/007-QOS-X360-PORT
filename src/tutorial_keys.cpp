@@ -16,7 +16,7 @@
 // B. The keyboard prompts (prompts/keyboard.txt) swap pictures by texture, so they can't tell them apart. While
 // keyboard prompts are on, this hook gives such commands a picture of their own from the library's unused ones,
 // which keyboard.txt then shows as the right key:
-//   +dash   -> btn_left   (Ctrl: sprint)
+//   +dash   -> btn_left   (Shift: sprint)
 //   +stance -> btn_right  (C: stance)
 //   +cover  -> btn_navigate_h (E: cover; the menus' A picture, btn_accept, then shows Enter like the title screen)
 //   +cover  -> btn_navigate_h (E)
