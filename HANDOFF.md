@@ -582,6 +582,19 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       ms a frame on average; the slow frames (16-21 ms) are ~6 ms drawing + 9-14 ms CP idle (waiting for the game):
       the game thread needs 12-20 ms there. GPU 3.7 ms, no GPU wait. Later (user: "another time"): a Tracy capture
       (TRACY_ON_DEMAND is built in) at the rooftop to see which game functions cost it.
+      **Z-fighting examples (user videos 27 Nov 21:45 and 21:52, 4K, 60 FPS):** both are decals flickering on and
+      off frame to frame while the camera moves: the cracked-glass decal on a glass panel (museum level, upper floor
+      by the ROTARY FLIGHT banners) and the warning/instruction stickers on the grey electrical panels (boiler room
+      with pipes and a red valve): in consecutive frames a sticker is whole, missing, or partly drawn. So the decals
+      and their surfaces get nearly the same depth and the depth bias doesn't separate them on the host (D32_SFLOAT;
+      guest D24S8 or D24FS8). Existing knob (Eat Lead): BOTS_GFX_DEPTH_BIAS_SCALE=f multiplies the constant bias; test
+      16 (if it stops: bias too small for the host format) and 0 (if nothing changes: the bias isn't used, the decals
+      rely on equal depth and the host computes it differently).
+      **Result (22:58, user): both 16 and 0 still flicker:** not the bias. Suspects: float24 depth rounding (wall's
+      depth rounded via a depth transfer/reload, decal's not), or wall and decal vertex shaders computing depth
+      differently on the host. **Next (parked for tonight):** a trace at the boiler-room panels: run with
+      "2> zfight-trace.txt", stand still facing the stickers, "type nul > trace-now" in the build folder (0097 traces
+      2 frames), quit; compare the sticker draws with the panel's (shaders, depth func/format, transfers between).
       Bigger ideas left: system constants memo by inputs (hard), texture sets kept across submissions (views are
       retired per submission: needs lifetime work), PM4 parsing thread.
       **Launcher after 922fbcf (committed 27 Nov):** SlimScrollbar (qos_installer.py) replaces ttk scroll bars;
