@@ -1,0 +1,64 @@
+title_name = "007: Quantum of Solace"
+title_id = "415607FF" # AV-2047
+hash = "A29428CB1432DD9E" # default.xex
+#media_id = "06DD88A0" # Disc (USA, Europe): https://redump.info/disc/12335
+
+[[patch]]
+    name = "Unlock FPS"
+    desc = "See note about framerate patches in the README. FPS higher than 30 can cause softlocks in certain missions."
+    author = "Sowa_95"
+    is_enabled = false
+
+    [[patch.be32]]
+        address = 0x8229b808
+        value = 0x60000000
+    [[patch.be32]]
+        address = 0x8229b86c
+        value = 0x60000000
+    [[patch.be8]]
+        address = 0x820f2283
+        value = 0x01 # 0x00=unlimited; 0x01=60FPS; 0x02=30FPS
+
+[[patch]]
+    name = "Balance beams at 60 FPS"
+    desc = "The balance wobble is multiplied once per frame, so beams get harder above 30 FPS. Scales it for a locked 60 FPS (use with Unlock FPS at 60). Enable only one balance patch."
+    author = "thegh0sts"
+    is_enabled = false
+
+    [[patch.f32]]
+        address = 0x82000500
+        value = 1.0099505 # bal_wobble_accel default (1.02 at 30 FPS)
+    [[patch.f32]]
+        address = 0x82000504
+        value = 0.9643651 # bal_wobble_decel default (0.93 at 30 FPS)
+    [[patch.be32]]
+        address = 0x82158ee0
+        value = 0x3c808200 # lis r4,0x8200 (was 0x8201)
+    [[patch.be32]]
+        address = 0x82158f00
+        value = 0xc0240500 # lfs f1,0x500(r4): accel default
+    [[patch.be32]]
+        address = 0x82158f34
+        value = 0xc02a0504 # lfs f1,0x504(r10): decel default
+
+[[patch]]
+    name = "Balance beams at 120 FPS"
+    desc = "The balance wobble is multiplied once per frame, so beams get harder above 30 FPS. Scales it for a locked 120 FPS. Enable only one balance patch."
+    author = "thegh0sts"
+    is_enabled = false
+
+    [[patch.f32]]
+        address = 0x82000508
+        value = 1.0049629 # bal_wobble_accel default (1.02 at 30 FPS)
+    [[patch.f32]]
+        address = 0x8200050c
+        value = 0.9820209 # bal_wobble_decel default (0.93 at 30 FPS)
+    [[patch.be32]]
+        address = 0x82158ee0
+        value = 0x3c808200 # lis r4,0x8200 (was 0x8201)
+    [[patch.be32]]
+        address = 0x82158f00
+        value = 0xc0240508 # lfs f1,0x508(r4): accel default
+    [[patch.be32]]
+        address = 0x82158f34
+        value = 0xc02a050c # lfs f1,0x50C(r10): decel default
