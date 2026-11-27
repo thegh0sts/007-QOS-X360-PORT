@@ -527,6 +527,10 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       **Default on (21:22, user: no new glitches):** 0112 now on unless BOTS_GFX_HOT_PAGES=0; log "hot vertex pages
       kept current by hash". **Known, older issue (user, 21:20): some z-fighting**, seen since well before this work;
       not caused by 0112. To look at later (where it shows: level/surfaces; compare Xenos; depth format/bias).
+      **Launcher render threads (21:35, written, not run):** "Render threads" is now Auto / 1 / 2 / 3 / 4 (4 = plus the
+      upload worker, BOTS_GFX_UPLOAD_WORKER). Auto (default): 4 with >= 12 logical processors, 3 with >= 8, 2 with
+      >= 4, else 1 (auto_render_threads); the note says what Auto picks on this PC. Saved "2" (the old default) moves
+      to Auto once (render_threads_auto marker). Hot pages (0112) need no launcher setting: on by default.
       **Launcher after 922fbcf (committed 27 Nov):** SlimScrollbar (qos_installer.py) replaces ttk scroll bars;
       Multiplayer "Host addresses (optional)" (`--netplay_peers`, cleaned by clean_host_addresses); Input device is
       a button group (Auto/KBM/XBOX/PS); Saves tab in two columns, buttons on the right.

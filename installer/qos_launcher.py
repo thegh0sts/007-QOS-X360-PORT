@@ -130,9 +130,21 @@ KBM_MAP = [
 ]
 # Settings from before the input device choice (launcher 0.1.1: "pad_prompts").
 # Render threads (Graphics tab): 1 = the renderer alone (original), 2 = plus the draw-recording thread (native patch
-# 0093, BOTS_GFX_RECORD_THREAD), 3 = plus the texture worker (native patch 0099, BOTS_GFX_WORKER). Each includes the
-# ones before it.
-RENDER_THREADS = ["1 (original)", "2", "3"]
+# 0093, BOTS_GFX_RECORD_THREAD), 3 = plus the texture worker (native patch 0099, BOTS_GFX_WORKER), 4 = plus the upload
+# worker (native patch 0103, BOTS_GFX_UPLOAD_WORKER). Each includes the ones before it. Auto (default, user 27 Nov)
+# picks by the PC's logical processors: the game itself keeps several busy too.
+RENDER_THREADS = ["Auto", "1 (original)", "2", "3", "4"]
+
+
+def auto_render_threads():
+    n = os.cpu_count() or 4
+    return 4 if n >= 12 else 3 if n >= 8 else 2 if n >= 4 else 1
+
+
+def render_thread_count(value):
+    if value == "Auto" or value not in RENDER_THREADS:
+        return auto_render_threads()
+    return 1 if value == RENDER_THREADS[1] else int(value)
 # Detail distance (src/lod.cpp: r_lodScale): how far away models keep their detailed versions.
 DETAIL_DISTANCE = ["Original", "Far (2x)", "Very far (4x)", "Maximum (always detailed)"]
 LOD_SCALE = {DETAIL_DISTANCE[0]: 1.0, DETAIL_DISTANCE[1]: 0.5, DETAIL_DISTANCE[2]: 0.25, DETAIL_DISTANCE[3]: 0.0}
@@ -150,9 +162,8 @@ DEFAULTS = {
     "aa": "Off",
     "upscaling": UPSCALING[0],
     "texture_filtering": "Game's own",
-    # Draw commands recorded on a second thread (native patch 0093): ~2 ms a frame faster in busy scenes. The third
-    # (texture worker, 0099) is new: off by default until tested.
-    "render_threads": "2",
+    # Draw recording, texture and upload workers (native 0093, 0099, 0103), as many as the PC has room for.
+    "render_threads": "Auto",
     "brightness": 100,
     "fps": "60",
     "vsync": False,  # off: smoother at 60 FPS in heavy scenes (user, 24 Nov)
@@ -247,7 +258,11 @@ def load_settings():
     except (OSError, ValueError):
         pass
     if "render_threads" not in s and "render_thread" in s:  # launcher 0.1.1: a "Second render thread" checkbox
-        s["render_threads"] = "2" if s.get("render_thread") else RENDER_THREADS[0]
+        s["render_threads"] = "2" if s.get("render_thread") else RENDER_THREADS[1]
+    if s.get("render_threads_auto") != 1:  # 27 Nov: "2" was the default before Auto, so it moves to Auto once
+        if s.get("render_threads") == "2":
+            s["render_threads"] = "Auto"
+        s["render_threads_auto"] = 1
     if "input_device" not in s or s.get("input_device") not in INPUT_DEVICES:
         s["input_device"] = OLD_PAD_PROMPTS.get(s.get("pad_prompts"), "Auto")
     for key, values in (("resolution", RESOLUTIONS), ("render_scale", SCALES), ("aa", AA), ("upscaling", UPSCALING),
@@ -602,9 +617,10 @@ def game_env(s):
     aniso = ANISOTROPY.get(s.get("texture_filtering"), 0)
     if aniso:
         env["BOTS_GFX_FORCE_ANISO"] = str(aniso)
-    threads = RENDER_THREADS.index(s.get("render_threads")) + 1 if s.get("render_threads") in RENDER_THREADS else 2
+    threads = render_thread_count(s.get("render_threads"))
     env["BOTS_GFX_RECORD_THREAD"] = "1" if threads >= 2 else "0"
     env["BOTS_GFX_WORKER"] = "1" if threads >= 3 else "0"
+    env["BOTS_GFX_UPLOAD_WORKER"] = "1" if threads >= 4 else "0"
     return env
 
 
@@ -781,10 +797,11 @@ class SettingsView(tk.Frame):
         note(box, 1, "Black and white stay as they are.")
         self._choice(box, 2, "texture_filtering", "Texture filtering", TEXTURE_FILTERING, ["Original", "4x", "8x", "16x"])
         note(box, 3, "Keeps floors and walls sharp at an angle. The HUD and text keep the game's own filtering.")
-        self._choice(box, 4, "render_threads", "Render threads", RENDER_THREADS, ["1", "2", "3"])
-        note(box, 5, "2 records the drawing on a second thread: faster in busy scenes. 3 also copies textures on a "
-                     "third thread, for fewer hitches when areas load. Go back to 1 if the picture flickers or objects "
-                     "go missing.")
+        self._choice(box, 4, "render_threads", "Render threads", RENDER_THREADS, ["Auto", "1", "2", "3", "4"])
+        note(box, 5, tr("2 records the drawing on a second thread: faster in busy scenes. 3 also copies textures on "
+                        "a third thread, for fewer hitches when areas load. 4 also copies the game's changing data on "
+                        "a fourth. Auto picks {n} on this PC. Go back to 1 if the picture flickers or objects go "
+                        "missing.", n=auto_render_threads()))
         self._toggle(box, 6, "depth_of_field", "Depth of field")
         note(box, 7, "The blur on distant or close things in cutscenes and when aiming. Off: everything stays sharp.")
         self._toggle(box, 8, "hit_markers", "Hit markers")
