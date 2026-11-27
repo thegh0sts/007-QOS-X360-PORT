@@ -777,6 +777,59 @@ ON_ACCENT = "#121212"
 BG, FG, DIM, ACCENT, FIELD = "#101215", "#e8e4da", "#9b978d", "#c9a24a", "#ffffff"
 
 
+class SlimScrollbar(tk.Canvas):
+    """A vertical scroll bar in the launcher's style (user, 27 Nov): a thin grey thumb on the panel's colour, lighter
+    under the mouse, gold while dragged; no arrows. Drop-in for ttk.Scrollbar: command=widget.yview, and the widget's
+    yscrollcommand=bar.set. A click on the track pages up or down."""
+
+    WIDTH = 12
+
+    def __init__(self, parent, command, bg):
+        super().__init__(parent, width=self.WIDTH, bg=bg, highlightthickness=0, bd=0)
+        self.command, self.first, self.last = command, 0.0, 1.0
+        self.thumb_colour, self.hover, self.dragging = "#4a505a", False, None
+        self.thumb = self.create_rectangle(0, 0, 0, 0, width=0)
+        self.bind("<Configure>", lambda e: self.draw())
+        self.bind("<Enter>", lambda e: self._hover(True))
+        self.bind("<Leave>", lambda e: self._hover(False))
+        self.bind("<ButtonPress-1>", self._press)
+        self.bind("<B1-Motion>", self._drag)
+        self.bind("<ButtonRelease-1>", self._release)
+
+    def set(self, first, last):
+        self.first, self.last = float(first), float(last)
+        self.draw()
+
+    def draw(self):
+        height = max(1, self.winfo_height())
+        top = int(self.first * height)
+        bottom = max(top + 24, int(self.last * height)) if self.last - self.first < 1 else height
+        colour = "#c9a24a" if self.dragging is not None else "#6a717c" if self.hover else "#4a505a"
+        self.coords(self.thumb, 3, top + 2, self.WIDTH - 3, min(height, bottom) - 2)
+        self.itemconfigure(self.thumb, fill=colour)
+
+    def _hover(self, on):
+        self.hover = on
+        self.draw()
+
+    def _press(self, event):
+        height = max(1, self.winfo_height())
+        y = event.y / height
+        if self.first <= y <= self.last:
+            self.dragging = y - self.first
+        else:
+            self.command("scroll", -1 if y < self.first else 1, "pages")
+        self.draw()
+
+    def _drag(self, event):
+        if self.dragging is not None:
+            self.command("moveto", event.y / max(1, self.winfo_height()) - self.dragging)
+
+    def _release(self, _):
+        self.dragging = None
+        self.draw()
+
+
 def dropdown(parent, bg, labels, current, choose, width=None):
     """A drop-down in the launcher's toggle-button-group style (user, 27 Nov): a dark field with a thin grey
     border, the chosen label and an arrow; a click opens the list. current() gives the chosen index, choose(i) picks

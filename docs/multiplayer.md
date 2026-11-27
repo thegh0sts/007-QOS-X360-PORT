@@ -40,8 +40,10 @@ System Link finds games with LAN broadcasts, so players in different places need
 
 - **ZeroTier** or similar tools that create a virtual LAN and pass broadcasts: install it on every PC, join the same
   network, then host and join as above.
-- **Tailscale** and other VPNs that drop broadcasts: games won't show up in the list on their own. The game has a
-  setting for that (`--netplay_peers`, the host's address), but the launcher doesn't offer it yet.
+- **Tailscale** and other VPNs that drop broadcasts: games won't show up in the list on their own. Put the host's
+  address (its VPN IP, or several separated by commas) in the launcher's Multiplayer tab under **Host addresses**
+  (it passes `--netplay_peers` to the game).
+  Only players joining need it.
 - **Port forwarding** (no VPN): the game uses UDP ports **11000 and 11001** for the first copy on a PC (each further
   copy on the same PC adds 16: 11016 and 11017, ...). Forwarding alone still doesn't make the game appear in the list
   for players outside the LAN, so a virtual LAN is the easier way for now.

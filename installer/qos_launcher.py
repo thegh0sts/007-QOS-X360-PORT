@@ -28,7 +28,7 @@ from tkinter import filedialog, messagebox, ttk
 import launcher_text
 import xex_achievements
 from launcher_text import tr, tr_label
-from qos_installer import (ACCENT, APP_NAME, BG, dropdown, DIM, FG, LAUNCHER_HOME, ON_ACCENT, TITLE_FONT, TITLE_TEXT,
+from qos_installer import (ACCENT, APP_NAME, BG, SlimScrollbar, dropdown, DIM, FG, LAUNCHER_HOME, ON_ACCENT, TITLE_FONT, TITLE_TEXT,
                            InstallView, install_info_path, make_root, start_game)
 
 VERSION = "0.2.1"
@@ -177,6 +177,9 @@ DEFAULTS = {
     # A folder with the game's DLC (STFS packages, e.g. the map pack): multiplayer installs what's new in it at its
     # start (mp/src/dlc_folder.cpp, --dlc_folder). Empty: none.
     "dlc_folder": "",
+    # Multiplayer: hosts System Link also sends its game broadcasts to, for networks that drop them (a VPN such as
+    # Tailscale, guest Wi-Fi): --netplay_peers, comma-separated. Empty: broadcasts only.
+    "host_addresses": "",
     # In-game cutscenes' black bars (src/letterbox.cpp): off keeps the view full screen.
     "cutscene_letterbox": False,
     # Depth of field blur (src/dof.cpp: r_dof_enable), in single player and multiplayer.
@@ -280,6 +283,12 @@ def clean_gamertag(name):
     """A gamertag the game can show: letters, digits and spaces, 15 characters at most."""
     name = re.sub(r"[^A-Za-z0-9 ]", "", str(name or "")).strip()[:15].strip()
     return name or DEFAULTS["gamertag"]
+
+
+def clean_host_addresses(text):
+    """Host addresses as --netplay_peers takes them: IP addresses or host names, comma-separated, no spaces."""
+    items = re.split(r"[,;\s]+", str(text or ""))
+    return ",".join(x for x in (re.sub(r"[^A-Za-z0-9.:\-]", "", i) for i in items) if x)
 
 
 def save_settings(s):
@@ -509,6 +518,10 @@ def game_args(s, screen=None):
     dlc = str(s.get("dlc_folder") or "").rstrip("\\/")
     if dlc:
         args.append(f"--dlc_folder={dlc}")
+    # Host addresses (Multiplayer tab): on both programs' command lines like the DLC folder (title_switch passes it on).
+    peers = clean_host_addresses(s.get("host_addresses"))
+    if peers:
+        args.append(f"--netplay_peers={peers}")
     # Controls: an extra dead zone on both sticks (the SDK's, as a fraction; 0 leaves the game's own), rumble
     # (the runtime's switch), and the input device: keyboard and mouse on or off, and the button prompts
     # (src/pad_prompts.cpp).
@@ -785,7 +798,7 @@ class SettingsView(tk.Frame):
                       "softer even with 2160p.")
 
         box = self._page("Controls")
-        self._combo(box, 0, "input_device", "Input device", INPUT_DEVICES)
+        self._choice(box, 0, "input_device", "Input device", INPUT_DEVICES, ["Auto", "KBM", "XBOX", "PS"])
         note(box, 1, "Auto plays with a controller, with Xbox or PlayStation buttons to match the one connected.")
         # Only the settings of the chosen device are shown: controller ones for Auto, Xbox and PlayStation, keyboard
         # ones for keyboard and mouse.
@@ -826,12 +839,18 @@ class SettingsView(tk.Frame):
         note(box, 3, "Your profile's ID, made for this install. The game tells players apart by it.")
         note(box, 4, "Start multiplayer from MULTIPLAYER on the game's main menu; leaving it returns to single player. "
                      "System Link over your local network. Display and controller settings are shared with single player.")
-        self._subheading(box, 5, "Downloadable content")
+        setting_name(box, 5, "Host addresses (optional)")
+        v = self.vars["host_addresses"] = tk.StringVar(value=self.s.get("host_addresses", ""))
+        ttk.Entry(box, textvariable=v, width=1).grid(row=5, column=1, sticky="ew", pady=2)
+        note(box, 6, "Only for System Link over a VPN that drops LAN broadcasts (such as Tailscale) or a network that "
+                     "blocks them (guest Wi-Fi, client isolation): the host's IP address, or several separated by "
+                     "commas, so the game appears in your list. Not needed on one PC, a normal home network or ZeroTier.")
+        self._subheading(box, 7, "Downloadable content")
         v = self.vars["dlc_folder"] = tk.StringVar(value=self.s.get("dlc_folder", ""))
         # Laid out like Game files (user, 27 Nov): the folder, what's in it and the note on the left, the buttons on
         # the right.
-        setting_name(box, 6, "DLC folder")
-        cell = box.setting_cells[6]
+        setting_name(box, 8, "DLC folder")
+        cell = box.setting_cells[8]
         shown = wrapping(tk.Label(cell, font=("Segoe UI", 9), fg=FG, bg=PANEL))
         shown.pack(fill="x", pady=(1, 0))
         packs = wrapping(tk.Label(cell, font=("Segoe UI", 9), fg=DIM, bg=PANEL))
@@ -851,20 +870,20 @@ class SettingsView(tk.Frame):
 
         v.trace_add("write", show_dlc)
         show_dlc()
-        note(box, 7, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
+        note(box, 9, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
                      "whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few "
                      "seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.")
-        self._button_stack(box, 6, [(tr("Choose folder..."), self.choose_dlc_folder), (tr("Clear"), lambda: v.set(""))])
+        self._button_stack(box, 8, [(tr("Choose folder..."), self.choose_dlc_folder), (tr("Clear"), lambda: v.set(""))])
 
+        # The same two columns as Game files: what's there on the left, the buttons on the right (user, 27 Nov).
         box = self._page("Saves", scroll=False)
-        line = tk.Frame(box, bg=PANEL)
-        line.grid(row=0, column=0, columnspan=2, sticky="w")
-        self._link(line, tr("Open saves folder"), self.open_saves).pack(side="left")
-        self._link(line, tr("Back up saves"), self.backup_saves).pack(side="left", padx=8)
-        self._link(line, tr("Refresh"), self.refresh_saves).pack(side="left")
-        self.saves_label = tk.Label(box, text="", font=("Segoe UI", 9), fg=DIM, bg=PANEL, anchor="w", justify="left",
-                                    wraplength=600)
-        self.saves_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 6))
+        two_columns(box)
+        setting_name(box, 0, "Saves")
+        self.saves_label = wrapping(tk.Label(box.setting_cells[0], text="", font=("Segoe UI", 8), fg=DIM, bg=PANEL))
+        self.saves_label.pack(fill="x", pady=(1, 0))
+        self._button_stack(box, 0, [(tr("Open saves folder"), self.open_saves),
+                                    (tr("Back up saves"), self.backup_saves),
+                                    (tr("Refresh"), self.refresh_saves)], pady=(2, 10))
         style = ttk.Style(self)
         style.configure("Saves.Treeview", background=BG, fieldbackground=BG, foreground=FG, rowheight=24,
                         borderwidth=0)
@@ -877,7 +896,7 @@ class SettingsView(tk.Frame):
                                  ("folder", "Folder", 160)):
             self.saves_tree.heading(col, text=tr(text, "column"), anchor="w")
             self.saves_tree.column(col, width=width, anchor="w", stretch=col == "name")
-        bar = ttk.Scrollbar(tree_box, orient="vertical", command=self.saves_tree.yview)
+        bar = SlimScrollbar(tree_box, self.saves_tree.yview, PANEL)
         self.saves_tree.configure(yscrollcommand=bar.set)
         self.saves_tree.pack(side="left", fill="both", expand=True)
         bar.pack(side="right", fill="y")
@@ -942,7 +961,7 @@ class SettingsView(tk.Frame):
         page = tk.Frame(self.pages_frame, bg=PANEL)
         page.place(relx=0, rely=0, relwidth=1, relheight=1)
         canvas = tk.Canvas(page, bg=PANEL, highlightthickness=0, bd=0)
-        bar = ttk.Scrollbar(page, orient="vertical", command=canvas.yview)
+        bar = SlimScrollbar(page, canvas.yview, PANEL)
         inner = tk.Frame(canvas, bg=PANEL, padx=22, pady=18)
         window = canvas.create_window((0, 0), window=inner, anchor="nw")
         canvas.configure(yscrollcommand=bar.set)
@@ -1197,6 +1216,8 @@ class SettingsView(tk.Frame):
     def collect(self):
         for k, v in self.vars.items():
             self.s[k] = v.get()
+        if "host_addresses" in self.s:
+            self.s["host_addresses"] = clean_host_addresses(self.s["host_addresses"])
         return self.s
 
     def reset(self):
@@ -1430,7 +1451,7 @@ class SettingsView(tk.Frame):
         outer = tk.Frame(box, bg=PANEL)
         outer.pack(fill="both", expand=True)
         canvas = tk.Canvas(outer, bg=PANEL, highlightthickness=0)
-        bar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        bar = SlimScrollbar(outer, canvas.yview, PANEL)
         rows = tk.Frame(canvas, bg=PANEL)
         rows.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         window = canvas.create_window((0, 0), window=rows, anchor="nw")

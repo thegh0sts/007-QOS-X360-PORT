@@ -1909,6 +1909,24 @@ TEXT = {
         'Se il gioco si blocca o non funziona bene: i log mostrano cosa è successo, e un rapporto di crash li riunisce '
         'in un unico file da allegare a una segnalazione di bug.'),
     'DLC folder': ('DLC-Ordner', 'Dossier des DLC', 'Carpeta de DLC', 'Cartella DLC'),
+    # Multiplayer: host addresses (27 Nov).
+    'Host addresses (optional)': ('Host-Adressen (optional)', "Adresses d'hôte (facultatif)",
+                                  'Direcciones del anfitrión (opcional)', "Indirizzi dell'host (facoltativo)"),
+    'Only for System Link over a VPN that drops LAN broadcasts (such as Tailscale) or a network that blocks them (guest Wi-Fi, client isolation): the host\'s IP address, or several separated by commas, so the game appears in your list. Not needed on one PC, a normal home network or ZeroTier.': (
+        'Nur für System Link über ein VPN, das LAN-Broadcasts verwirft (etwa Tailscale), oder ein Netz, das sie '
+        'blockiert (Gast-WLAN, Client-Isolierung): die IP-Adresse des Hosts, oder mehrere durch Kommas getrennt, damit '
+        'das Spiel in deiner Liste erscheint. Nicht nötig auf einem PC, in einem normalen Heimnetz oder mit ZeroTier.',
+        "Uniquement pour System Link via un VPN qui bloque les diffusions LAN (comme Tailscale) ou un réseau qui les "
+        "bloque (Wi-Fi invité, isolation des clients) : l'adresse IP de l'hôte, ou plusieurs séparées par des "
+        "virgules, pour que la partie apparaisse dans ta liste. Inutile sur un seul PC, un réseau domestique "
+        'normal ou ZeroTier.',
+        'Solo para System Link a través de una VPN que descarta las difusiones LAN (como Tailscale) o una red que las '
+        'bloquea (Wi-Fi de invitados, aislamiento de clientes): la dirección IP del anfitrión, o varias separadas por '
+        'comas, para que la partida aparezca en tu lista. No hace falta en un solo PC, una red doméstica normal ni '
+        'con ZeroTier.',
+        "Solo per System Link tramite una VPN che scarta i broadcast LAN (come Tailscale) o una rete che li blocca "
+        "(Wi-Fi ospiti, isolamento dei client): l'indirizzo IP dell'host, o più indirizzi separati da virgole, così "
+        'la partita compare nella tua lista. Non serve su un solo PC, in una normale rete domestica o con ZeroTier.'),
     # Credits tab (27 Nov).
     'Credits': ('Mitwirkende', 'Crédits', 'Créditos', 'Riconoscimenti'),
     'Website': ('Website', 'Site web', 'Sitio web', 'Sito web'),
