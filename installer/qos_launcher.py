@@ -24,6 +24,7 @@ from pathlib import Path
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from tkinter import font as tkfont
 
 import launcher_text
 import xex_achievements
@@ -660,6 +661,48 @@ def link_button(parent, text, cmd):
                      activebackground=ACCENT_HOVER, activeforeground=ON_ACCENT, bd=0, padx=10, pady=3, cursor="hand2")
 
 
+class RoundedTab(tk.Canvas):
+    """A tab in the list on the left: its name on a shape with the top and bottom left corners rounded and the right
+    side square, so the open tab joins the page beside it (user, 28 Nov). Drawn on a canvas (a tk.Button can't round
+    its corners); redrawn when its width changes or it's opened or closed."""
+
+    RADIUS = 8
+
+    def __init__(self, parent, text, command, font=("Segoe UI", 11, "bold"), padx=16, pady=9):
+        self.font = tkfont.Font(parent, font=font)
+        height = self.font.metrics("linespace") + 2 * pady
+        super().__init__(parent, height=height, bg=BG, highlightthickness=0, bd=0, cursor="hand2")
+        self.text, self.padx, self.command = text, padx, command
+        self.on, self.hover = False, False
+        self.bind("<Configure>", lambda _e: self.draw())
+        self.bind("<Enter>", lambda _e: self._set_hover(True))
+        self.bind("<Leave>", lambda _e: self._set_hover(False))
+        self.bind("<Button-1>", lambda _e: self.command())
+
+    def _set_hover(self, hover):
+        self.hover = hover
+        self.draw()
+
+    def set_open(self, on):
+        self.on = on
+        self.draw()
+
+    def draw(self):
+        self.delete("all")
+        w, h, r = self.winfo_width(), int(self["height"]), self.RADIUS
+        if w <= 1:
+            return
+        fill = PANEL if self.on else BG
+        if fill != BG:
+            d = 2 * r
+            self.create_oval(0, 0, d, d, fill=fill, outline=fill)
+            self.create_oval(0, h - d - 1, d, h - 1, fill=fill, outline=fill)
+            self.create_rectangle(0, r, r, h - r - 1, fill=fill, outline=fill)
+            self.create_rectangle(r, 0, w, h, fill=fill, outline=fill)
+        colour = ACCENT_HOVER if self.on else (FG if self.hover else DIM)
+        self.create_text(self.padx, h // 2, text=self.text, anchor="w", font=self.font, fill=colour)
+
+
 def two_columns(box):
     """A settings page's grid: names and notes in the left two thirds, the controls in the right third, left-aligned
     so they line up (user, 27 Nov)."""
@@ -755,8 +798,7 @@ class SettingsView(tk.Frame):
         self.pages_frame.pack(side="left", fill="both", expand=True)
         self.pages, self.tab_buttons = {}, {}
         for name in TABS:
-            b = tk.Button(nav, text=tr(name), anchor="w", font=("Segoe UI", 11, "bold"), bd=0, padx=16, pady=9,
-                          cursor="hand2", command=lambda n=name: self.show_tab(n))
+            b = RoundedTab(nav, tr(name), lambda n=name: self.show_tab(n))
             b.pack(fill="x", pady=(0, 2))
             self.tab_buttons[name] = b
 
@@ -1048,9 +1090,7 @@ class SettingsView(tk.Frame):
         elif name == "Achievements":
             self.refresh_achievements()
         for n, b in self.tab_buttons.items():
-            on = n == name
-            b.configure(bg=PANEL if on else BG, fg=ACCENT_HOVER if on else DIM, activebackground=PANEL,
-                        activeforeground=FG)
+            b.set_open(n == name)
         self.s["tab"] = name
 
     def _link(self, parent, text, cmd):
