@@ -77,8 +77,8 @@ ANISOTROPY = {TEXTURE_FILTERING[1]: 4, TEXTURE_FILTERING[2]: 8, TEXTURE_FILTERIN
 # normal speed. Above 30 some scripted moments may misbehave (Xenia Canary's notes for its 60 FPS patch). 120 (user,
 # 27 Nov): no refresh waits (fps_unlock.cpp) and balance beams scaled (balance_fix.cpp); busy scenes may drop below
 # it. Multiplayer counts anything above 60 as 60 (mp/src/frame_rate_fov.cpp).
-FPS = ["30 (original)", "40", "50", "60", "120"]
-FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60, FPS[4]: 120}
+FPS = ["30 (original)", "40", "50", "60", "90", "120"]
+FPS_RATE = {FPS[0]: 30, FPS[1]: 40, FPS[2]: 50, FPS[3]: 60, FPS[4]: 90, FPS[5]: 120}
 FPS_COUNTER = ["Off", "FPS", "Detailed (frame times, GPU, CPU, memory)"]
 # Input device (Controls tab). Auto: controllers only, with Xbox or PlayStation prompts to match the one connected
 # (keyboard and mouse off, user 24 Nov). The others pick one device and fix the prompts to it
@@ -120,8 +120,8 @@ KBM_MAP = [
     ("R", "Reload"),
     ("F", "Use"),
     ("Space", "Jump / climb"),
-    ("Ctrl", "Sprint"),
-    ("Shift", "Walk"),
+    ("Shift", "Sprint"),
+    ("Ctrl", "Walk"),
     ("Q", "Take down"),
     ("X", "Fire mode"),
     ("4", "Silencer"),
@@ -153,6 +153,8 @@ LOD_SCALE = {DETAIL_DISTANCE[0]: 1.0, DETAIL_DISTANCE[1]: 0.5, DETAIL_DISTANCE[2
 # Sun shadow range (src/shadows.cpp: a multiplier on the levels' sm_sunSampleSizeNear).
 SHADOW_RANGE = ["Original", "Longer (2x)", "Longest (4x)"]
 SHADOW_RANGE_SCALE = {SHADOW_RANGE[0]: 1.0, SHADOW_RANGE[1]: 2.0, SHADOW_RANGE[2]: 4.0}
+# Motion blur (src/motion_blur.cpp: r_motionblur_enable): the game's (takedowns), never or always.
+MOTION_BLUR = ["Original", "Off", "On"]
 OLD_PAD_PROMPTS = {"Keyboard only": "Keyboard and mouse", "Xbox only": "Xbox controller",
                    "PlayStation only": "PlayStation controller"}
 
@@ -197,6 +199,11 @@ DEFAULTS = {
     "cutscene_letterbox": False,
     # Depth of field blur (src/dof.cpp: r_dof_enable), in single player and multiplayer.
     "depth_of_field": True,
+    "motion_blur": "Original",
+    # Damage blur when hurt (src/effects.cpp: cg_showHurtBlur, cg_showVeryHurtBlur), single player only.
+    "damage_blur": True,
+    # Bloom (src/effects.cpp + glow_hook.cpp: the glow settings' bloom intensity), both programs.
+    "bloom": True,
     # The hit marker when a shot lands (src/hit_markers.cpp, mp/src/hit_markers.cpp).
     "hit_markers": True,
     "detail_distance": "Original",
@@ -516,6 +523,13 @@ def game_args(s, screen=None):
         args.append("--cutscene_letterbox=true")
     if not s.get("depth_of_field", True):
         args.append("--depth_of_field=false")
+    motion_blur = s.get("motion_blur", "Original")
+    if motion_blur in ("Off", "On"):
+        args.append(f"--motion_blur={motion_blur.lower()}")
+    if not s.get("damage_blur", True):
+        args.append("--damage_blur=false")
+    if not s.get("bloom", True):
+        args.append("--bloom=false")
     if not s.get("hit_markers", True):
         args.append("--hit_markers=false")
     scale = LOD_SCALE.get(s.get("detail_distance"), 1.0)
@@ -781,10 +795,10 @@ class SettingsView(tk.Frame):
         self._choice(box, 5, "upscaling", "Upscaling", UPSCALING, ["Bilinear", "FSR 1", "CAS"])
         note(box, 6, "How the picture is scaled to your screen. FSR 1 upscales with sharper edges than bilinear: "
                      "best with a render resolution below the output (e.g. 1440p on a 4K screen).")
-        self._choice(box, 7, "fps", "Frame rate", FPS, ["30", "40", "50", "60", "120"])
+        self._choice(box, 7, "fps", "Frame rate", FPS, ["30", "40", "50", "60", "90", "120"])
         note(box, 8, "30 is the original. The game runs at normal speed at any rate, but some scripted moments may "
-                     "misbehave above 30. 120 is experimental: busy scenes can drop below it, and multiplayer stays "
-                     "at 60.")
+                     "misbehave above 30. 90 and 120 are experimental: busy scenes can drop below them, and "
+                     "multiplayer stays at 60.")
         self._toggle(box, 9, "vsync", "V-sync")
         note(box, 10, "Off can smooth heavy scenes at 60 FPS, with some tearing.")
         self._slider(box, 11, "fov", "Field of view (degrees)", 65, 110, 1)
@@ -807,13 +821,19 @@ class SettingsView(tk.Frame):
                         "missing.", n=auto_render_threads()))
         self._toggle(box, 6, "depth_of_field", "Depth of field")
         note(box, 7, "The blur on distant or close things in cutscenes and when aiming. Off: everything stays sharp.")
-        self._toggle(box, 8, "hit_markers", "Hit markers")
-        note(box, 9, "The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.")
-        self._choice(box, 10, "detail_distance", "Detail distance", DETAIL_DISTANCE, ["Original", "2x", "4x", "Max"])
-        note(box, 11, "How far away people, plants and objects keep their full detail, so less pops in. Further costs "
+        self._choice(box, 8, "motion_blur", "Motion blur", MOTION_BLUR)
+        note(box, 9, "Original: the game blurs the view during takedowns. Off: never. On: always.")
+        self._toggle(box, 10, "damage_blur", "Damage blur")
+        note(box, 11, "The blur over the screen when Bond is hurt. Single player only.")
+        self._toggle(box, 12, "bloom", "Bloom")
+        note(box, 13, "The glow around lights and bright surfaces. Off: no glow; light rays stay.")
+        self._toggle(box, 14, "hit_markers", "Hit markers")
+        note(box, 15, "The mark at the crosshair when a shot hits an enemy. In multiplayer its sound still plays.")
+        self._choice(box, 16, "detail_distance", "Detail distance", DETAIL_DISTANCE, ["Original", "2x", "4x", "Max"])
+        note(box, 17, "How far away people, plants and objects keep their full detail, so less pops in. Further costs "
                       "frame rate in big, busy areas; Max the most.")
-        self._choice(box, 12, "shadow_range", "Sun shadow range", SHADOW_RANGE, ["Original", "2x", "4x"])
-        note(box, 13, "How far from you outdoor shadows are drawn. Further makes them softer unless the render "
+        self._choice(box, 18, "shadow_range", "Sun shadow range", SHADOW_RANGE, ["Original", "2x", "4x"])
+        note(box, 19, "How far from you outdoor shadows are drawn. Further makes them softer unless the render "
                       "resolution is raised: 2x looks as sharp as the original with 1440p; 4x stays a little "
                       "softer even with 2160p.")
 
@@ -938,7 +958,7 @@ class SettingsView(tk.Frame):
             row += 2
         note(box, row, "007: Quantum of Solace is a trademark of its owners. This project is not affiliated with or "
                        "endorsed by Activision, Treyarch, MGM, Danjaq or Microsoft.")
-        self.show_tab(self.s.get("tab") if self.s.get("tab") in TABS else "Display")
+        self.show_tab("Game files")  # always opens here, whichever tab was open last time
 
         foot = tk.Frame(self, bg=BG)
         foot.pack(side="bottom", fill="x", padx=28, pady=18)
