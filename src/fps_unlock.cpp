@@ -53,6 +53,12 @@ void OnFrame(uint8_t* base);  // letterbox.cpp: in-game cutscenes full screen (-
 namespace qos::dof {
 void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // dof.cpp: depth of field on or off (--depth_of_field)
 }  // namespace qos::dof
+namespace qos::motion_blur {
+void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // motion_blur.cpp: motion blur override (--motion_blur)
+}  // namespace qos::motion_blur
+namespace qos::effects {
+void OnFrame(uint8_t* base, uint32_t hurt, uint32_t very_hurt);  // effects.cpp: damage blur on or off (--damage_blur)
+}  // namespace qos::effects
 namespace qos::lod {
 void OnFrame(uint8_t* base, uint32_t dvar_pointer);  // lod.cpp: detail distance (--lod_scale)
 }  // namespace qos::lod
@@ -127,6 +133,8 @@ extern "C" REX_FUNC(sub_8229B7C0) {
   qos::fov::OnFrame(base);
   qos::letterbox::OnFrame(base);
   qos::dof::OnFrame(base, 0x84055E40);  // r_dof_enable
+  qos::motion_blur::OnFrame(base, 0x84055FC0);  // r_motionblur_enable
+  qos::effects::OnFrame(base, 0x8266F534, 0x827700EC);  // cg_showHurtBlur, cg_showVeryHurtBlur
   qos::lod::OnFrame(base, 0x84055C78);  // r_lodScale
   qos::shadows::OnFrame(base, 0x84055E5C, 0x84055D98);  // sm_sunSampleSizeNear, sm_fastSunShadow
   qos::takedown_keys::OnFrame();

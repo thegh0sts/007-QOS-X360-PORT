@@ -23,6 +23,9 @@ set(QOS_SOURCES
     src/fov.cpp
     src/letterbox.cpp
     src/dof.cpp
+    src/motion_blur.cpp
+    src/effects.cpp
+    src/glow_hook.cpp
     src/hit_markers.cpp
     src/lod.cpp
     src/shadows.cpp

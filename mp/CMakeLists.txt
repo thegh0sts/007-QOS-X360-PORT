@@ -17,6 +17,7 @@ set(QOS_MP_SOURCES
     src/main.cpp
     src/relaunch_log.cpp
     src/frame_rate_fov.cpp
+    src/glow_hook.cpp
     src/console_log.cpp
     src/dlc_folder.cpp
     src/dlc_content.cpp
@@ -24,6 +25,8 @@ set(QOS_MP_SOURCES
     ${QOS_SP_DIR}/src/kbm_binds.cpp
     ${QOS_SP_DIR}/src/pad_prompts.cpp
     ${QOS_SP_DIR}/src/dof.cpp
+    ${QOS_SP_DIR}/src/motion_blur.cpp
+    ${QOS_SP_DIR}/src/effects.cpp
     ${QOS_SP_DIR}/src/lod.cpp
     ${QOS_SP_DIR}/src/shadows.cpp
     src/mouse_look.cpp
