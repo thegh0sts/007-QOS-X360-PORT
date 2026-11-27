@@ -612,6 +612,48 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   - **Release 0.2.2 prepared (27 Nov 23:10, user):** QOS_RELEASE, launcher VERSION and GAME_VERSION 0.2.2 (installs
     rebuild), SDK bundle qos12 (native renderer to 0114, SDK own31), notes docs/releases/0.2.2.md. The user builds
     (build_native, game, installer) and publishes with gh.
+    **Released on GitHub (user, 27 Nov 23:29) as v0.2.2.**
+  - **Sprint/walk keys swapped (28 Nov 00:10, user: the real PC version runs on Shift and walks on Ctrl; the manual
+    page said the opposite):** kbm_binds.cpp lstick_press Shift, keybind_walk Control; prompts/keyboard.txt HUD LS
+    glyphs k_shift, tutorial btn_left km_shift_sq; launcher keyboard map. Not built (game build; prompts copied by it).
+    Goes out in 0.2.3 with the other fixes (user, 28 Nov 00:48).
+  - **Xenia Canary balance patch (28 Nov 08:05, not tested):** canary/415607FF - 007 Quantum of Solace.patch.toml =
+    Canary's game-patches file (hash A29428CB1432DD9E) plus "Balance beams at 60 FPS" / "at 120 FPS": f32 values
+    1.02^(30/fps), 0.93^(30/fps) at 0x82000500.. (PE header padding), lis r4 at 0x82158EE0 -> 0x8200, lfs at
+    0x82158F00 (accel, r4) and 0x82158F34 (decel, r10) pointed there. Our default.xex's Canary hash computed offline =
+    A29428CB1432DD9E (code pages 0x820E0000-0x825E0000 from the page descriptors, 189 import thunks rewritten to
+    sc 2 / blr / nop / nop as Canary's loader does): same build as Canary's file. Note: Canary's own "Unlock FPS"
+    nops 0x8229B808 / 0x8229B86C, which in this build are loads (com_maxfps dvar pointer, a float), not the clamp
+    branches (0x8229B820 / 0x8229B8A4).
+    **Separate release plan (user, 28 Nov 08:11):** canary/ (patch file, comments trimmed, + README.md). Publish
+    as its own GitHub release with --latest=false: the launcher's update check reads /releases/latest (tag compared
+    with VERSION, QuantumOfSolace.exe asset), so a Canary-only release must not become "latest". Tag not v*, e.g.
+    canary-balance-1. Test in Canary first; later a PR to xenia-canary/game-patches.
+  - **0.2.3 additions (28 Nov 08:30-09:05, written to the PC, not built):** src/motion_blur.cpp `--motion_blur`
+    original/off/on (r_motionblur_enable: SP ptr 0x84055FC0, stored at 0x8255EFD4; MP 0x8518C260; bool default 0,
+    flags 0x4000, not saved; takedown start sets 1 at 0x82386764, end restores at 0x82387838). Off keeps the byte at
+    0 each Com_Frame, on keeps it at 1; logs the game's own changes (first 20). Launcher Graphics "Motion blur"
+    Original/Off/On. Launcher frame rate adds 90 (note: "90 and 120 are experimental"). Launcher always opens on
+    Game files (was the last tab).
+  - **Damage blur and bloom switches (28 Nov 09:40, written to the PC, not built):** src/effects.cpp (both
+    programs): `--damage_blur` holds cg_showHurtBlur / cg_showVeryHurtBlur (SP ptrs 0x8266F534 / 0x827700EC, bools
+    default 1, read by the HUD sub_8217E110; MP has neither) at 0 each Com_Frame; `--bloom` sets the bloom intensity
+    to 0 after the renderer fills the glow settings (src/glow_hook.cpp hooks sub_82561DC0, MP mp/src/glow_hook.cpp
+    sub_824C6D98: 56 bytes at r3 + 22916 copied to 0x841EF1B4 / MP 0x8518FE64; +0 enabled, +4 cutoff, +8 desat, +12
+    intensity, +16 radius, +20 ray expansion, +24 ray intensity; from the vision set or r_glowTweak* when
+    r_glowUseTweaks; r_glow is registered but never read). Light rays left on. Launcher Graphics "Damage blur" and
+    "Bloom" switches. **Lens flares not done:** r_sunflare_* (SP ptrs 0x843E3858.., registered in sub_82589D20) have
+    no readers by pointer or name, so the flares come from elsewhere (level effects?); needs a trace with a flare on
+    screen.
+  - **Quick kills at high FPS (28 Nov 09:10):** the press windows are in ms (qk_diff_tweak_easy +500, norm +300,
+    hard -100, xprt -150; picked by difficulty in sub_823866D0 around 0x82387030), so frame rate shouldn't matter.
+    Not traced: ButtonMash, StickSwirl/StickSlap/StickToggle, lock picking (MechLock pins). Watch for these.
+  - **Correction (28 Nov 09:23, user):** mission titles (location text) are not part of the load videos; the mission
+    2 title is drawn by the game. The 25 Nov trace only showed a Bink video with alpha drawing at that moment.
+    Curiosity, low priority: how the titles are drawn (script hud text or Scaleform) and whether their position can
+    be moved; one trace while a title is on screen would tell.
+  - **Playthrough (user, 28 Nov 09:25):** 7 of 15 levels played; the other 8 still to check (above-60 FPS breakage,
+    keyboard prompts, z-fighting, see-through bars, slowdowns).
   12. **Rooftop slowdown, level 2 (user, 27 Nov 23:01):** dips into the 50s uncapped (and a few frames just under 60
       at 60) on the rooftop chase. Game-bound, not the renderer (qos_223: ~6 ms drawing, then 9-14 ms waiting for the
       game; the game thread needs 12-20 ms a frame there). Next: a Tracy capture there (TRACY_ON_DEMAND is built in;
