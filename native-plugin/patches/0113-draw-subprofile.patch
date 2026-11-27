@@ -1,0 +1,202 @@
+# Draw sub-phase profile (27 Nov): after 0110/0112 the busiest draws spend ~1.1-1.2 ms a frame each in the constants
+# and descriptors phases, which already reuse what they can. With BOTS_DRAW_PROFILE=1 a line per stats window,
+# "draw sub-phases per frame", splits them: viewport, system constants, float constants, bool/loop + fetch constants
+# (time, and uploads vs reuses per constant buffer), pipeline layout lookup, texture sets (none / same as the last
+# draw / found / new) and descriptor updates, to pick the next trim.
+ src/gfx/native.cpp      |  1 +
+ src/gfx/vk/draw.cpp     | 31 +++++++++++++++++++++++++++++--
+ src/gfx/vk/renderer.cpp | 22 ++++++++++++++++++++++
+ src/gfx/vk/renderer.h   |  9 +++++++++
+ 4 files changed, 61 insertions(+), 2 deletions(-)
+
+diff --git a/src/gfx/native.cpp b/src/gfx/native.cpp
+index 4dbeb21..ed7dfa3 100644
+--- a/src/gfx/native.cpp
++++ b/src/gfx/native.cpp
+@@ -216,6 +216,7 @@ class NativeCommandProcessor final : public rg::CommandProcessor {
+         if (sync_) sync_->LogStreamPages(n);  // qos (patch 0111)
+         if (sync_) sync_->LogHotPages(n);  // qos (patch 0112)
+         renderer_->LogStreamDiag(n);
++        renderer_->LogSubProfile(n);  // qos (patch 0113)
+         if (renderer_->draw_profile()) {
+           std::string phases;
+           for (size_t i = 0; i < std::size(st.draw_phase_ns); ++i) {
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 9e94e21..cf2f1be 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -1566,6 +1566,16 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   if (!host_count) return;
+ 
+   profile.Mark(kPhaseConstants);
++  // qos (patch 0113): sub-phase clock (BOTS_DRAW_PROFILE=1 only).
++  auto sub_now = [&] { return draw_profile_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{}; };
++  auto sub_add = [&](uint64_t& total, std::chrono::steady_clock::time_point& t) {
++    if (!draw_profile_) return;
++    const auto now = std::chrono::steady_clock::now();
++    total += uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(now - t).count());
++    t = now;
++  };
++  auto sub_t = sub_now();
++  if (draw_profile_) ++sub_.draws;
+   // System constants (VulkanCommandProcessor::UpdateSystemConstantValues, host render targets).
+   // Host depth holds the guest value for both depth formats (not float24 halved into [0, 1)): clears, resolves
+   // and transfers read and write it as such.
+@@ -1575,6 +1585,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   du::ViewportInfo viewport;
+   du::GetHostViewportInfo(regs, samples_x, samples_y, false, props.maxViewportDimensions[0], props.maxViewportDimensions[1], true,
+                           depth_control, false, false, pshader && pshader->writes_depth(), viewport);
++  sub_add(sub_.viewport_ns, sub_t);
+   Translator::SystemConstants sc;
+   std::memset(&sc, 0, sizeof(sc));
+   if (scale_ != 1.0f) sc.textures_resolution_scaled = textures_resolution_scaled;
+@@ -1655,9 +1666,13 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   // Reuses the last upload of a buffer when its key matches (see constant_uploads_); key 0: always upload.
+   auto reuse = [&](uint32_t index, uint64_t key, const void* shader) {
+     ConstantUpload& last = constant_uploads_[index];
+-    if (!key || last.epoch != ring_epoch_ || last.key != key || last.shader != shader) return false;
++    if (!key || last.epoch != ring_epoch_ || last.key != key || last.shader != shader) {
++      if (draw_profile_) ++sub_.uploads[index];
++      return false;
++    }
+     constant_offsets[index] = last.offset;
+     ++stats_.constant_reuses;
++    if (draw_profile_) ++sub_.reuses[index];
+     return true;
+   };
+   auto remember = [&](uint32_t index, uint64_t key, const void* shader) {
+@@ -1706,18 +1721,22 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     ++system_constants_version_;
+   }
+   put(Translator::kConstantBufferSystem, &sc, sizeof(sc), system_constants_version_);
++  sub_add(sub_.system_ns, sub_t);
+   put_floats(Translator::kConstantBufferFloatVertex, vshader, rg::XE_GPU_REG_SHADER_CONSTANT_000_X);
+   put_floats(Translator::kConstantBufferFloatPixel, pshader, rg::XE_GPU_REG_SHADER_CONSTANT_256_X);
++  sub_add(sub_.floats_ns, sub_t);
+   const uint64_t* group_writes = draw.constant_writes;
+   put(Translator::kConstantBufferBoolLoop, &regs.values[rg::XE_GPU_REG_SHADER_CONSTANT_BOOL_000_031], 4 * (8 + 32),
+       group_writes ? group_writes[kBoolLoopConstantGroup] + 1 : 0);
+   put(Translator::kConstantBufferFetch, &regs.values[rg::XE_GPU_REG_SHADER_CONSTANT_FETCH_00_0], 4 * 6 * 32,
+       group_writes ? group_writes[kFetchConstantGroup] + 1 : 0);
+ 
++  sub_add(sub_.misc_ns, sub_t);
+   profile.Mark(kPhaseDescriptors);
+   // Descriptor sets.
+   const PipelineLayout* layout = GetPipelineLayout({uint32_t(vtextures.size()), uint32_t(vsamplers.size()),
+                                                     uint32_t(ptextures.size()), uint32_t(psamplers.size())});
++  sub_add(sub_.layout_ns, sub_t);
+   if (!layout) {
+     ++stats_.skipped_draws;
+     return;
+@@ -1731,7 +1750,10 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   // of a material mostly do). Views and samplers outlive the submission (Retire), so a handle can't be reused in it.
+   auto texture_set = [&](VkDescriptorSet& set, VkDescriptorSetLayout set_layout, std::span<const VkImageView> views,
+                          const std::vector<rg::SpirvShader::SamplerBinding>& samplers, uint32_t stage) {
+-    if ((views.empty() && samplers.empty()) || samplers.size() > 32) return;
++    if ((views.empty() && samplers.empty()) || samplers.size() > 32) {
++      if (draw_profile_) ++sub_.set_empty;
++      return;
++    }
+     const size_t first = image_count;
+     for (VkImageView view : views) images[image_count++] = {VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_GENERAL};
+     uint32_t slot = 0;
+@@ -1775,6 +1797,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+         std::memcmp(set_memo_handles_[stage], handles, handle_count * sizeof(uint64_t)) == 0) {
+       set = set_memo_[stage];
+       image_count = first;
++      if (draw_profile_) ++sub_.set_memo;
+       return;
+     }
+     set_key_.assign(reinterpret_cast<const char*>(&set_layout), sizeof(set_layout));
+@@ -1789,6 +1812,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+       return;
+     }
+     if (const auto it = texture_sets_.find(std::string_view(set_key_)); it != texture_sets_.end()) {
++      if (draw_profile_) ++sub_.set_map;
+       set = it->second;
+       image_count = first;
+       set_memo_key_[stage] = set_key_;
+@@ -1797,6 +1821,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     }
+     set = AllocateSet(set_layout);
+     if (!set) return;
++    if (draw_profile_) ++sub_.set_new;
+     texture_sets_.emplace(set_key_, set);
+     set_memo_key_[stage] = set_key_;
+     remember(set);
+@@ -1812,6 +1837,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   };
+   texture_set(sets[2], layout->textures_vertex, vviews, vsamplers, 0);
+   texture_set(sets[3], layout->textures_pixel, pviews, psamplers, 1);
++  sub_add(sub_.sets_ns, sub_t);
+   if ((sets[2] == VK_NULL_HANDLE && !(vtextures.empty() && vsamplers.empty())) ||
+       (sets[3] == VK_NULL_HANDLE && !(ptextures.empty() && psamplers.empty()))) {
+     ++stats_.skipped_draws;
+@@ -1843,6 +1869,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   } else if (write_count) {
+     vk_.vkUpdateDescriptorSets(device_->device(), write_count, writes, 0, nullptr);
+   }
++  sub_add(sub_.update_ns, sub_t);
+ 
+   profile.Mark(kPhasePipeline);
+   // Pipeline (VulkanPipelineCache::GetCurrentStateDescription + EnsurePipelineCreated, simplified).
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index a5a926e..12f38c3 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -882,6 +882,28 @@ void Renderer::UnindexTexture(GuestTexture& texture) {
+   texture.indexed_ranges = {};
+ }
+ 
++void Renderer::LogSubProfile(double frames) {
++  if (!draw_profile_ || frames <= 0) return;
++  const SubProfile& a = sub_;
++  SubProfile& b = sub_last_;
++  auto ms = [&](uint64_t x, uint64_t y) { return double(x - y) / 1e6 / frames; };
++  auto per = [&](uint64_t x, uint64_t y) { return double(x - y) / frames; };
++  REXLOG_INFO("gfx native: draw sub-phases per frame ({:.0f} draws reaching constants): constants: viewport {:.2f} "
++              "ms, system {:.2f}, float {:.2f}, bool/loop+fetch {:.2f}; uploads/reuses: system {:.0f}/{:.0f}, vertex "
++              "floats {:.0f}/{:.0f}, pixel floats {:.0f}/{:.0f}, bool/loop {:.0f}/{:.0f}, fetch {:.0f}/{:.0f}; "
++              "descriptors: layout {:.2f} ms, texture sets {:.2f} ms, updates {:.2f} ms; sets: {:.0f} none, {:.0f} as "
++              "last draw, {:.0f} found, {:.0f} new",
++              per(a.draws, b.draws), ms(a.viewport_ns, b.viewport_ns), ms(a.system_ns, b.system_ns),
++              ms(a.floats_ns, b.floats_ns), ms(a.misc_ns, b.misc_ns), per(a.uploads[0], b.uploads[0]),
++              per(a.reuses[0], b.reuses[0]), per(a.uploads[1], b.uploads[1]), per(a.reuses[1], b.reuses[1]),
++              per(a.uploads[2], b.uploads[2]), per(a.reuses[2], b.reuses[2]), per(a.uploads[3], b.uploads[3]),
++              per(a.reuses[3], b.reuses[3]), per(a.uploads[4], b.uploads[4]), per(a.reuses[4], b.reuses[4]),
++              ms(a.layout_ns, b.layout_ns), ms(a.sets_ns, b.sets_ns), ms(a.update_ns, b.update_ns),
++              per(a.set_empty, b.set_empty), per(a.set_memo, b.set_memo), per(a.set_map, b.set_map),
++              per(a.set_new, b.set_new));
++  b = a;
++}
++
+ void Renderer::LogStreamDiag(double frames) {
+   if (!stream_diag_ || frames <= 0) return;
+   const StreamDiag& a = sdiag_;
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index a7b7f58..72fcd24 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -712,6 +712,13 @@ class Renderer : public Pm4Sink {
+   void IndexTexture(GuestTexture& texture);
+   void UnindexTexture(GuestTexture& texture);
+   // BOTS_DRAW_PROFILE=1: invalidation batches handled, their time, and the textures they checked.
++  struct SubProfile {
++    uint64_t viewport_ns = 0, system_ns = 0, floats_ns = 0, misc_ns = 0;   // constants phase
++    uint64_t layout_ns = 0, sets_ns = 0, update_ns = 0;                    // descriptors phase
++    uint64_t uploads[5] = {}, reuses[5] = {};                              // per constant buffer
++    uint64_t set_empty = 0, set_memo = 0, set_map = 0, set_new = 0;        // texture sets per stage
++    uint64_t draws = 0;
++  } sub_, sub_last_;
+   bool stream_diag_ = false;
+   struct StreamDiag {
+     uint64_t draws = 0, requests = 0, requested = 0, spanned = 0, scan_ns = 0, scanned = 0, indexed = 0, auto_index = 0,
+@@ -730,6 +737,8 @@ class Renderer : public Pm4Sink {
+   // VGT_INDX_OFFSET, the widest stride on that constant), and the cost of finding the span by scanning the indices.
+   // Sizes a per-draw copy of streamed vertex data instead of write-protecting it.
+   void LogStreamDiag(double frames);
++  // qos (patch 0113): BOTS_DRAW_PROFILE=1 splits the constants and descriptors phases (time and outcomes).
++  void LogSubProfile(double frames);
+   bool stream_diag() const { return stream_diag_; }
+ 
+  private:

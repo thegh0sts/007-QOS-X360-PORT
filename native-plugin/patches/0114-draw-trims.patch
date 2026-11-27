@@ -1,0 +1,135 @@
+# Two per-draw trims from the 0113 sub-phase profile (27 Nov, qos_218, ~7,000 draws a frame): the pipeline layout was
+# looked up in a std::map every draw (~0.35 ms a frame): the last draw's layout is kept and reused when the texture
+# and sampler counts match. And a hot vertex page (0112) read by two of a draw's vertex streams was hashed twice:
+# a page already checked or copied for the same draw (Renderer::draw_serial) isn't hashed again. The hot-pages
+# profile line counts those ("already checked for the same draw").
+ src/gfx/vk/draw.cpp        |  8 ++++++--
+ src/gfx/vk/memory_sync.cpp | 28 +++++++++++++++++++++-------
+ src/gfx/vk/memory_sync.h   |  3 ++-
+ src/gfx/vk/renderer.h      |  5 +++++
+ 4 files changed, 34 insertions(+), 10 deletions(-)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index cf2f1be..a214365 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -892,6 +892,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     return;
+   }
+   DrawProfile profile(draw_profile_ ? stats_.draw_phase_ns : nullptr);
++  ++draw_serial_;  // qos (patch 0114)
+   ProcessInvalidations();
+   if (!shared_memory_uploaded_ && !tracker_) {
+     if (!UploadSharedMemory()) {
+@@ -1734,8 +1735,11 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   sub_add(sub_.misc_ns, sub_t);
+   profile.Mark(kPhaseDescriptors);
+   // Descriptor sets.
+-  const PipelineLayout* layout = GetPipelineLayout({uint32_t(vtextures.size()), uint32_t(vsamplers.size()),
+-                                                    uint32_t(ptextures.size()), uint32_t(psamplers.size())});
++  const LayoutKey layout_key{uint32_t(vtextures.size()), uint32_t(vsamplers.size()), uint32_t(ptextures.size()),
++                             uint32_t(psamplers.size())};
++  const PipelineLayout* layout = layout_memo_ && layout_key == layout_memo_key_ ? layout_memo_
++                                                                                 : GetPipelineLayout(layout_key);
++  if (layout) layout_memo_key_ = layout_key, layout_memo_ = layout;
+   sub_add(sub_.layout_ns, sub_t);
+   if (!layout) {
+     ++stats_.skipped_draws;
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index 5b15044..7697e4e 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -24,6 +24,7 @@ MemorySync::MemorySync(rex::memory::Memory& memory, Renderer& renderer) : Shared
+     hot_known_.assign(pages / 64, 0);
+     hot_hash_.assign(pages, 0);
+     hot_changed_frame_.assign(pages, 0);
++    hot_checked_draw_.assign(pages, 0);
+     up_frame_.assign(pages, 0);
+     up_streak_.assign(pages, 0);
+   }
+@@ -289,10 +290,22 @@ bool MemorySync::HotCheck(uint32_t page_first, uint32_t page_count) {
+   const uint64_t t0 = profile_on_ ? NowNs() : 0;
+   bool ok = true;
+   hot_hashes_.resize(page_count);
+-  // Hash first, copy after: a write between the two makes the stored hash older than the copy, never newer.
+-  for (uint32_t i = 0; i < page_count; ++i) hot_hashes_[i] = PageHash(page_first + i);
+-  hot_stats_.checked += page_count;
+   auto known = [&](uint32_t page) { return (hot_known_[page >> 6] >> (page & 63)) & 1; };
++  // Hash first, copy after: a write between the two makes the stored hash older than the copy, never newer.
++  // qos (patch 0114): a page already checked (or copied) for this draw - another of its vertex streams - is current
++  // for it: no second hash.
++  const uint32_t draw = renderer_.draw_serial();
++  for (uint32_t i = 0; i < page_count; ++i) {
++    const uint32_t page = page_first + i;
++    if (hot_checked_draw_[page] == draw && known(page)) {
++      hot_hashes_[i] = hot_hash_[page];
++      ++hot_stats_.skipped;
++    } else {
++      hot_hashes_[i] = PageHash(page);
++      ++hot_stats_.checked;
++    }
++    hot_checked_draw_[page] = draw;
++  }
+   auto same = [&](uint32_t i) {
+     const uint32_t page = page_first + i;
+     return known(page) && hot_hash_[page] == hot_hashes_[i];
+@@ -336,10 +349,11 @@ void MemorySync::LogHotPages(double frames) {
+   const HotStats& a = hot_stats_;
+   HotStats& b = hot_stats_last_;
+   auto per = [&](uint64_t x, uint64_t y) { return double(x - y) / frames; };
+-  REXLOG_INFO("gfx native: hot vertex pages per frame: {:.0f} checked by hash ({:.2f} ms), {:.0f} copied in {:.0f} "
+-              "runs; {:.1f} made hot, {:.1f} back to protection when quiet, {:.1f} when other requests read them; {} hot "
+-              "now",
+-              per(a.checked, b.checked), per(a.ns, b.ns) / 1e6, per(a.copied, b.copied), per(a.copy_runs, b.copy_runs),
++  REXLOG_INFO("gfx native: hot vertex pages per frame: {:.0f} checked by hash ({:.2f} ms; {:.0f} more already checked "
++              "for the same draw), {:.0f} copied in {:.0f} runs; {:.1f} made hot, {:.1f} back to protection when quiet, "
++              "{:.1f} when other requests read them; {} hot now",
++              per(a.checked, b.checked), per(a.ns, b.ns) / 1e6, per(a.skipped, b.skipped), per(a.copied, b.copied),
++              per(a.copy_runs, b.copy_runs),
+               per(a.promoted, b.promoted), per(a.demoted_idle, b.demoted_idle), per(a.demoted_other, b.demoted_other),
+               a.count);
+   b = a;
+diff --git a/src/gfx/vk/memory_sync.h b/src/gfx/vk/memory_sync.h
+index 86fe5fc..4c77df0 100644
+--- a/src/gfx/vk/memory_sync.h
++++ b/src/gfx/vk/memory_sync.h
+@@ -109,6 +109,7 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   std::vector<uint64_t> hot_, hot_known_;   // bits per page: hot; GPU copy hash known
+   std::vector<uint64_t> hot_hash_;           // per page: hash of the bytes the GPU copy holds
+   std::vector<uint32_t> hot_changed_frame_;  // per page: frame it last changed
++  std::vector<uint32_t> hot_checked_draw_;   // qos (patch 0114): per page: draw serial it was last checked in
+   std::vector<uint32_t> up_frame_;           // per page: frame a vertex request last uploaded it
+   std::vector<uint8_t> up_streak_;           // frames running it was
+   std::vector<uint64_t> hot_hashes_;
+@@ -125,7 +126,7 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   void HotNoteUpload(uint32_t page_first, uint32_t page_count);
+   struct HotStats {
+     uint64_t checked = 0, copied = 0, copy_runs = 0, promoted = 0, demoted_idle = 0, demoted_other = 0, ns = 0,
+-             count = 0;
++             count = 0, skipped = 0;
+   } hot_stats_, hot_stats_last_;
+ 
+   // qos (patch 0111): BOTS_GFX_STREAM_DIAG=1. Per page: the frame it was last uploaded and how many frames running it
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index 72fcd24..e86f0b2 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -170,6 +170,7 @@ class Renderer : public Pm4Sink {
+   // qos (patch 0104): changes when a new submission starts (pages read in this one are then forgotten).
+   uint32_t read_stamp() const { return page_stamp_; }
+   uint64_t frame_number() const { return frame_; }  // qos (patch 0111)
++  uint32_t draw_serial() const { return draw_serial_; }  // qos (patch 0114): bumped at each IssueDraw
+   void NoteSharedRead(uint32_t start, uint32_t length);
+   // qos (patch 0103): waits for the upload worker's copies (before the command processor writes guest memory or
+   // raises an interrupt: SDK patch 0029's OnBeforeGuestWrite; and before a submission).
+@@ -1006,6 +1007,10 @@ class Renderer : public Pm4Sink {
+                         set_layout_empty_ = VK_NULL_HANDLE;
+   std::map<std::tuple<bool, uint32_t, uint32_t>, VkDescriptorSetLayout> texture_set_layouts_;
+   std::map<LayoutKey, PipelineLayout> pipeline_layouts_;
++  // qos (patch 0114): the last draw's layout (a std::map lookup per draw was ~0.3 ms a frame at 7,000 draws).
++  LayoutKey layout_memo_key_{~0u, ~0u, ~0u, ~0u};
++  const PipelineLayout* layout_memo_ = nullptr;
++  uint32_t draw_serial_ = 0;
+   struct PipelineSlot {
+     std::atomic<Async> state{Async::kNone};
+     VkPipeline pipeline = VK_NULL_HANDLE;  // set by whoever creates it, before state becomes kReady

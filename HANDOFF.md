@@ -531,6 +531,27 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
       upload worker, BOTS_GFX_UPLOAD_WORKER). Auto (default): 4 with >= 12 logical processors, 3 with >= 8, 2 with
       >= 4, else 1 (auto_render_threads); the note says what Auto picks on this PC. Saved "2" (the old default) moves
       to Auto once (render_threads_auto marker). Hot pages (0112) need no launcher setting: on by default.
+      **Z-fighting parked (user, 21:33).** **Next: per-draw trims.** qos_216 peak (7,629 draws, 9.75 ms in draws):
+      tracker 1.75, textures 1.22, descriptors 1.20, constants 1.14, indices 0.69, record 0.68, pipeline 0.59, setup
+      0.52, shaders 0.44, targets 0.42, pass 0.38, ring 0.16. Frames 20-25 ms in busy windows aren't hitch-logged
+      (need > 1.5x the average): they're total per-frame cost, so trims matter there.
+      **Native 0113-draw-subprofile (21:40, built, works):** with BOTS_DRAW_PROFILE=1, "draw sub-phases per
+      frame": constants (viewport / system / floats / bool+fetch ms, uploads vs reuses per buffer) and descriptors
+      (layout / texture sets / updates ms; sets none / as last draw / found / new). One run at the busy route.
+      **Result (21:42-21:47, qos_218; the extra clocks add ~0.4 ms to constants):** at ~7,000 draws: viewport 0.23 ms,
+      system constants 0.61 (built and compared every draw, uploaded for only ~7%), floats 0.28 (vertex floats
+      uploaded for ~84% of draws, pixel ~17%), bool/loop + fetch 0.22 (fetch uploaded ~59%); pipeline layout lookup
+      0.37 (a std::map per draw), texture sets 0.76 (per frame ~11,000 stages without textures, ~1,900 as the last
+      draw, ~300 found, ~620 new: sets don't outlive a submission), descriptor updates 0.20. Spread thin: no single
+      big piece left.
+      **Native 0114-draw-trims (21:55; built, works):** last pipeline layout reused when the counts match;
+      hot pages already checked for the same draw (draw_serial) not hashed again. Expect ~0.3-0.5 ms at the peak.
+      **Result (qos_219 vs qos_218, >= 5,000-draw windows, profiler on):** 1.393 vs 1.407 us/draw (~1%, ~0.1 ms at
+      7,000 draws): layout 0.038 vs 0.054 us/draw (most of what's left is the sub-profile's own clock reads), hot-page
+      hashing 0.127 vs 0.140 us/draw (~990 second hashes a frame skipped). Kept (harmless, small). Per-draw trims are
+      now at diminishing returns.
+      Bigger ideas left: system constants memo by inputs (hard), texture sets kept across submissions (views are
+      retired per submission: needs lifetime work), PM4 parsing thread.
       **Launcher after 922fbcf (committed 27 Nov):** SlimScrollbar (qos_installer.py) replaces ttk scroll bars;
       Multiplayer "Host addresses (optional)" (`--netplay_peers`, cleaned by clean_host_addresses); Input device is
       a button group (Auto/KBM/XBOX/PS); Saves tab in two columns, buttons on the right.
