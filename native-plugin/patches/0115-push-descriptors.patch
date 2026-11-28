@@ -1,0 +1,253 @@
+# Push descriptors (28 Nov, DXVK-style): the pixel shader's textures and samplers (set 3) are pushed into the command
+# buffer per draw with vkCmdPushDescriptorSetKHR (VK_KHR_push_descriptor, enabled by SDK own patch 0032) instead of
+# a set found in this submission's map or allocated and updated (texture sets were ~0.76 ms and updates ~0.20 ms a
+# frame at ~7,000 draws in qos_218). Only one set of a layout can be pushed, so vertex textures keep their sets; a
+# layout's pixel set is pushed when its textures + samplers fit maxPushDescriptors (at most 32). A push is skipped
+# when the last draw pushed the same handles with the same layout, nothing bound since (same_layout) and in the
+# same texture_sets_epoch_. Recorded at the binds, after the pass and its transfers. BOTS_GFX_PUSH_DESCRIPTORS=0
+# turns it off (A/B). The sub-profile line adds "pixel textures pushed N, push skipped M". Changed layouts mean the
+# driver's pipeline cache misses once (pipelines rebuilt at the first start).
+  src/gfx/vk/draw.cpp     | 79 ++++++++++++++++++++++++++++++++++++++++++++++---
+  src/gfx/vk/renderer.cpp |  4 +--
+  src/gfx/vk/renderer.h   | 20 +++++++++++--
+  src/gfx/vk/vk_api.h     |  6 ++++
+  4 files changed, 101 insertions(+), 8 deletions(-)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index a214365..27d4880 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -243,6 +243,21 @@ bool Renderer::InitDrawing() {
+   if (const char* v = std::getenv("BOTS_GFX_PASS_MERGE"); v && *v) pass_merge_ = *v == '1';
+   if (const char* v = std::getenv("BOTS_GFX_LAZY_RAW_DEPTH"); v && *v) lazy_raw_depth_ = *v == '1';
+   if (const char* v = std::getenv("BOTS_GFX_DRAW_MEMO"); v && *v == '0') draw_memo_ = false;
++  // qos (patch 0115): push descriptors for the pixel textures, when the device has them (SDK own 0032).
++  if (vk_.vkCmdPushDescriptorSetKHR) {
++    const auto& ifn = device_->vulkan_instance()->functions();
++    VkPhysicalDevicePushDescriptorPropertiesKHR push_props{
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR};
++    VkPhysicalDeviceProperties2 props2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &push_props};
++    if (ifn.vkGetPhysicalDeviceProperties2) ifn.vkGetPhysicalDeviceProperties2(device_->physical_device(), &props2);
++    max_push_descriptors_ = std::min<uint32_t>(push_props.maxPushDescriptors, 32);
++    push_descriptors_ = max_push_descriptors_ > 0;
++    if (const char* v = std::getenv("BOTS_GFX_PUSH_DESCRIPTORS"); v && *v == '0') push_descriptors_ = false;
++    REXLOG_INFO("gfx native: push descriptors {} (up to {} pixel textures and samplers a draw)",
++                push_descriptors_ ? "on" : "off (BOTS_GFX_PUSH_DESCRIPTORS=0)", max_push_descriptors_);
++  } else {
++    REXLOG_INFO("gfx native: push descriptors not offered by the driver");
++  }
+   if (const char* v = std::getenv("BOTS_GFX_RECORD_THREAD"); v && *v == '1') {
+     recorder_ = std::make_unique<Recorder>();
+     REXLOG_INFO("gfx native: draws recorded on a worker thread (BOTS_GFX_RECORD_THREAD=1)");
+@@ -467,9 +482,9 @@ VkDescriptorSet Renderer::AllocateSet(VkDescriptorSetLayout layout) {
+   return set;
+ }
+ 
+-VkDescriptorSetLayout Renderer::TextureSetLayout(bool vertex, uint32_t textures, uint32_t samplers) {
++VkDescriptorSetLayout Renderer::TextureSetLayout(bool vertex, uint32_t textures, uint32_t samplers, bool push) {
+   if (!textures && !samplers) return set_layout_empty_;
+-  auto& slot = texture_set_layouts_[{vertex, textures, samplers}];
++  auto& slot = texture_set_layouts_[{vertex, textures, samplers, push}];
+   if (slot) return slot;
+   std::vector<VkDescriptorSetLayoutBinding> bindings;
+   const VkShaderStageFlags stage = vertex ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT;
+@@ -480,6 +495,7 @@ VkDescriptorSetLayout Renderer::TextureSetLayout(bool vertex, uint32_t textures,
+   VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+   info.bindingCount = uint32_t(bindings.size());
+   info.pBindings = bindings.data();
++  if (push) info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;  // qos (0115)
+   vk_.vkCreateDescriptorSetLayout(device_->device(), &info, nullptr, &slot);
+   return slot;
+ }
+@@ -488,7 +504,9 @@ const Renderer::PipelineLayout* Renderer::GetPipelineLayout(const LayoutKey& key
+   auto& slot = pipeline_layouts_[key];
+   if (slot.layout) return &slot;
+   slot.textures_vertex = TextureSetLayout(true, key[0], key[1]);
+-  slot.textures_pixel = TextureSetLayout(false, key[2], key[3]);
++  // qos (0115): pixel textures pushed when they fit.
++  slot.pixel_push = push_descriptors_ && (key[2] || key[3]) && key[2] + key[3] <= max_push_descriptors_;
++  slot.textures_pixel = TextureSetLayout(false, key[2], key[3], slot.pixel_push);
+   const VkDescriptorSetLayout sets[] = {set_layout_shared_, set_layout_constants_, slot.textures_vertex,
+                                         slot.textures_pixel};
+   VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+@@ -1750,6 +1768,9 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   uint32_t write_count = 0;
+   VkDescriptorImageInfo images[2 * (64 + 32)];
+   size_t image_count = 0;
++  // qos (0115): this draw's pixel textures when set 3 is pushed (recorded at the binds, below).
++  PushedTextures push{};
++  bool push_pending = false;
+   // Texture sets are reused within a submission when a draw binds exactly what an earlier one did (consecutive draws
+   // of a material mostly do). Views and samplers outlive the submission (Retire), so a handle can't be reused in it.
+   auto texture_set = [&](VkDescriptorSet& set, VkDescriptorSetLayout set_layout, std::span<const VkImageView> views,
+@@ -1786,6 +1807,21 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     }
+     // qos: the raw handles, compared with this stage's last set without building the string key.
+     const size_t handle_count = image_count - first;
++    if (stage == 1 && layout->pixel_push) {
++      // qos (0115): pushed at the binds instead of a set (more than fit: no set either, the draw is skipped).
++      if (handle_count > std::size(push.handles)) {
++        image_count = first;
++        return;
++      }
++      push.layout = layout->layout, push.views = uint32_t(views.size()), push.samplers = uint32_t(samplers.size());
++      for (size_t i = 0; i < handle_count; ++i) {
++        const VkDescriptorImageInfo& info = images[first + i];
++        push.handles[i] = info.imageView ? uint64_t(info.imageView) : uint64_t(info.sampler);
++      }
++      push_pending = true;
++      image_count = first;
++      return;
++    }
+     uint64_t handles[96];
+     for (size_t i = 0; i < handle_count; ++i) {
+       const VkDescriptorImageInfo& info = images[first + i];
+@@ -1843,7 +1879,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   texture_set(sets[3], layout->textures_pixel, pviews, psamplers, 1);
+   sub_add(sub_.sets_ns, sub_t);
+   if ((sets[2] == VK_NULL_HANDLE && !(vtextures.empty() && vsamplers.empty())) ||
+-      (sets[3] == VK_NULL_HANDLE && !(ptextures.empty() && psamplers.empty()))) {
++      (sets[3] == VK_NULL_HANDLE && !push_pending && !(ptextures.empty() && psamplers.empty()))) {
+     ++stats_.skipped_draws;
+     return;
+   }
+@@ -2094,6 +2130,41 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+       ++stats_.set_binds_skipped;
+     }
+   }
++  // qos (0115): the pixel textures pushed, unless the last push had the same layout and handles and nothing bound
++  // since. Recorded here, after the pass and its transfers (which bind other layouts and would disturb it).
++  if (push_pending) {
++    const uint32_t n = push.views + push.samplers;
++    const bool same = same_layout && push_memo_epoch_ == texture_sets_epoch_ && push_memo_.layout == push.layout &&
++                      push_memo_.views == push.views && push_memo_.samplers == push.samplers &&
++                      std::memcmp(push_memo_.handles, push.handles, n * sizeof(uint64_t)) == 0;
++    if (same) {
++      if (draw_profile_) ++sub_.pushes_skipped;
++    } else {
++      if (draw_profile_) ++sub_.pushes;
++      push_memo_ = push, push_memo_epoch_ = texture_sets_epoch_;
++      Rec([this, p = push](VkCommandBuffer cmd) {
++        VkDescriptorImageInfo infos[32];
++        const uint32_t count = p.views + p.samplers;
++        for (uint32_t i = 0; i < count; ++i) {
++          infos[i] = i < p.views ? VkDescriptorImageInfo{VK_NULL_HANDLE, VkImageView(p.handles[i]),
++                                                         VK_IMAGE_LAYOUT_GENERAL}
++                                 : VkDescriptorImageInfo{VkSampler(p.handles[i]), VK_NULL_HANDLE,
++                                                         VK_IMAGE_LAYOUT_GENERAL};
++        }
++        VkWriteDescriptorSet w[2];
++        uint32_t writes = 0;
++        if (p.views) {
++          w[writes++] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, VK_NULL_HANDLE, 0, 0, p.views,
++                         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, infos, nullptr, nullptr};
++        }
++        if (p.samplers) {
++          w[writes++] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, VK_NULL_HANDLE, p.views, 0, p.samplers,
++                         VK_DESCRIPTOR_TYPE_SAMPLER, infos + p.views, nullptr, nullptr};
++        }
++        vk_.vkCmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, p.layout, 3, writes, w);
++      });
++    }
++  }
+   // qos (0093): the draw's commands go to the worker as one packet (DrawPacket::Record), handed over at the draw
+   // (or, if the draw is dropped after this, with the binds alone: bound_pipeline_ and the bound sets assume them).
+   DrawPacket packet;
+diff --git a/src/gfx/vk/renderer.cpp b/src/gfx/vk/renderer.cpp
+index 12f38c3..295454f 100644
+--- a/src/gfx/vk/renderer.cpp
++++ b/src/gfx/vk/renderer.cpp
+@@ -892,7 +892,7 @@ void Renderer::LogSubProfile(double frames) {
+               "ms, system {:.2f}, float {:.2f}, bool/loop+fetch {:.2f}; uploads/reuses: system {:.0f}/{:.0f}, vertex "
+               "floats {:.0f}/{:.0f}, pixel floats {:.0f}/{:.0f}, bool/loop {:.0f}/{:.0f}, fetch {:.0f}/{:.0f}; "
+               "descriptors: layout {:.2f} ms, texture sets {:.2f} ms, updates {:.2f} ms; sets: {:.0f} none, {:.0f} as "
+-              "last draw, {:.0f} found, {:.0f} new",
++              "last draw, {:.0f} found, {:.0f} new; pixel textures pushed {:.0f}, push skipped {:.0f}",
+               per(a.draws, b.draws), ms(a.viewport_ns, b.viewport_ns), ms(a.system_ns, b.system_ns),
+               ms(a.floats_ns, b.floats_ns), ms(a.misc_ns, b.misc_ns), per(a.uploads[0], b.uploads[0]),
+               per(a.reuses[0], b.reuses[0]), per(a.uploads[1], b.uploads[1]), per(a.reuses[1], b.reuses[1]),
+@@ -900,7 +900,7 @@ void Renderer::LogSubProfile(double frames) {
+               per(a.reuses[3], b.reuses[3]), per(a.uploads[4], b.uploads[4]), per(a.reuses[4], b.reuses[4]),
+               ms(a.layout_ns, b.layout_ns), ms(a.sets_ns, b.sets_ns), ms(a.update_ns, b.update_ns),
+               per(a.set_empty, b.set_empty), per(a.set_memo, b.set_memo), per(a.set_map, b.set_map),
+-              per(a.set_new, b.set_new));
++              per(a.set_new, b.set_new), per(a.pushes, b.pushes), per(a.pushes_skipped, b.pushes_skipped));
+   b = a;
+ }
+ 
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index e86f0b2..cf01a40 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -331,6 +331,7 @@ class Renderer : public Pm4Sink {
+   struct PipelineLayout {
+     VkPipelineLayout layout = VK_NULL_HANDLE;
+     VkDescriptorSetLayout textures_vertex = VK_NULL_HANDLE, textures_pixel = VK_NULL_HANDLE;
++    bool pixel_push = false;  // qos (0115): set 3 (pixel textures) is a push descriptor set
+   };
+   // A guest texture's host image (null image if unsupported) and its views by host swizzle.
+   struct GuestTexture {
+@@ -538,7 +539,7 @@ class Renderer : public Pm4Sink {
+   // Space in this submission's upload ring (uniforms and indices); flushes when full.
+   uint8_t* Upload(VkDeviceSize size, VkDeviceSize alignment, VkDeviceSize& offset);
+   VkDescriptorSet AllocateSet(VkDescriptorSetLayout layout);
+-  VkDescriptorSetLayout TextureSetLayout(bool vertex, uint32_t textures, uint32_t samplers);
++  VkDescriptorSetLayout TextureSetLayout(bool vertex, uint32_t textures, uint32_t samplers, bool push = false);
+   const PipelineLayout* GetPipelineLayout(const LayoutKey& key);
+   // Everything that selects a draw pipeline: translations (ShaderCache::Translation*), layout, then fixed-function
+   // state (plain values from `topology` on; the manifest stores those bytes as they are). Zero-initialised (padding
+@@ -718,6 +719,7 @@ class Renderer : public Pm4Sink {
+     uint64_t layout_ns = 0, sets_ns = 0, update_ns = 0;                    // descriptors phase
+     uint64_t uploads[5] = {}, reuses[5] = {};                              // per constant buffer
+     uint64_t set_empty = 0, set_memo = 0, set_map = 0, set_new = 0;        // texture sets per stage
++    uint64_t pushes = 0, pushes_skipped = 0;                               // qos (0115): pixel textures pushed
+     uint64_t draws = 0;
+   } sub_, sub_last_;
+   bool stream_diag_ = false;
+@@ -1005,7 +1007,21 @@ class Renderer : public Pm4Sink {
+   uint32_t shared_memory_bindings_ = 1;
+   VkDescriptorSetLayout set_layout_shared_ = VK_NULL_HANDLE, set_layout_constants_ = VK_NULL_HANDLE,
+                         set_layout_empty_ = VK_NULL_HANDLE;
+-  std::map<std::tuple<bool, uint32_t, uint32_t>, VkDescriptorSetLayout> texture_set_layouts_;
++  std::map<std::tuple<bool, uint32_t, uint32_t, bool>, VkDescriptorSetLayout> texture_set_layouts_;
++  // qos (patch 0115, BOTS_GFX_PUSH_DESCRIPTORS=0 turns it off): the pixel textures (set 3) pushed with
++  // vkCmdPushDescriptorSetKHR instead of looked up / allocated / updated sets, for layouts with at most
++  // max_push_descriptors_ of them; vertex textures keep sets (one push set per layout). A push is skipped while the
++  // last one had the same layout and handles and nothing bound since (same_layout), in the same texture_sets_epoch_
++  // (a retired view's handle can come back).
++  bool push_descriptors_ = false;
++  uint32_t max_push_descriptors_ = 0;
++  struct PushedTextures {
++    VkPipelineLayout layout = VK_NULL_HANDLE;
++    uint32_t views = 0, samplers = 0;
++    uint64_t handles[32];
++  };
++  PushedTextures push_memo_{};
++  uint64_t push_memo_epoch_ = 0;
+   std::map<LayoutKey, PipelineLayout> pipeline_layouts_;
+   // qos (patch 0114): the last draw's layout (a std::map lookup per draw was ~0.3 ms a frame at 7,000 draws).
+   LayoutKey layout_memo_key_{~0u, ~0u, ~0u, ~0u};
+diff --git a/src/gfx/vk/vk_api.h b/src/gfx/vk/vk_api.h
+index 348229a..d173630 100644
+--- a/src/gfx/vk/vk_api.h
++++ b/src/gfx/vk/vk_api.h
+@@ -88,6 +88,8 @@ struct Api {
+   PFN_vkGetPhysicalDeviceFormatProperties vkGetPhysicalDeviceFormatProperties = nullptr;
+   // VK_EXT_external_memory_host, when the device has it enabled (else null).
+   PFN_vkGetMemoryHostPointerPropertiesEXT vkGetMemoryHostPointerPropertiesEXT = nullptr;
++  // qos (patch 0115): VK_KHR_push_descriptor, when the device has it enabled (SDK own 0032; else null).
++  PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR = nullptr;
+ 
+   // False if any function is missing.
+   bool Load(const rex::ui::vulkan::VulkanDevice& device) {
+@@ -108,6 +110,10 @@ struct Api {
+       vkGetMemoryHostPointerPropertiesEXT = reinterpret_cast<PFN_vkGetMemoryHostPointerPropertiesEXT>(
+           ifn.vkGetDeviceProcAddr(device.device(), "vkGetMemoryHostPointerPropertiesEXT"));
+     }
++    if (device.extensions().ext_KHR_push_descriptor) {
++      vkCmdPushDescriptorSetKHR = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(
++          ifn.vkGetDeviceProcAddr(device.device(), "vkCmdPushDescriptorSetKHR"));
++    }
+     return ok && vkGetPhysicalDeviceFormatProperties;
+   }
+ };
