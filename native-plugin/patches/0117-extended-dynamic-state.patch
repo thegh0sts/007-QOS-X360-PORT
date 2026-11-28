@@ -3,18 +3,19 @@
 # pipeline, and primitive restart too where VK_EXT_extended_dynamic_state2 is offered. GetPipeline drops them from
 # the key (StripDynamic), so draws that differ only in them share one pipeline: fewer pipelines to build, warm up
 # and switch between. Only changed states are set (new DrawPacket::dyn_mask bits 10-18), all of them again after a
-# rebind. BOTS_GFX_DYNAMIC_STATE=0 turns it off; the log says "extended dynamic state on/off/not offered".
+# rebind. Off by default (with it on, mission 10's pistol switched between two looks from frame to frame; cause not
+# found yet): BOTS_GFX_DYNAMIC_STATE=1 turns it on; the log says "extended dynamic state on/off/not offered".
 # Switching it on or off rebuilds the pipelines once (the keys change).
-  src/gfx/vk/draw.cpp   | 117 +++++++++++++++++++++++++++++++++++++++++++++-----
+  src/gfx/vk/draw.cpp   | 119 +++++++++++++++++++++++++++++++++++++++++++++-----
   src/gfx/vk/renderer.h |  11 +++++
   src/gfx/vk/vk_api.h   |  31 +++++++++++++
-  3 files changed, 148 insertions(+), 11 deletions(-)
+  3 files changed, 150 insertions(+), 11 deletions(-)
 
 diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
-index 27d4880..4569d72 100644
+index 27d4880..0b15526 100644
 --- a/src/gfx/vk/draw.cpp
 +++ b/src/gfx/vk/draw.cpp
-@@ -258,6 +258,30 @@ bool Renderer::InitDrawing() {
+@@ -258,6 +258,32 @@ bool Renderer::InitDrawing() {
    } else {
      REXLOG_INFO("gfx native: push descriptors not offered by the driver");
    }
@@ -33,19 +34,21 @@ index 27d4880..4569d72 100644
 +           vk_.vkCmdSetStencilTestEnableEXT && vk_.vkCmdSetStencilOpEXT;
 +    eds2_ = eds_ && eds2.extendedDynamicState2 && vk_.vkCmdSetPrimitiveRestartEnableEXT;
 +    const bool offered = eds_;
-+    if (const char* v = std::getenv("BOTS_GFX_DYNAMIC_STATE"); v && *v == '0') eds_ = eds2_ = false;
++    // Off by default for now (0.2.3: mission 10's pistol switched between two looks from frame to frame with it on);
++    // BOTS_GFX_DYNAMIC_STATE=1 turns it on.
++    if (const char* v = std::getenv("BOTS_GFX_DYNAMIC_STATE"); !v || *v != '1') eds_ = eds2_ = false;
 +    all_dyn_mask_ = 0x3FF | (eds_ ? 0xFFu << 10 : 0u) | (eds2_ ? 1u << 18 : 0u);
 +    if (!offered) {
 +      REXLOG_INFO("gfx native: extended dynamic state not offered by the driver");
 +    } else {
-+      REXLOG_INFO("gfx native: extended dynamic state {}{}", eds_ ? "on" : "off (BOTS_GFX_DYNAMIC_STATE=0)",
++      REXLOG_INFO("gfx native: extended dynamic state {}{}", eds_ ? "on" : "off (BOTS_GFX_DYNAMIC_STATE=1 turns it on)",
 +                  eds_ ? (eds2_ ? " (with primitive restart)" : " (without primitive restart)") : "");
 +    }
 +  }
    if (const char* v = std::getenv("BOTS_GFX_RECORD_THREAD"); v && *v == '1') {
      recorder_ = std::make_unique<Recorder>();
      REXLOG_INFO("gfx native: draws recorded on a worker thread (BOTS_GFX_RECORD_THREAD=1)");
-@@ -574,15 +598,27 @@ VkPipeline Renderer::CreateDrawPipeline(const PipelineKey& key) const {
+@@ -574,15 +600,27 @@ VkPipeline Renderer::CreateDrawPipeline(const PipelineKey& key) const {
    VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
    blend.attachmentCount = 4;
    blend.pAttachments = blends;
@@ -81,7 +84,7 @@ index 27d4880..4569d72 100644
    dynamic.pDynamicStates = dynamic_states;
    VkPipelineRenderingCreateInfo rendering_info{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
    rendering_info.colorAttachmentCount = 4;
-@@ -623,7 +659,21 @@ VkPipeline Renderer::CreateDrawPipeline(const PipelineKey& key) const {
+@@ -623,7 +661,21 @@ VkPipeline Renderer::CreateDrawPipeline(const PipelineKey& key) const {
    return pipeline;
  }
  
@@ -104,7 +107,7 @@ index 27d4880..4569d72 100644
    const std::string_view bytes(reinterpret_cast<const char*>(&key), sizeof(key));
    pending = false;
    if (last_pipeline_ && bytes == last_pipeline_key_) return last_pipeline_;
-@@ -2230,13 +2280,29 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+@@ -2230,13 +2282,29 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
    const auto ref_back = polygonal && depth_control.backface_enable
                              ? regs.Get<reg::RB_STENCILREFMASK>(rg::XE_GPU_REG_RB_STENCILREFMASK_BF)
                              : ref_front;
@@ -135,7 +138,7 @@ index 27d4880..4569d72 100644
    const DynamicState* last = dynamic_valid_ ? &dynamic_ : nullptr;
    auto changed = [&](auto member) { return !last || std::memcmp(&(last->*member), &(state.*member), sizeof(state.*member)); };
    // qos (0093): which dynamic states changed (bits 0-3: viewport, scissor, bias, blend; 4-9: stencil words), and
-@@ -2252,6 +2318,18 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+@@ -2252,6 +2320,18 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
        if (!o || state.stencil[i] != o[i]) dyn_mask |= 16u << i;
      }
    }
@@ -154,7 +157,7 @@ index 27d4880..4569d72 100644
    packet.dyn_mask = dyn_mask, packet.state = state;
    dynamic_ = state, dynamic_valid_ = true;
  
-@@ -2413,7 +2491,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+@@ -2413,7 +2493,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
    binds_only.armed = false;
    if (!dynamic_valid_ || bound_pipeline_ != pipeline) {
      // Something recorded since (debug captures between the state and the draw) bound its own: everything again.
@@ -163,7 +166,7 @@ index 27d4880..4569d72 100644
      packet.bind_mask = (sets[2] ? 4u : 0u) | (sets[3] ? 8u : 0u);
      bound_pipeline_ = pipeline, dynamic_valid_ = true;
    }
-@@ -2590,6 +2668,23 @@ void Renderer::DrawPacket::Record(const Api& vk, VkCommandBuffer cmd, bool draw)
+@@ -2590,6 +2670,23 @@ void Renderer::DrawPacket::Record(const Api& vk, VkCommandBuffer cmd, bool draw)
    if (dyn_mask & 128) vk.vkCmdSetStencilCompareMask(cmd, VK_STENCIL_FACE_BACK_BIT, s[3]);
    if (dyn_mask & 256) vk.vkCmdSetStencilWriteMask(cmd, VK_STENCIL_FACE_FRONT_BIT, s[4]);
    if (dyn_mask & 512) vk.vkCmdSetStencilWriteMask(cmd, VK_STENCIL_FACE_BACK_BIT, s[5]);
@@ -188,14 +191,14 @@ index 27d4880..4569d72 100644
      vk.vkCmdBindIndexBuffer(cmd, index_buffer, index_offset, index_type);
      vk.vkCmdDrawIndexed(cmd, count, 1, 0, 0, 0);
 diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
-index cf01a40..c47910a 100644
+index cf01a40..7fb8b32 100644
 --- a/src/gfx/vk/renderer.h
 +++ b/src/gfx/vk/renderer.h
 @@ -1015,6 +1015,13 @@ class Renderer : public Pm4Sink {
    // (a retired view's handle can come back).
    bool push_descriptors_ = false;
    uint32_t max_push_descriptors_ = 0;
-+  // qos (patch 0117, BOTS_GFX_DYNAMIC_STATE=0 turns it off): extended dynamic state. Cull mode, front face, depth
++  // qos (patch 0117, off unless BOTS_GFX_DYNAMIC_STATE=1): extended dynamic state. Cull mode, front face, depth
 +  // test / write / compare and stencil test / ops (eds_), and primitive restart (eds2_), are set per draw instead of
 +  // baked into the pipeline, so GetPipeline drops them from the key (StripDynamic) and draws differing only in them
 +  // share one pipeline. all_dyn_mask_: every DrawPacket::dyn_mask bit in use (all set again after a rebind).
