@@ -1,0 +1,116 @@
+# Hot page draw limit (28 Nov, mission 9's train, qos_226): hot vertex pages (0112) are checked by hash for every draw
+# that reads them. Where many draws read the same hot pages (big shared vertex ranges), that was ~70,000 hashes
+# and ~16 ms of tracker time a frame, with 121 of 600 frames over 50 ms (the game ran at ~10 FPS for seconds at a
+# time). Now a hot page read by more than BOTS_GFX_HOT_MAX_DRAWS draws in one frame (default 16, 0 = no limit;
+# a draw counts once whatever its streams) goes back to write protection (one fault when the game writes it
+# instead of a hash per draw) and isn't made hot again for 600 frames. The hot page line adds "when read by too
+# many draws".
+  src/gfx/vk/memory_sync.cpp | 31 ++++++++++++++++++++++++++++---
+  src/gfx/vk/memory_sync.h   | 11 ++++++++++-
+  2 files changed, 38 insertions(+), 4 deletions(-)
+
+diff --git a/src/gfx/vk/memory_sync.cpp b/src/gfx/vk/memory_sync.cpp
+index 7697e4e..37eb0e3 100644
+--- a/src/gfx/vk/memory_sync.cpp
++++ b/src/gfx/vk/memory_sync.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include <chrono>
+ #include <cstdlib>
++#include <string>
+ 
+ #include <rex/logging.h>
+ #include <xxhash.h>
+@@ -27,9 +28,17 @@ MemorySync::MemorySync(rex::memory::Memory& memory, Renderer& renderer) : Shared
+     hot_checked_draw_.assign(pages, 0);
+     up_frame_.assign(pages, 0);
+     up_streak_.assign(pages, 0);
++    hot_draws_frame_.assign(pages, 0);  // qos (patch 0116)
++    hot_draws_.assign(pages, 0);
++    hot_banned_until_.assign(pages, 0);
++    if (const char* v = std::getenv("BOTS_GFX_HOT_MAX_DRAWS"); v && *v) hot_max_draws_ = uint32_t(std::atoi(v));
+   }
+   REXLOG_INFO("gfx native: hot vertex pages {}", hot_on_ ? "kept current by hash"
+                                                           : "write-protected like the rest (BOTS_GFX_HOT_PAGES=0)");
++  if (hot_on_) {
++    REXLOG_INFO("gfx native: hot vertex pages read by more than {} draws a frame go back to protection",
++                hot_max_draws_ ? std::to_string(hot_max_draws_) : std::string("any number of (no limit)"));
++  }
+   if (const char* v = std::getenv("BOTS_GFX_STREAM_DIAG"); v && *v == '1') {  // qos (patch 0111)
+     stream_diag_ = true;
+     const size_t pages = size_t(kBufferSize >> page_size_log2());
+@@ -255,7 +264,7 @@ void MemorySync::HotNoteUpload(uint32_t page_first, uint32_t page_count) {
+     if (last == frame) continue;
+     up_streak_[page] = last == frame - 1 ? uint8_t(std::min(up_streak_[page] + 1, 250)) : 1;
+     up_frame_[page] = frame;
+-    if (up_streak_[page] >= 3 && !IsHot(page)) {
++    if (up_streak_[page] >= 3 && !IsHot(page) && frame >= hot_banned_until_[page]) {
+       SetHot(page, true);
+       hot_changed_frame_[page] = frame;
+       ++hot_stats_.promoted;
+@@ -267,6 +276,22 @@ bool MemorySync::HotRequest(uint32_t start, uint32_t length, uint32_t page_first
+   const uint32_t page_log2 = page_size_log2();
+   const uint64_t end = uint64_t(start) + length;
+   bool ok = true;
++  // qos (patch 0116): count the draws reading each hot page this frame (a draw once, whatever its streams); past
++  // hot_max_draws_ the page goes back to protection (SlowRequest below uploads it and the SDK watches it again).
++  if (hot_max_draws_) {
++    const uint32_t frame = uint32_t(renderer_.frame_number()) + 1;
++    const uint32_t draw = renderer_.draw_serial();
++    for (uint32_t page = page_first; page <= page_last; ++page) {
++      if (!IsHot(page) || hot_checked_draw_[page] == draw) continue;
++      if (hot_draws_frame_[page] != frame) hot_draws_frame_[page] = frame, hot_draws_[page] = 0;
++      if (++hot_draws_[page] > hot_max_draws_) {
++        SetHot(page, false);
++        hot_banned_until_[page] = frame + kHotBanFrames;
++        up_streak_[page] = 0;
++        ++hot_stats_.demoted_busy;
++      }
++    }
++  }
+   for (uint32_t page = page_first; page <= page_last;) {
+     const bool hot = IsHot(page);
+     uint32_t last = page;
+@@ -351,11 +376,11 @@ void MemorySync::LogHotPages(double frames) {
+   auto per = [&](uint64_t x, uint64_t y) { return double(x - y) / frames; };
+   REXLOG_INFO("gfx native: hot vertex pages per frame: {:.0f} checked by hash ({:.2f} ms; {:.0f} more already checked "
+               "for the same draw), {:.0f} copied in {:.0f} runs; {:.1f} made hot, {:.1f} back to protection when quiet, "
+-              "{:.1f} when other requests read them; {} hot now",
++              "{:.1f} when other requests read them, {:.1f} when read by too many draws; {} hot now",
+               per(a.checked, b.checked), per(a.ns, b.ns) / 1e6, per(a.skipped, b.skipped), per(a.copied, b.copied),
+               per(a.copy_runs, b.copy_runs),
+               per(a.promoted, b.promoted), per(a.demoted_idle, b.demoted_idle), per(a.demoted_other, b.demoted_other),
+-              a.count);
++              per(a.demoted_busy, b.demoted_busy), a.count);
+   b = a;
+ }
+ 
+diff --git a/src/gfx/vk/memory_sync.h b/src/gfx/vk/memory_sync.h
+index 4c77df0..378c2a6 100644
+--- a/src/gfx/vk/memory_sync.h
++++ b/src/gfx/vk/memory_sync.h
+@@ -110,6 +110,15 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   std::vector<uint64_t> hot_hash_;           // per page: hash of the bytes the GPU copy holds
+   std::vector<uint32_t> hot_changed_frame_;  // per page: frame it last changed
+   std::vector<uint32_t> hot_checked_draw_;   // qos (patch 0114): per page: draw serial it was last checked in
++  // qos (patch 0116): a hot page read by more than hot_max_draws_ draws in one frame goes back to protection (one
++  // write fault when the game writes it instead of a hash per draw) and isn't made hot again for kHotBanFrames.
++  // Mission 9's train (28 Nov, qos_226): ~70,000 hashes a frame, 100 ms frames. BOTS_GFX_HOT_MAX_DRAWS (default 16,
++  // 0 = no limit).
++  static constexpr uint32_t kHotBanFrames = 600;
++  uint32_t hot_max_draws_ = 16;
++  std::vector<uint32_t> hot_draws_frame_;    // per page: frame hot_draws_ counts
++  std::vector<uint16_t> hot_draws_;          // per page: draws that read it in that frame
++  std::vector<uint32_t> hot_banned_until_;   // per page: not made hot again before this frame
+   std::vector<uint32_t> up_frame_;           // per page: frame a vertex request last uploaded it
+   std::vector<uint8_t> up_streak_;           // frames running it was
+   std::vector<uint64_t> hot_hashes_;
+@@ -126,7 +135,7 @@ class MemorySync final : public rex::graphics::SharedMemory, public GuestMemoryT
+   void HotNoteUpload(uint32_t page_first, uint32_t page_count);
+   struct HotStats {
+     uint64_t checked = 0, copied = 0, copy_runs = 0, promoted = 0, demoted_idle = 0, demoted_other = 0, ns = 0,
+-             count = 0, skipped = 0;
++             count = 0, skipped = 0, demoted_busy = 0;
+   } hot_stats_, hot_stats_last_;
+ 
+   // qos (patch 0111): BOTS_GFX_STREAM_DIAG=1. Per page: the frame it was last uploaded and how many frames running it
