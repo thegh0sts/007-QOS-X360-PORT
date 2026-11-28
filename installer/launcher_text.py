@@ -1860,14 +1860,36 @@ TEXT = {
     'Choose the folder with your DLC': (
         'Wähle den Ordner mit deinen Zusatzinhalten', 'Choisissez le dossier de votre contenu téléchargeable',
         'Elige la carpeta con tu contenido descargable', 'Scegli la cartella con i tuoi contenuti scaricabili'),
-    "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.": (
-        'Der Ordner mit deinen Zusatzinhalten (die Datei des Kartenpakets, wie von einer Xbox-360-Festplatte kopiert, oder ein ganzer Content-Ordner). Der Mehrspieler installiert neue beim Start (beim ersten Mal dauert das einige Sekunden) und zeigt die Karten mit den anderen an. Alle Spieler einer Partie brauchen dieselben Zusatzinhalte, um ihre Karten zu spielen.',
-        "Le dossier de vos contenus téléchargeables (le fichier du pack de cartes, copié depuis un disque Xbox 360, ou tout un dossier Content). Le multijoueur installe les nouveaux à son lancement (quelques secondes la première fois) et affiche les cartes avec les autres. Tous les joueurs d'une partie ont besoin des mêmes contenus pour jouer sur leurs cartes.",
-        'La carpeta con tus paquetes descargables (el archivo del paquete de mapas, copiado de un disco de Xbox 360, o una carpeta Content entera). El multijugador instala los nuevos al iniciarse (la primera vez tarda unos segundos) y muestra los mapas con los demás. Todos los jugadores de una partida necesitan el mismo contenido para jugar sus mapas.',
-        "La cartella con i tuoi contenuti scaricabili (il file del pacchetto mappe, copiato da un disco Xbox 360, o un'intera cartella Content). Il multigiocatore installa quelli nuovi all'avvio (la prima volta richiede qualche secondo) e mostra le mappe insieme alle altre. Tutti i giocatori di una partita devono avere gli stessi contenuti per giocare le loro mappe."),
+    "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps. Remove takes a pack out the next time multiplayer starts (your file in the folder is kept); Add back installs it again.": (
+        'Der Ordner mit deinen Zusatzinhalten (die Datei des Kartenpakets, wie von einer Xbox-360-Festplatte kopiert, oder ein ganzer Content-Ordner). Der Mehrspieler installiert neue beim Start (beim ersten Mal dauert das einige Sekunden) und zeigt die Karten mit den anderen an. Alle Spieler einer Partie brauchen dieselben Zusatzinhalte, um ihre Karten zu spielen. Entfernen nimmt ein Paket beim nächsten Start des Mehrspielers heraus (deine Datei im Ordner bleibt); Wieder hinzufügen installiert es erneut.',
+        "Le dossier de vos contenus téléchargeables (le fichier du pack de cartes, copié depuis un disque Xbox 360, ou tout un dossier Content). Le multijoueur installe les nouveaux à son lancement (quelques secondes la première fois) et affiche les cartes avec les autres. Tous les joueurs d'une partie ont besoin des mêmes contenus pour jouer sur leurs cartes. Retirer enlève un pack au prochain lancement du multijoueur (votre fichier dans le dossier est conservé) ; Rajouter le réinstalle.",
+        'La carpeta con tus paquetes descargables (el archivo del paquete de mapas, copiado de un disco de Xbox 360, o una carpeta Content entera). El multijugador instala los nuevos al iniciarse (la primera vez tarda unos segundos) y muestra los mapas con los demás. Todos los jugadores de una partida necesitan el mismo contenido para jugar sus mapas. Quitar retira un paquete la próxima vez que se inicie el multijugador (tu archivo en la carpeta se conserva); Volver a añadir lo instala de nuevo.',
+        "La cartella con i tuoi contenuti scaricabili (il file del pacchetto mappe, copiato da un disco Xbox 360, o un'intera cartella Content). Il multigiocatore installa quelli nuovi all'avvio (la prima volta richiede qualche secondo) e mostra le mappe insieme alle altre. Tutti i giocatori di una partita devono avere gli stessi contenuti per giocare le loro mappe. Rimuovi toglie un pacchetto al prossimo avvio del multigiocatore (il tuo file nella cartella resta); Aggiungi di nuovo lo reinstalla."),
     'No DLC found in this folder': (
         'Keine Zusatzinhalte in diesem Ordner gefunden', 'Aucun contenu téléchargeable dans ce dossier',
         'No hay contenido descargable en esta carpeta', 'Nessun contenuto scaricabile in questa cartella'),
+    'Skip intro': ('Intro überspringen', "Passer l'intro", 'Saltar la intro', "Salta l'intro"),
+    'Skips the Activision, Treyarch and MGM logo videos at start-up. The legal screen stays.': (
+        'Überspringt beim Start die Logo-Videos von Activision, Treyarch und MGM. Der Rechtshinweis bleibt.',
+        "Passe les vidéos des logos Activision, Treyarch et MGM au démarrage. L'écran des mentions légales reste.",
+        'Omite los vídeos de los logotipos de Activision, Treyarch y MGM al iniciar. La pantalla legal se mantiene.',
+        "Salta i video dei loghi Activision, Treyarch e MGM all'avvio. La schermata legale resta."),
+    'Target Follow': ('Ziel folgen', 'Suivi de cible', 'Seguir objetivo', 'Segui bersaglio'),
+    'Target Stick': ('Ziel haften', 'Cible collante', 'Fijar objetivo', 'Aggancio bersaglio'),
+    'Target Snap': ('Ziel einrasten', 'Accroche de cible', 'Ajuste al objetivo', 'Scatto sul bersaglio'),
+    "Follow: the view follows a target while you move. Stick: aiming slows down over an enemy. Snap: aiming down the sights turns to a nearby enemy. These set the game's own Options switches.": (
+        'Folgen: die Ansicht folgt einem Ziel, während du dich bewegst. Haften: das Zielen wird über einem Gegner langsamer. Einrasten: beim Zielen über Kimme und Korn dreht sich die Ansicht zu einem nahen Gegner. Diese stellen die Schalter in den Optionen des Spiels ein.',
+        "Suivi : la vue suit une cible pendant vos déplacements. Collante : la visée ralentit sur un ennemi. Accroche : viser avec la mire tourne la vue vers un ennemi proche. Ces réglages remplacent ceux des options du jeu.",
+        'Seguir: la vista sigue a un objetivo mientras te mueves. Fijar: el apuntado se ralentiza sobre un enemigo. Ajuste: apuntar con la mira gira la vista hacia un enemigo cercano. Estos ajustan las opciones del propio juego.',
+        "Segui: la visuale segue un bersaglio mentre ti muovi. Aggancio: la mira rallenta sopra un nemico. Scatto: mirare con il mirino gira la visuale verso un nemico vicino. Queste impostano le opzioni del gioco."),
+    "Aiming down the sights turns to a nearby enemy. Target Follow and Target Stick work on the controller's stick, so they're off with a mouse.": (
+        'Beim Zielen über Kimme und Korn dreht sich die Ansicht zu einem nahen Gegner. Ziel folgen und Ziel haften wirken auf den Stick des Controllers und sind mit der Maus aus.',
+        "Viser avec la mire tourne la vue vers un ennemi proche. Le suivi et la cible collante agissent sur le stick de la manette : ils sont désactivés à la souris.",
+        'Apuntar con la mira gira la vista hacia un enemigo cercano. Seguir y Fijar objetivo actúan sobre el stick del mando, así que con ratón están desactivados.',
+        "Mirare con il mirino gira la visuale verso un nemico vicino. Segui e Aggancio bersaglio agiscono sulla levetta del controller, quindi con il mouse sono disattivati."),
+    'Remove': ('Entfernen', 'Retirer', 'Quitar', 'Rimuovi'),
+    'Add back': ('Wieder hinzufügen', 'Rajouter', 'Volver a añadir', 'Aggiungi di nuovo'),
+    '{name} (removed)': ('{name} (entfernt)', '{name} (retiré)', '{name} (quitado)', '{name} (rimosso)'),
     'Found: {names}': ('Gefunden: {names}', 'Trouvé : {names}', 'Encontrado: {names}', 'Trovato: {names}'),
     'Black bars in in-game cutscenes': (
         'Schwarze Balken in Zwischensequenzen im Spiel', 'Bandes noires dans les cinématiques en jeu',

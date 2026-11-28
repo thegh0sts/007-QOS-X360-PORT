@@ -25,6 +25,8 @@ set(QOS_SOURCES
     src/fov.cpp
     src/letterbox.cpp
     src/widescreen.cpp
+    src/skip_intro.cpp
+    src/aim_assist.cpp
     src/dof.cpp
     src/motion_blur.cpp
     src/effects.cpp

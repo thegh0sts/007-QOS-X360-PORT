@@ -68,6 +68,9 @@ void OnFrame(uint8_t* base, uint32_t sample_size_pointer, uint32_t fast_pointer)
 namespace qos::takedown_keys {
 void OnFrame();
 }  // namespace qos::takedown_keys
+namespace qos::aim_assist {
+void OnFrame(uint8_t* base);  // aim_assist.cpp: keyboard and mouse keep only Target Snap (--kbm_aim_assist_snap_only)
+}  // namespace qos::aim_assist
 namespace qos::menu_keys {
 void OnFrame(uint8_t* base);
 }  // namespace qos::menu_keys
@@ -139,6 +142,7 @@ extern "C" REX_FUNC(sub_8229B7C0) {
   qos::shadows::OnFrame(base, 0x84055E5C, 0x84055D98);  // sm_sunSampleSizeNear, sm_fastSunShadow
   qos::takedown_keys::OnFrame();
   qos::menu_keys::OnFrame(base);
+  qos::aim_assist::OnFrame(base);
   __imp__sub_8229B7C0(ctx, base);
 }
 

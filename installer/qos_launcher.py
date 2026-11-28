@@ -193,11 +193,22 @@ DEFAULTS = {
     # A folder with the game's DLC (STFS packages, e.g. the map pack): multiplayer installs what's new in it at its
     # start (mp/src/dlc_folder.cpp, --dlc_folder). Empty: none.
     "dlc_folder": "",
+    # DLC packages (their file names) the player removed with the Multiplayer tab's Remove: multiplayer skips them and
+    # deletes their installed copy at its next start (--dlc_removed). Add back takes a name off the list.
+    "dlc_removed": [],
     # Multiplayer: hosts System Link also sends its game broadcasts to, for networks that drop them (a VPN such as
     # Tailscale, guest Wi-Fi): --netplay_peers, comma-separated. Empty: broadcasts only.
     "host_addresses": "",
     # In-game cutscenes' black bars (src/letterbox.cpp): off keeps the view full screen.
     "cutscene_letterbox": False,
+    # Aim assist (src/aim_assist.cpp), the game's Options switches set from here: with a controller Target Follow
+    # (lock-on), Target Stick (slowdown) and Target Snap (auto-aim); with keyboard and mouse only Target Snap.
+    "aim_follow": False,
+    "aim_stick": True,
+    "aim_snap": True,
+    "kbm_aim_snap": True,
+    # Skip the start-up logo videos; the legal screen stays (src/skip_intro.cpp, --skip_intro).
+    "skip_intro": False,
     # Depth of field blur (src/dof.cpp: r_dof_enable), in single player and multiplayer.
     "depth_of_field": True,
     "motion_blur": "Original",
@@ -286,6 +297,9 @@ def load_settings():
             s[key] = min(hi, max(lo, int(s[key])))
         except (TypeError, ValueError):
             s[key] = DEFAULTS[key]
+    if not isinstance(s.get("dlc_removed"), list):
+        s["dlc_removed"] = []
+    s["dlc_removed"] = sorted({str(n) for n in s["dlc_removed"] if re.fullmatch(r"[0-9A-Za-z_.\-]{1,42}", str(n))})
     s["gamertag"] = clean_gamertag(s.get("gamertag"))
     if not re.fullmatch(r"E[0-9A-F]{15}", str(s.get("xuid", ""))):
         # An offline profile's XUID (E000...), random so two PCs don't share one. Saved at once, so it stays the
@@ -522,6 +536,8 @@ def game_args(s, screen=None):
         args.append("--achievement_popups=false")
     if s.get("cutscene_letterbox"):
         args.append("--cutscene_letterbox=true")
+    if s.get("skip_intro"):
+        args.append("--skip_intro=true")
     if not s.get("depth_of_field", True):
         args.append("--depth_of_field=false")
     motion_blur = s.get("motion_blur", "Original")
@@ -550,6 +566,9 @@ def game_args(s, screen=None):
     dlc = str(s.get("dlc_folder") or "").rstrip("\\/")
     if dlc:
         args.append(f"--dlc_folder={dlc}")
+    removed = s.get("dlc_removed") or []
+    if removed:
+        args.append(f"--dlc_removed={','.join(removed)}")
     # Host addresses (Multiplayer tab): on both programs' command lines like the DLC folder (title_switch passes it on).
     peers = clean_host_addresses(s.get("host_addresses"))
     if peers:
@@ -565,6 +584,13 @@ def game_args(s, screen=None):
         args.append("--vibration=false")
     device = s.get("input_device", "Auto")
     args.append(f"--pad_prompts={INPUT_PROMPTS.get(device, 'auto')}")
+    # Aim assist: controller all three, keyboard and mouse Target Snap only (the game holds Follow and Stick off).
+    if device == "Keyboard and mouse":
+        args.append(f"--aim_target_snap={1 if s.get('kbm_aim_snap', True) else 0}")
+    else:
+        args += [f"--aim_target_follow={1 if s.get('aim_follow') else 0}",
+                 f"--aim_target_stick={1 if s.get('aim_stick', True) else 0}",
+                 f"--aim_target_snap={1 if s.get('aim_snap', True) else 0}"]
     if device != "Keyboard and mouse":
         args += ["--mnk_mode=false", "--mnk_mouse=false", "--input_backend=sdl"]
     else:
@@ -576,9 +602,10 @@ def game_args(s, screen=None):
     return args
 
 
-def dlc_packages(folder, depth=0):
-    """The game's DLC packages in a folder (searched 5 deep, as mp/src/dlc_folder.cpp): their names from each Xbox 360
-    package header (CON/LIVE/PIRS; content type at 0x344, title ID at 0x360, English display name at 0x411)."""
+def dlc_package_files(folder, depth=0):
+    """The game's DLC packages in a folder (searched 5 deep, as mp/src/dlc_folder.cpp): (file name, name) pairs, the
+    name from each Xbox 360 package header (CON/LIVE/PIRS; content type at 0x344, title ID at 0x360, English display
+    name at 0x411). The file name is what the game installs it under (and what Remove passes on)."""
     found = []
     try:
         entries = list(os.scandir(folder))
@@ -588,7 +615,7 @@ def dlc_packages(folder, depth=0):
         try:
             if e.is_dir():
                 if depth < 5:
-                    found += dlc_packages(e.path, depth + 1)
+                    found += dlc_package_files(e.path, depth + 1)
                 continue
             if not e.is_file() or e.stat().st_size < 0xA000:
                 continue
@@ -601,8 +628,13 @@ def dlc_packages(folder, depth=0):
         if int.from_bytes(head[0x344:0x348], "big") != 2 or int.from_bytes(head[0x360:0x364], "big") != 0x415607FF:
             continue
         name = head[0x411:0x491].decode("utf-16-be", "ignore").split("\0")[0].strip()
-        found.append(name or e.name)
+        found.append((e.name, name or e.name))
     return found
+
+
+def dlc_packages(folder):
+    """The names of the game's DLC packages in a folder."""
+    return [name for _, name in dlc_package_files(folder)]
 
 
 def mp_profile_args(s):
@@ -825,6 +857,8 @@ class SettingsView(tk.Frame):
         setting_name(box, 9, "MP shader cache")
         note(box, 10, "Multiplayer keeps its own, built the same way at its first start.")
         self._button_stack(box, 9, [(tr("Clear and rebuild"), lambda: self.clear_shader_cache(multiplayer=True))])
+        self._toggle(box, 11, "skip_intro", "Skip intro")
+        note(box, 12, "Skips the Activision, Treyarch and MGM logo videos at start-up. The legal screen stays.")
 
         box = self._page("Display")
         self._toggle(box, 0, "fullscreen", "Fullscreen")
@@ -891,9 +925,15 @@ class SettingsView(tk.Frame):
         self._slider(pad, 1, "deadzone", "Extra stick dead zone (%)", 0, 40, 1)
         note(pad, 2, "On top of the game's own; raise it if the camera or Bond drifts on his own. 0: the game's alone.")
         self._toggle(pad, 3, "vibration", "Controller vibration")
-        self._subheading(pad, 4, "Controller map")
+        self._subheading(pad, 4, "Aim assist")
+        self._toggle(pad, 5, "aim_follow", "Target Follow")
+        self._toggle(pad, 6, "aim_stick", "Target Stick")
+        self._toggle(pad, 7, "aim_snap", "Target Snap")
+        note(pad, 8, "Follow: the view follows a target while you move. Stick: aiming slows down over an enemy. "
+                     "Snap: aiming down the sights turns to a nearby enemy. These set the game's own Options switches.")
+        self._subheading(pad, 9, "Controller map")
         self.pad_map = tk.Frame(pad, bg=PANEL)
-        self.pad_map.grid(row=5, column=0, columnspan=2, sticky="ew")
+        self.pad_map.grid(row=10, column=0, columnspan=2, sticky="ew")
         kbm = self.kbm_settings = tk.Frame(box, bg=PANEL)
         two_columns(kbm)
         kbm.grid(row=3, column=0, columnspan=2, sticky="ew")
@@ -901,9 +941,13 @@ class SettingsView(tk.Frame):
         self._slider(kbm, 1, "mouse_sensitivity", "Mouse sensitivity (%)", 10, 300, 5)
         note(kbm, 2, "100 is the PC game's default speed.")
         self._toggle(kbm, 3, "mouse_invert", "Invert mouse up/down")
-        self._subheading(kbm, 4, "Keyboard and mouse map")
+        self._subheading(kbm, 4, "Aim assist")
+        self._toggle(kbm, 5, "kbm_aim_snap", "Target Snap")
+        note(kbm, 6, "Aiming down the sights turns to a nearby enemy. Target Follow and Target Stick work on the "
+                     "controller's stick, so they're off with a mouse.")
+        self._subheading(kbm, 7, "Keyboard and mouse map")
         kbm_map = tk.Frame(kbm, bg=PANEL)
-        kbm_map.grid(row=5, column=0, columnspan=2, sticky="ew")
+        kbm_map.grid(row=8, column=0, columnspan=2, sticky="ew")
         self._control_map(kbm_map, KBM_MAP)
         self.vars["input_device"].trace_add("write", lambda *_: self._input_device_changed())
         self._input_device_changed()
@@ -935,26 +979,51 @@ class SettingsView(tk.Frame):
         cell = box.setting_cells[8]
         shown = wrapping(tk.Label(cell, font=("Segoe UI", 9), fg=FG, bg=PANEL))
         shown.pack(fill="x", pady=(1, 0))
-        packs = wrapping(tk.Label(cell, font=("Segoe UI", 9), fg=DIM, bg=PANEL))
+        packs = tk.Frame(cell, bg=PANEL)
         packs.pack(fill="x")
+
+        def toggle_pack(file_name):
+            removed = set(self.s.get("dlc_removed") or [])
+            removed ^= {file_name}
+            self.s["dlc_removed"] = sorted(removed)
+            show_dlc()
 
         def show_dlc(*_):
             folder = v.get()
             shown.config(text=folder or tr("No folder chosen"))
+            for w in packs.winfo_children():
+                w.destroy()
             if not folder:
-                packs.config(text="")
                 packs.pack_forget()
                 return
             if not packs.winfo_ismapped():
                 packs.pack(fill="x", after=shown)
-            names = sorted(set(dlc_packages(folder)))
-            packs.config(text=tr("Found: {names}", names=", ".join(names)) if names else tr("No DLC found in this folder"))
+            found = sorted(set(dlc_package_files(folder)), key=lambda p: p[1].lower())
+            if not found:
+                tk.Label(packs, text=tr("No DLC found in this folder"), font=("Segoe UI", 9), fg=DIM, bg=PANEL,
+                         anchor="w").pack(fill="x")
+                return
+            removed = set(self.s.get("dlc_removed") or [])
+            # One row per pack: its name (and "removed"), a small Remove / Add back button on the right.
+            for file_name, name in found:
+                row = tk.Frame(packs, bg=PANEL)
+                row.pack(fill="x", pady=(3, 0))
+                gone = file_name in removed
+                button = self._button(row, PANEL, tr("Add back") if gone else tr("Remove"),
+                                      lambda f=file_name: toggle_pack(f))
+                button.winfo_children()[0].config(width=10)
+                button.pack(side="right")
+                text = tr("{name} (removed)", name=name) if gone else name
+                tk.Label(row, text=text, font=("Segoe UI", 9), fg=DIM if gone else FG, bg=PANEL,
+                         anchor="w").pack(side="left", fill="x", expand=True)
 
         v.trace_add("write", show_dlc)
         show_dlc()
         note(box, 9, "The folder with your DLC packages (the map pack's file, as copied from an Xbox 360 drive, or a "
                      "whole Content folder). Multiplayer installs new ones when it starts (the first time takes a few "
-                     "seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps.")
+                     "seconds) and lists the maps with the others. Everyone in a game needs the same DLC to play its maps. Remove "
+                     "takes a pack out the next time multiplayer starts (your file in the folder is kept); Add back "
+                     "installs it again.")
         self._button_stack(box, 8, [(tr("Choose folder..."), self.choose_dlc_folder), (tr("Clear"), lambda: v.set(""))])
 
         # The same two columns as Game files: what's there on the left, the buttons on the right (user, 27 Nov).
