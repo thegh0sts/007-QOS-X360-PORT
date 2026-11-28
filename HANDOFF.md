@@ -629,6 +629,8 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     as its own GitHub release with --latest=false: the launcher's update check reads /releases/latest (tag compared
     with VERSION, QuantumOfSolace.exe asset), so a Canary-only release must not become "latest". Tag not v*, e.g.
     canary-balance-1. Test in Canary first; later a PR to xenia-canary/game-patches.
+    **Released (user, 28 Nov 20:51)** on the user's own repo; not offered to xenia-canary/game-patches (a PR there
+    is the only part left, optional).
   - **0.2.3 additions (28 Nov 08:30-09:05, written to the PC, not built):** src/motion_blur.cpp `--motion_blur`
     original/off/on (r_motionblur_enable: SP ptr 0x84055FC0, stored at 0x8255EFD4; MP 0x8518C260; bool default 0,
     flags 0x4000, not saved; takedown start sets 1 at 0x82386764, end restores at 0x82387838). Off keeps the byte at
@@ -642,7 +644,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     sub_824C6D98: 56 bytes at r3 + 22916 copied to 0x841EF1B4 / MP 0x8518FE64; +0 enabled, +4 cutoff, +8 desat, +12
     intensity, +16 radius, +20 ray expansion, +24 ray intensity; from the vision set or r_glowTweak* when
     r_glowUseTweaks; r_glow is registered but never read). Light rays left on. Launcher Graphics "Damage blur" and
-    "Bloom" switches. **Lens flares not done:** r_sunflare_* (SP ptrs 0x843E3858.., registered in sub_82589D20) have
+    "Bloom" switches. **Lens flares switch dropped (user, 28 Nov 21:48: no flare seen that needs it).** Was: r_sunflare_* (SP ptrs 0x843E3858.., registered in sub_82589D20) have
     no readers by pointer or name, so the flares come from elsewhere (level effects?); needs a trace with a flare on
     screen.
   - **DXVK-style work (28 Nov 10:30-11:50):** SDK own patch 0032-native-device-extensions (OWN_PATCHES own33):
@@ -676,6 +678,9 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   - **Train cutscene lamp flicker: intended (28 Nov 11:50).** The light pool and bottle shadow on Vesper's table
     flash on and off: lightning from the storm outside. Same on Xenos, at 30 FPS, in 6-year-old console footage and on
     the PC version. Not a bug. (Ruled out on the way: push descriptors, hot pages, occlusion queries - 0 in that run.)
+  - **Closed (user, 28 Nov 22:00): the 0.2.3 release holds a solid 60 FPS on the train.** (A dev run that evening,
+    qos_286, was slow only because a Command Prompt still had test switches set: BOTS_GFX_HOIST_UPLOADS=0,
+    BOTS_GFX_HOT_PAGES=0, BOTS_GFX_TEXTURE_INDEX=0, plus the profiler. Test runs: use a fresh window.) Was:
   - **To do: mission 10 (train) performance (user, 28 Nov 11:52):** still feels slow in places after 0116. From qos_228: busy
     train/casino stretches at ~15,000-17,000 draws are renderer-bound at 18-20 ms frames (low 50s FPS at a 60 cap);
     one ~200 ms frame each time the phone opens (log: "phone true", video blood_barrel; likely the game's own phone
@@ -691,6 +696,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     traversal / falling changes with origin (+32) and velocity (+44). Type names at 0x825E65D0 (none, balance,
     climb, mantle, transition, wall); sub-types (beam, ladder, ledge, pipe...) at 0x825E65EC. Not committed yet;
     the old src/traversal_log.cpp on the PC is unused (delete). Real cause inside the mantle code not found.
+    **Holds at 90 FPS (user, 28 Nov 22:29):** the mission 10 mantle across the gap works at 90; 120 not reported.
   - **0117 A/B done (28 Nov 17:05, qos_247 on / qos_248 off, mission 10, profiler on): no gain, stays off.**
     Busy windows (>= 7,000 draws): 0.953 vs 0.930 us/draw in draws, pipeline 0.063 vs 0.058, record 0.098 vs
     0.095; pipelines warmed 4,401 vs 4,459 (58 fewer: the game rarely pairs the same shaders with different
@@ -703,6 +709,20 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     over three JQ Worker threads, so not the rooftop limit; native skinning dropped. qos_252 rooftop at 60: game
     ~6-7 ms a frame (renderer waits 9-10 ms), vs 12-20 ms on 27 Nov (qos_223); not shader builds. Original report was
     uncapped: a --frame_rate=0 check would settle it.
+  - **Decal z-fighting (28 Nov 21:24, native 0120-decal-depth-slack; for 0.2.4, not committed):** both renderers
+    flicker (Xenos too). Boiler-room stickers (zfight-trace.txt): quads on the wall's plane, depth GEQUAL, no depth
+    write, no polygon offset (scm 00018006: offset bits 0x1800 off), so BOTS_GFX_DEPTH_BIAS_SCALE had nothing to
+    scale. The guest depth is D24FS8 (20-bit mantissa): wall and sticker round to the same value and GEQUAL passes;
+    host D32_SFLOAT keeps their tiny difference. 0120: D24FS8 draws with depth test on, write off, GEQUAL/GREATER
+    (or LEQUAL/LESS) and no guest bias get a constant bias of 8 float32 steps (one float24 step) towards passing.
+    BOTS_GFX_DECAL_DEPTH_SLACK=n (0 off). **Works on the boiler-room level (user).**
+    **Not fixed, parked (user 21:41: "unless someone complains"):** coplanar level geometry that writes depth itself,
+    e.g. the security room's sticky notes on shelves/desk (zfight-trace2.txt: dc E6, mode 4, no bias). Nearly all
+    of 007's colour draws write depth with GEQUAL (no depth prepass); on the Xbox both round to the same float24
+    value and the later draw wins; a bias can't help (both draws would shift). Real fix: round written depth to
+    float24 in the pixel shader (SDK's kFloat24Rounding, which assumes Xenia's host [0, 0.5] depth range: needs an
+    SDK patch for the native renderer's [0, 1]; depth-only draws need a pass-through pixel shader; costs early-Z, so a
+    launcher option). Xenia/Xenos show the same flicker by default.
   - **See-through letterbox bars above 720p fixed (28 Nov 20:44, native 0119-plain-upscale-pixels, works, user;
     for 0.2.4, not committed):** with --cutscene_letterbox (launcher "Black bars in in-game cutscenes") at render
     scale 2 the Bolivia intro ("Oruro Province", an in-engine 3D intro, not a Bink video) and other letterboxed
@@ -722,7 +742,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     every such trace catches the pause screen; trigger it with a delay instead (timeout /t 8 /nobreak >nul & type nul
     > "%USERPROFILE%\source\repos\007qol\out\build\win-amd64-relwithdebinfo\trace-now") and click back into
     the game.
-  - **Shader refs from the full playthrough (28 Nov 18:00, in progress):** ff_shader_refs.py index on the PC's
+  - **Shader refs from the full playthrough (28 Nov 18:00; committed 166a80e, 20:48, 937 KB; `check` not run):** ff_shader_refs.py index on the PC's
     manifest (~4,400 pipelines) with --keep and --cover -> pipelines/415607FF.refs for 0.2.4 (installer ships the
     folder; existing installs rebuild only new shaders). Needs numpy on the PC.
   - **0.2.3 released (user, 28 Nov ~15:10).** Queue for 0.2.4 below.
@@ -753,7 +773,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     Not traced: ButtonMash, StickSwirl/StickSlap/StickToggle, lock picking (MechLock pins). Watch for these.
   - **Correction (28 Nov 09:23, user):** mission titles (location text) are not part of the load videos; the mission
     2 title is drawn by the game. The 25 Nov trace only showed a Bink video with alpha drawing at that moment.
-    Curiosity, low priority: how the titles are drawn (script hud text or Scaleform) and whether their position can
+    **Dropped (user, 28 Nov 22:16).** Was: curiosity, low priority: how the titles are drawn (script hud text or Scaleform) and whether their position can
     be moved; one trace while a title is on screen would tell.
   - **Playthrough (user, 28 Nov 09:25):** 7 of 15 levels played; the other 8 still to check (above-60 FPS breakage,
     keyboard prompts, z-fighting, see-through bars, slowdowns).
@@ -1428,7 +1448,7 @@ default on) or "Press 4 / X" (off). Unknown whether that text field takes HTML: 
 off. Log "tutorial keys (box): ...". **Works (qos_152, 19:32):** reworded to the img tag and btn_nav_down drawn as 4.
 **Balance beam hint (19:40-19:44):** has no button picture at all (plain text, no log line). Options put to the user:
 keyboard-only rewording (pads keep the original text) or pictures for every pad style (stick picture; keyboard A/D
-needs a spare picture, all seven used). **User: leave it, keyboard hints done for now; may revisit later.**
+needs a spare picture, all seven used). **User: leave it, keyboard hints done for now; may revisit later.** **Dropped (user, 28 Nov 22:16).**
 
 ## To do, 24 Nov (user, 23:20)
 
