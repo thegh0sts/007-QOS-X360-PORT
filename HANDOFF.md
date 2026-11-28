@@ -370,8 +370,8 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
      Next try, if ever: find 007's own weapon placement (which DObj is the view model; where its pose/bone matrices
      are built) and squash it along the view direction by tan(W/2)/tan(G/2); or identify the gun's draws in a
      renderer trace and work back from their constants.
-  7. Video cutscenes' see-through bars above 720p: limit the plain-upscale blit to the draw's own rectangle (vertex
-     bounds), see the letterbox notes above.
+  7. ~~Video cutscenes' see-through bars above 720p~~ fixed 28 Nov (native 0119: plain upscale compared in pixels,
+     not MSAA samples; see the 28 Nov entry).
   8. Launcher: an optional "Host addresses" field in the Multiplayer tab -> --netplay_peers (comma-separated), passed to
      both programs like the DLC folder. Only for System Link where broadcasts don't arrive: VPNs that drop them
      (Tailscale), or home networks that block them (guest Wi-Fi, client isolation, separate segments). Not needed on
@@ -691,6 +691,49 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     traversal / falling changes with origin (+32) and velocity (+44). Type names at 0x825E65D0 (none, balance,
     climb, mantle, transition, wall); sub-types (beam, ladder, ledge, pipe...) at 0x825E65EC. Not committed yet;
     the old src/traversal_log.cpp on the PC is unused (delete). Real cause inside the mantle code not found.
+  - **0117 A/B done (28 Nov 17:05, qos_247 on / qos_248 off, mission 10, profiler on): no gain, stays off.**
+    Busy windows (>= 7,000 draws): 0.953 vs 0.930 us/draw in draws, pipeline 0.063 vs 0.058, record 0.098 vs
+    0.095; pipelines warmed 4,401 vs 4,459 (58 fewer: the game rarely pairs the same shaders with different
+    cull/depth/stencil). Code kept, off by default (BOTS_GFX_DYNAMIC_STATE=1). Closed.
+  - **Phone hitch skipped (user, 17:11):** not noticed in play; left on the list, low priority.
+  - **Mission 2 rooftop: can't reproduce (28 Nov 18:23).** Tracy (--tracy, src/qos_app.h: the SDK never started
+    the profiler; viewer 0.13.1, run as admin for sampling): main thread mostly game frame code; hottest guest
+    functions are CPU vertex skinning (sub_825A68F8 -> sub_825A65A0 -> sub_825A59A0/5B98/5DF8/60B0, bone blend +
+    2-10-10-10 normal unpack/repack). src/skin_profile.cpp (--skin_profile): 1.2-4.6 ms a frame total, split evenly
+    over three JQ Worker threads, so not the rooftop limit; native skinning dropped. qos_252 rooftop at 60: game
+    ~6-7 ms a frame (renderer waits 9-10 ms), vs 12-20 ms on 27 Nov (qos_223); not shader builds. Original report was
+    uncapped: a --frame_rate=0 check would settle it.
+  - **See-through letterbox bars above 720p fixed (28 Nov 20:44, native 0119-plain-upscale-pixels, works, user;
+    for 0.2.4, not committed):** with --cutscene_letterbox (launcher "Black bars in in-game cutscenes") at render
+    scale 2 the Bolivia intro ("Oruro Province", an in-engine 3D intro, not a Bink video) and other letterboxed
+    cutscenes showed only the two thin blue border lines, the scene running on behind them (Xbox and the Xenos
+    renderer: solid black bars, checked against a YouTube capture). The game composes the letterbox in its 2x MSAA
+    3D view surface (base 0x48, 1024x608 pixels): a black fill (1x1 texture 05E23000, opaque), the scene copied into
+    rows 60.8-547.2 with texcoords 0.1-0.9 (vs B4A1C67978D074E5, ps 6E57A6E305D5D69A), then four 2-pixel border
+    quads (1x1 texture 05E22000 times vertex colour). Plain upscale (0023) compared the copy's source (2048x1216 host)
+    with the draw's area in samples (2048x2432: MSAA targets are drawn supersampled), took it for a stretch and
+    blitted the whole view over the whole surface, wiping out the black fill. 0119 divides the area by the sample
+    grid first; the 608 -> 720 and 1024 -> 1280 stretches (1x targets) are unchanged. The default (bars off) was
+    never affected: letterbox.cpp keeps the view full height. Earlier notes blaming a depth-clear transfer and
+    "fine at scale 1" were wrong. Native 0118-plain-upscale-trace (diagnostic, kept): trace-now extras: every plain
+    upscale candidate, vertices/indices of screen quads and 2D batches, 1x1 texels, BOTS_TRACE_PROBE=x,y (a pixel
+    read back after every draw and at present) and trace-present.ppm (the shown image). **Trace trap:** switching to
+    the Command Prompt to type trace-now pauses videos and cutscenes (SKIP/RESUME screen over a dark world map), so
+    every such trace catches the pause screen; trigger it with a delay instead (timeout /t 8 /nobreak >nul & type nul
+    > "%USERPROFILE%\source\repos\007qol\out\build\win-amd64-relwithdebinfo\trace-now") and click back into
+    the game.
+  - **Shader refs from the full playthrough (28 Nov 18:00, in progress):** ff_shader_refs.py index on the PC's
+    manifest (~4,400 pipelines) with --keep and --cover -> pipelines/415607FF.refs for 0.2.4 (installer ships the
+    folder; existing installs rebuild only new shaders). Needs numpy on the PC.
+  - **0.2.3 released (user, 28 Nov ~15:10).** Queue for 0.2.4 below.
+  - **Mission 11 cutscene camera with the bars off (28 Nov 15:56, fixed, works, user; for 0.2.4, not committed):**
+    after the reception keypad the cutscene showed the wrong camera and Bond out of place: letterbox.cpp held
+    r_pipMainMode at 0, but that cutscene frames its shot through the main PIP window. Now the window stays and only
+    its crop goes: the script function animatePip (sub_82230440) sends "animatePip <time> <screen> <x> <y> <scalex>
+    <scaley> <cropx> <cropy>" through SV_GameSendServerCommand (sub_822C1F50, r3 client, r4 text); while
+    letterboxActive, a screen-1 command's scaley is rewritten to 1.000000 in place, and cg_pipmain_border (float,
+    ptr 0x8276A078) is held at 0. Log "letterbox: cutscene view kept full height". Workaround in 0.2.3: launcher
+    "Black bars in in-game cutscenes" on.
   - **Pistol LOD switching at wide FOV (28 Nov 15:05, fixed, works at 90, user):** the P99 view model switched
     between its detailed and simpler model frame to frame at --fov 90 (not at 65): the game scales LOD distances by
     the field of view and the gun sits at its first threshold. src/lod.cpp now multiplies r_lodScale by
@@ -700,7 +743,11 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   - **Release 0.2.3 prepared (28 Nov 14:10, user):** QOS_RELEASE, launcher VERSION and GAME_VERSION 0.2.3 (installs
     rebuild), SDK bundle qos13 (native renderer to 0117, SDK own33), notes docs/releases/0.2.3.md. The user builds
     (build_native, game, installer) and publishes with gh.
-  - **Playthrough:** missions 1-10 played; the rest still to check (user keeps playing, 28 Nov).
+  - **Playthrough complete (user, 28 Nov 16:47):** all 15 missions finished (11-15 on 0.2.3 at 60 FPS, FOV 90, with
+    cutscene bars on after the mission 11 camera bug). Issues found on the way: train gaps (fixed 0.2.3), pistol LOD
+    at wide FOV (fixed 0.2.3), mission 11 cutscene camera with bars off (fixed, for 0.2.4). qos_246 (missions 12-15):
+    60 FPS held, ~200 ms hitch every time the phone opens with the blood_barrel video (9 in 40 min; phone opens
+    without that video don't hitch): now the top performance item.
   - **Quick kills at high FPS (28 Nov 09:10):** the press windows are in ms (qk_diff_tweak_easy +500, norm +300,
     hard -100, xprt -150; picked by difficulty in sub_823866D0 around 0x82387030), so frame rate shouldn't matter.
     Not traced: ButtonMash, StickSwirl/StickSlap/StickToggle, lock picking (MechLock pins). Watch for these.
@@ -789,7 +836,7 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   --cutscene_letterbox (default false); launcher Display "Black bars in in-game cutscenes" (default off). The 1440p
   level-1 trace (level1-trace2.txt) showed the bars as four 1x1-texture quads (vs 73FF89529D64FE5C) drawn into the
   1024x608 view before the 608 -> 720 stretch. Videos (Bolivia intro, level intro) keep their own bars; their
-  see-through bars at 1440p (plain upscale) stay a known issue.
+  see-through bars at 1440p (plain upscale) were fixed on 28 Nov by native 0119.
 5. (last: describes everything above) **User instructions:** how to play multiplayer (launcher gamertag, firewall prompt, System Link on a LAN, two PCs,
    VPN with netplay_peers / port forwarding UDP 11000+ (16 per slot)), installing DLC.
 6. (after everything above; adds to it, replaces nothing) **Xbox LIVE via Xenia Web Services:** make the SDK's
