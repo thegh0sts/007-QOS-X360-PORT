@@ -654,8 +654,20 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     changes pipeline layouts, so the driver rebuilds every pipeline once (warm-up ~6 s instead of ~1 s). Tested
     (qos_227-231): no visual problems; per-frame gain not measured A/B yet. Pipeline libraries: deprioritised
     (qos_223: 2 pipelines built during play, 16 draws skipped in 142,000 frames; the RTX 4080 SUPER supports fast
-    linking). Extended dynamic state: next (native 0117), not started.
-  - **Mission 9 (train) 10 FPS stretches fixed (28 Nov 11:20, native 0116-hot-page-draw-limit):** qos_226 had ~70,000
+    linking). **Pipeline libraries skipped (user, 28 Nov 12:08):** almost nothing to fix (warm-up covers it) and
+    costs (unoptimised fast-linked pipelines until the optimised one replaces them, every pipeline built twice,
+    more memory, uneven AMD/Intel driver support, invasive change). Revisit only if players report first-visit
+    pop-in or hitches, or a cold-cache run (cache\native deleted, a level not played since) shows many "pipeline
+    took N ms" lines or skipped draws. SDK 0032 still enables the extensions (harmless).
+    **Extended dynamic state (native 0117-extended-dynamic-state, 28 Nov 12:00, on the PC, not built or tested):**
+    cull mode, front face, depth test/write/compare, stencil test/ops (VK_EXT_extended_dynamic_state) and primitive
+    restart (VK_EXT_extended_dynamic_state2) set per draw; GetPipeline drops them from the key (StripDynamic), so
+    draws differing only in them share a pipeline; changed states only (DrawPacket::dyn_mask bits 10-18), all after
+    a rebind. BOTS_GFX_DYNAMIC_STATE=0 off; log "extended dynamic state on (with primitive restart)". Switching it
+    rebuilds pipelines once; the manifest then records stripped keys (with it off later, those warm up unused
+    pipelines: harmless). Test: build_native + game build, mission 10 busy spots, A/B with =0; watch for missing or
+    inside-out faces, see-through objects, broken stencil effects.
+  - **Mission 10 (train) 10 FPS stretches fixed (28 Nov 11:20, native 0116-hot-page-draw-limit):** qos_226 had ~70,000
     hot-page hashes and ~16 ms of tracker a frame, 121 of 600 frames over 50 ms (the game held at ~10 FPS for seconds):
     many draws read the same big block of hot pages. A hot page read by more than BOTS_GFX_HOT_MAX_DRAWS draws in a
     frame (default 16, 0 = no limit) goes back to protection and isn't made hot again for 600 frames. qos_228 (train +
@@ -664,12 +676,22 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   - **Train cutscene lamp flicker: intended (28 Nov 11:50).** The light pool and bottle shadow on Vesper's table
     flash on and off: lightning from the storm outside. Same on Xenos, at 30 FPS, in 6-year-old console footage and on
     the PC version. Not a bug. (Ruled out on the way: push descriptors, hot pages, occlusion queries - 0 in that run.)
-  - **To do: mission 9 performance (user, 28 Nov 11:52):** still feels slow in places after 0116. From qos_228: busy
+  - **To do: mission 10 (train) performance (user, 28 Nov 11:52):** still feels slow in places after 0116. From qos_228: busy
     train/casino stretches at ~15,000-17,000 draws are renderer-bound at 18-20 ms frames (low 50s FPS at a 60 cap);
     one ~200 ms frame each time the phone opens (log: "phone true", video blood_barrel; likely the game's own phone
     video start). Next: a profiled run at the slow spots (BOTS_DRAW_PROFILE=1, note where), then the per-draw costs
     there (constants ~2.5-3.3 ms, descriptors ~1.6-1.9, record ~1.2-1.4 at 16k draws) or extended dynamic state.
-  - **Playthrough:** missions 1-9 played; the rest still to check (user keeps playing, 28 Nov).
+  - **Train car gaps at 60 FPS fixed (28 Nov 14:04, src/traversal_fix.cpp, works, user):** mission 10's jumps
+    between cars (wall move along the car's side, traversal type 5, then a mantle, type 3) dropped Bond onto the
+    tracks above 30 FPS: the mantle ended at the same point every time just before the gap (qos_237, 60 FPS) where at
+    30 it carried on across (qos_238). sub_82157A28 is Pmove (r3 pmove: +0 ps, +4 cmd serverTime; steps of up to 66
+    ms through PmoveSingle sub_82156E88; also run by client prediction). --traversal_fix (on): during wall/mantle
+    moves (ps pm_flags +12 & 8, type +2260 3 or 5) a call with under 33 ms to run moves nothing (serverTime set to
+    commandTime for the call), so those moves run in 33 ms steps as at 30 FPS. --traversal_log (off) logs pm_flags /
+    traversal / falling changes with origin (+32) and velocity (+44). Type names at 0x825E65D0 (none, balance,
+    climb, mantle, transition, wall); sub-types (beam, ladder, ledge, pipe...) at 0x825E65EC. Not committed yet;
+    the old src/traversal_log.cpp on the PC is unused (delete). Real cause inside the mantle code not found.
+  - **Playthrough:** missions 1-10 played; the rest still to check (user keeps playing, 28 Nov).
   - **Quick kills at high FPS (28 Nov 09:10):** the press windows are in ms (qk_diff_tweak_easy +500, norm +300,
     hard -100, xprt -150; picked by difficulty in sub_823866D0 around 0x82387030), so frame rate shouldn't matter.
     Not traced: ButtonMash, StickSwirl/StickSlap/StickToggle, lock picking (MechLock pins). Watch for these.

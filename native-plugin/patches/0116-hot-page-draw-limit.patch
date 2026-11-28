@@ -1,4 +1,4 @@
-# Hot page draw limit (28 Nov, mission 9's train, qos_226): hot vertex pages (0112) are checked by hash for every draw
+# Hot page draw limit (28 Nov, mission 10's train, qos_226): hot vertex pages (0112) are checked by hash for every draw
 # that reads them. Where many draws read the same hot pages (big shared vertex ranges), that was ~70,000 hashes
 # and ~16 ms of tracker time a frame, with 121 of 600 frames over 50 ms (the game ran at ~10 FPS for seconds at a
 # time). Now a hot page read by more than BOTS_GFX_HOT_MAX_DRAWS draws in one frame (default 16, 0 = no limit;
@@ -95,7 +95,7 @@ index 4c77df0..378c2a6 100644
    std::vector<uint32_t> hot_checked_draw_;   // qos (patch 0114): per page: draw serial it was last checked in
 +  // qos (patch 0116): a hot page read by more than hot_max_draws_ draws in one frame goes back to protection (one
 +  // write fault when the game writes it instead of a hash per draw) and isn't made hot again for kHotBanFrames.
-+  // Mission 9's train (28 Nov, qos_226): ~70,000 hashes a frame, 100 ms frames. BOTS_GFX_HOT_MAX_DRAWS (default 16,
++  // Mission 10's train (28 Nov, qos_226): ~70,000 hashes a frame, 100 ms frames. BOTS_GFX_HOT_MAX_DRAWS (default 16,
 +  // 0 = no limit).
 +  static constexpr uint32_t kHotBanFrames = 600;
 +  uint32_t hot_max_draws_ = 16;
