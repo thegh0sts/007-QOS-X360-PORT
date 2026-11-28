@@ -1,0 +1,29 @@
+# Plain upscale in pixels (28 Nov): the plain upscale (0023) compared its source with the draw's area in samples. A
+# multisampled target is drawn supersampled (one host pixel per guest sample), so the letterbox's same-size copy of
+# the 3D view into its 2x MSAA surface (1024x608 pixels, 1024x1216 samples) looked twice as tall as its source: the
+# whole view was blitted over the whole surface, wiping out the black bars the game draws around the copy (in-game
+# cutscenes and the Bolivia intro with --cutscene_letterbox, render scale above 1). The area is now divided by the
+# sample grid first; the 608 -> 720 and 1024 -> 1280 stretches (1x targets) are unchanged.
+  src/gfx/vk/draw.cpp | 9 +++++++--
+  1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 1231844..56ce4b6 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -2566,8 +2566,13 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     if (y1 > y0 && y1 - y0 > source->height && y1 - y0 - source->height <= source->height / 32) y1 = y0 + source->height;
+     // Larger: at least the source's size both ways and more one way (the 3D view's 608 -> 720 rows pass reads whole
+     // guest texels too, so it is replaced as well; the 1024 -> 1280 front buffer pass is the other).
+-    const bool wider = x1 > x0 && y1 > y0 && x1 - x0 >= source->width && y1 - y0 >= source->height &&
+-                       (x1 - x0 > source->width || y1 - y0 > source->height) && source->width >= Host(640u) &&
++    // qos (0119): compared in pixels, not samples: a multisampled target is drawn supersampled (one host pixel per
++    // guest sample), so the letterbox's same-size copy of the 3D view into its 2x MSAA surface (1024x608 pixels,
++    // 1024x1216 samples) looked twice as tall as its source, and the blit of the whole view over the whole surface
++    // wiped out the black bars the game had drawn around the copy (in-game cutscenes with --cutscene_letterbox).
++    const uint32_t px_w = x1 > x0 ? (x1 - x0) / samples_x : 0, px_h = y1 > y0 ? (y1 - y0) / samples_y : 0;
++    const bool wider = px_w && px_h && px_w >= source->width && px_h >= source->height &&
++                       (px_w > source->width || px_h > source->height) && source->width >= Host(640u) &&
+                        source->aspect == VK_IMAGE_ASPECT_COLOR_BIT;
+     if (wider) {
+       const bool one_image = std::ranges::all_of(draw_reads_, [&](const Image* read) { return read == source; });
