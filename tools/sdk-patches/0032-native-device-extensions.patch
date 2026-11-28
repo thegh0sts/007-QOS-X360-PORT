@@ -1,0 +1,107 @@
+# Native renderer device extensions (28 Nov): VK_KHR_push_descriptor, VK_EXT_extended_dynamic_state 1/2/3,
+# VK_KHR_pipeline_library and VK_EXT_graphics_pipeline_library are enabled when the driver offers them (with
+# gpu emulation), every supported feature of each turned on, and flagged in VulkanDevice::Extensions. Nothing uses
+# them until the native renderer does (patches 0115 push descriptors, 0116 extended dynamic state, 0117 pipeline
+# libraries); Xenos is unchanged.
+  include/rex/ui/vulkan/device.h  |  7 ++++++
+  src/ui/vulkan/vulkan_device.cpp | 48 +++++++++++++++++++++++++++++++++++++++++
+  2 files changed, 55 insertions(+)
+
+diff --git a/include/rex/ui/vulkan/device.h b/include/rex/ui/vulkan/device.h
+index afcc477..7da7c7c 100644
+--- a/include/rex/ui/vulkan/device.h
++++ b/include/rex/ui/vulkan/device.h
+@@ -200,6 +200,13 @@ class VulkanDevice {
+     bool ext_1_3_KHR_maintenance4 = false;  // #414
+     // Has optional features not implied by this being true.
+     bool ext_1_3_KHR_dynamic_rendering = false;  // #55
++    // qos (own patch 0032): for the native renderer, when offered (each one's features all enabled).
++    bool ext_KHR_push_descriptor = false;          // #81
++    bool ext_EXT_extended_dynamic_state = false;   // #268
++    bool ext_EXT_extended_dynamic_state2 = false;  // #378
++    bool ext_EXT_extended_dynamic_state3 = false;  // #456
++    bool ext_KHR_pipeline_library = false;         // #291
++    bool ext_EXT_graphics_pipeline_library = false;  // #321
+   };
+ 
+   const Extensions& extensions() const { return extensions_; }
+diff --git a/src/ui/vulkan/vulkan_device.cpp b/src/ui/vulkan/vulkan_device.cpp
+index 353252b..af23e8f 100644
+--- a/src/ui/vulkan/vulkan_device.cpp
++++ b/src/ui/vulkan/vulkan_device.cpp
+@@ -240,6 +240,14 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+       XE_UI_VULKAN_STRUCT_EXTENSION(EXT_custom_border_color)
+       // Required for true null descriptors in bindless texture bindings.
+       XE_UI_VULKAN_STRUCT_EXTENSION(EXT_robustness2)
++      // qos (own 0032): for the native renderer: textures pushed per draw, render state set per draw instead of
++      // baked into pipelines, pipelines linked from parts. Nothing changes until a renderer uses them.
++      XE_UI_VULKAN_STRUCT_EXTENSION(KHR_push_descriptor)
++      XE_UI_VULKAN_STRUCT_EXTENSION(EXT_extended_dynamic_state)
++      XE_UI_VULKAN_STRUCT_EXTENSION(EXT_extended_dynamic_state2)
++      XE_UI_VULKAN_STRUCT_EXTENSION(EXT_extended_dynamic_state3)
++      XE_UI_VULKAN_STRUCT_EXTENSION(KHR_pipeline_library)
++      XE_UI_VULKAN_STRUCT_EXTENSION(EXT_graphics_pipeline_library)
+     }
+     if (properties.apiVersion >= VK_MAKE_API_VERSION(0, 1, 1, 0)) {
+       // #237.
+@@ -339,6 +347,19 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+   VulkanFeatures<VkPhysicalDeviceRobustness2FeaturesEXT,
+                  VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT>
+       features_EXT_robustness2;
++  // qos (own 0032).
++  VulkanFeatures<VkPhysicalDeviceExtendedDynamicStateFeaturesEXT,
++                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT>
++      features_EXT_extended_dynamic_state;
++  VulkanFeatures<VkPhysicalDeviceExtendedDynamicState2FeaturesEXT,
++                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT>
++      features_EXT_extended_dynamic_state2;
++  VulkanFeatures<VkPhysicalDeviceExtendedDynamicState3FeaturesEXT,
++                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT>
++      features_EXT_extended_dynamic_state3;
++  VulkanFeatures<VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT,
++                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT>
++      features_EXT_graphics_pipeline_library;
+ 
+   if (get_physical_device_properties2_supported) {
+     if (properties.apiVersion >= VK_MAKE_API_VERSION(0, 1, 2, 0)) {
+@@ -380,6 +401,18 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+     if (device->extensions_.ext_EXT_robustness2) {
+       features_EXT_robustness2.Link(supported_features_2, device_create_info);
+     }
++    if (device->extensions_.ext_EXT_extended_dynamic_state) {
++      features_EXT_extended_dynamic_state.Link(supported_features_2, device_create_info);
++    }
++    if (device->extensions_.ext_EXT_extended_dynamic_state2) {
++      features_EXT_extended_dynamic_state2.Link(supported_features_2, device_create_info);
++    }
++    if (device->extensions_.ext_EXT_extended_dynamic_state3) {
++      features_EXT_extended_dynamic_state3.Link(supported_features_2, device_create_info);
++    }
++    if (device->extensions_.ext_EXT_graphics_pipeline_library) {
++      features_EXT_graphics_pipeline_library.Link(supported_features_2, device_create_info);
++    }
+     ifn.vkGetPhysicalDeviceProperties2(physical_device, &properties_2);
+     ifn.vkGetPhysicalDeviceFeatures2(physical_device, &supported_features_2);
+   }
+@@ -735,6 +768,21 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+     }
+   }
+ 
++  // qos (own 0032): every supported feature of these extensions enabled (the renderer asks the driver which).
++  {
++    const auto enable_all = [](auto& features) {
++      void* const next = features.enabled.pNext;
++      features.enabled = features.supported;
++      features.enabled.pNext = next;
++    };
++    if (device->extensions_.ext_EXT_extended_dynamic_state) enable_all(features_EXT_extended_dynamic_state);
++    if (device->extensions_.ext_EXT_extended_dynamic_state2) enable_all(features_EXT_extended_dynamic_state2);
++    if (device->extensions_.ext_EXT_extended_dynamic_state3) enable_all(features_EXT_extended_dynamic_state3);
++    if (device->extensions_.ext_EXT_graphics_pipeline_library) {
++      enable_all(features_EXT_graphics_pipeline_library);
++    }
++  }
++
+ #undef XE_UI_VULKAN_LIMIT
+ #undef XE_UI_VULKAN_ENUM_LIMIT
+ #undef XE_UI_VULKAN_FEATURE
