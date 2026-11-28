@@ -14,7 +14,7 @@ Expect bugs; see [HANDOFF.md](HANDOFF.md) for the detailed state of the work.
 
 - **Native renderer** with render scales up to 3× (2560×1440 or 3840×2160 from the game's 1280×720), FXAA,
   forced anisotropic filtering, and AMD FidelityFX **FSR 1** or **CAS** for the final scale to the screen.
-- **Up to 60 FPS** (the game is 30 FPS), with a second render thread for busy scenes.
+- **Made for 60 FPS** (the game is 30 FPS): see [Playing at 60 FPS](#playing-at-60-fps) below.
 - **Field of view** from 65 (the original) to 110.
 - **PlayStation button prompts** when a DualShock or DualSense is connected: menus, HUD, tutorials and takedowns.
 - **Shaders built at first start** from the game's own files (a few seconds), so levels don't pop in on their first
@@ -38,8 +38,21 @@ game.
 
 **Multiplayer (System Link) and the map pack:** see [docs/multiplayer.md](docs/multiplayer.md).
 
-Some scripted moments may misbehave above 30 FPS (as noted for Xenia Canary's 60 FPS patch); set the frame rate back
-to 30 in the launcher if a mission gets stuck.
+### Playing at 60 FPS
+
+The aim of this port is a 60 FPS game, not just the 30 FPS original running on a PC. The game was built and tuned for
+30 FPS, and some of its code assumes it: running it faster can break things that have nothing to do with graphics.
+We fix those as they're found, so they play at 60 the way they played at 30. Examples so far:
+
+- **Balance beams:** the wobble grew far faster at 60 FPS (uncontrollable with a controller); it now builds up as at 30.
+- **Train car jumps (mission 10):** at 60 FPS the mantle onto the next car never triggered, so Bond fell every time
+  and the mission couldn't be finished (a softlock); wall runs and mantles now move as at 30.
+- **Weapon detail at wide fields of view** and cutscene camera fixes found on the way.
+
+The whole single-player campaign has been played through at 60 FPS. 90 and 120 FPS are in the launcher too, but
+they're experimental: less tested, and busy scenes can drop below them. If something behaves differently from the
+original at 60 FPS (a jump you can't make, a timing that feels off, a stuck script), please report it with where it
+happened; meanwhile, setting the frame rate back to 30 in the launcher plays it as the original did.
 
 ## For developers
 
