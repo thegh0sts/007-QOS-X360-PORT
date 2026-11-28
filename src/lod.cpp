@@ -9,6 +9,11 @@
 // Dvar pointers from the registration in the decrypted executables: single player 0x84055C78, multiplayer 0x8518BF18.
 // r_lodBias (the takedown camera changes it) is left alone.
 //
+// The field of view also widens that distance: at a wider --fov every model reaches its simpler versions sooner,
+// and the first-person weapons, which sit right at their first threshold, can switch back and forth while they bob
+// (the P99 at FOV 90, 28 Nov). So r_lodScale is also multiplied by tan(65/2) / tan(fov/2): every model keeps the
+// level of detail it has at the original 65 (0.64 at 90). This applies at --lod_scale 1 too.
+//
 // Written at the start of every frame (Com_Frame, hooked in src/fps_unlock.cpp and mp/src/frame_rate_fov.cpp), also
 // at 1, so a value saved by an earlier run with another setting doesn't stay. Shared by both programs.
 
@@ -16,6 +21,7 @@
 #include "generated/default/qos_pch.h"
 #endif
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -24,6 +30,8 @@
 
 REXCVAR_DEFINE_DOUBLE(lod_scale, 1.0, "Game",
                       "Detail distance: 1 the game's, 0.5 detailed models twice as far, 0 always detailed");
+
+REXCVAR_DECLARE(double, fov);  // fov.cpp / mp/src/frame_rate_fov.cpp
 
 namespace qos::lod {
 
@@ -38,7 +46,14 @@ void OnFrame(uint8_t* base, uint32_t dvar_pointer) {
   const uint32_t dvar = LoadBE32(base + dvar_pointer);
   if (!dvar) return;
   double setting = REXCVAR_GET(lod_scale);
-  const float scale = float(setting < 0.0 ? 0.0 : setting > 1.0 ? 1.0 : setting);
+  setting = setting < 0.0 ? 0.0 : setting > 1.0 ? 1.0 : setting;
+  // As at the original field of view (see the top).
+  constexpr double kPi = 3.14159265358979323846, kOriginalFov = 65.0;
+  const double fov = REXCVAR_GET(fov);
+  if (fov > kOriginalFov && fov < 170.0) {
+    setting *= std::tan(kOriginalFov * kPi / 360.0) / std::tan(fov * kPi / 360.0);
+  }
+  const float scale = float(setting);
   uint32_t bits;
   std::memcpy(&bits, &scale, 4);
   uint8_t* value = base + dvar + 12;
