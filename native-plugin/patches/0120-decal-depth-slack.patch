@@ -1,0 +1,41 @@
+# Decal depth slack (28 Nov): 007 draws stickers and glass cracks exactly on the wall's plane (depth test GEQUAL, no
+# depth write, no polygon offset), relying on the guest's 24-bit float depth (D24FS8, 20-bit mantissa), where the
+# wall and the decal round to the same value. The host keeps 32-bit float depth: their slightly different
+# interpolated depths failed the test on about half the pixels, so the decals flickered as the camera moved (the
+# Xenos renderer too; BOTS_GFX_DEPTH_BIAS_SCALE could not help: the guest bias is 0). Such draws (D24FS8, depth test
+# on, depth write off, GEQUAL/GREATER or LEQUAL/LESS, no guest bias) get a constant bias of 8 float32 steps (one
+# float24 step) towards passing. BOTS_GFX_DECAL_DEPTH_SLACK=n sets the steps (0 off).
+  src/gfx/vk/draw.cpp | 20 ++++++++++++++++++++
+  1 file changed, 20 insertions(+)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 56ce4b6..2cc8371 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -2302,6 +2302,26 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+     return v && *v ? float(std::atof(v)) : 1.0f;
+   }();
+   bias_constant *= bias_scale;
++  // qos (0120): decals with no bias of their own. 007 draws its stickers and glass cracks exactly on the wall's
++  // plane, depth test GEQUAL (or LEQUAL), no depth write, no polygon offset: they rely on the guest's 24-bit float
++  // depth (D24FS8, 20-bit mantissa), where the wall and the decal round to the same value. The host keeps 32-bit
++  // float depth, where their slightly different interpolated depths fail the test on about half the pixels (flicker
++  // as the camera moves; the same on the Xenos renderer). Such draws get a constant bias of a float24 step (8 float32
++  // steps, Vulkan's units for a float depth format) towards passing. BOTS_GFX_DECAL_DEPTH_SLACK=n: n steps (0 off).
++  static const float decal_slack = [] {
++    const char* v = std::getenv("BOTS_GFX_DECAL_DEPTH_SLACK");
++    return v && *v ? float(std::atof(v)) : 8.0f;
++  }();
++  if (decal_slack != 0.0f && bias_constant == 0.0f && bias_slope == 0.0f &&
++      depth_info.depth_format == xe::DepthRenderTargetFormat::kD24FS8 && depth_control.z_enable &&
++      !depth_control.z_write_enable) {
++    const xe::CompareFunction f = depth_control.zfunc;
++    if (f == xe::CompareFunction::kGreaterEqual || f == xe::CompareFunction::kGreater) {
++      bias_constant = decal_slack;
++    } else if (f == xe::CompareFunction::kLessEqual || f == xe::CompareFunction::kLess) {
++      bias_constant = -decal_slack;
++    }
++  }
+   // eatlead: the slope-scaled part is per pixel of depth change: at a render scale the depth changes 1/scale as much
+   // from one host pixel to the next as from one guest pixel to the next, so the same factor gave decals 1/scale of
+   // their guest bias on sloped surfaces (bullet holes on posters flickering at 4K, less at 1x). Scaled back up.
