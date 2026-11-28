@@ -261,7 +261,16 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
    header isn't title 415607FF + type 00000002, and installs each one without an installed header with the SDK's
    `ContentManager::InstallContent` (extracts to Documents\qosmp\content\0000000000000000\415607FF\00000002\<file>\
    and writes Headers\00000002\<file>.header, which XamContentCreateEnumerator lists). Log lines start "dlc:".
-   Not done: removing a pack (delete its folder + header by hand); checking the maps appear (party_mappacks,
+   **Remove / Add back (29 Nov 00:05, written to the PC, not built or run):** launcher Multiplayer tab lists each pack
+   found in the DLC folder on its own row with a Remove / Add back button; the removed packs' file names are saved
+   as dlc_removed and passed as --dlc_removed=a,b (both programs, like the DLC folder). mp/src/dlc_folder.cpp at
+   start-up deletes an installed copy of each (ReadContentHeaderFile, then the SDK's DeleteContent: extracted folder
+   + .header) and never installs them from the folder; log "dlc: <file> removed (the launcher's Remove)" / "removed
+   by the player, not installed". The player's file in the DLC folder is kept. Add back = off the list, reinstalled
+   at the next start. Test: Remove the Camille pack, start multiplayer (log line, its maps gone from the list), Add
+   back, start again (installed again, maps back). Packs installed but no longer in the folder still need deleting
+   by hand.
+   Was not done: removing a pack (delete its folder + header by hand); checking the maps appear (party_mappacks,
    map list) and a System Link match on one.
    **Test (25 Nov 18:56):** installed and mounted ("Mounting Camille Map Pack as drive 'mappack1'"), maps listed, but
    names showed as CONTENT_MP_BAGS and no picture ("Could not load material mapimg_mp_bags"). The pack holds mp_*.ff,
@@ -709,6 +718,109 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     over three JQ Worker threads, so not the rooftop limit; native skinning dropped. qos_252 rooftop at 60: game
     ~6-7 ms a frame (renderer waits 9-10 ms), vs 12-20 ms on 27 Nov (qos_223); not shader builds. Original report was
     uncapped: a --frame_rate=0 check would settle it.
+  - **Ultrawide plan (user, 28 Nov 22:43; parked 23:49, 21:9 only, 32:9 not wanted):** Skullburglar's widescreen.h
+    (Bourne) has the renderer side: --aspect_ratio, the back buffer keeps 1280 wide and gets shorter (1280x548 for
+    21:9), Hor+ (vertical FOV kept), UI stretched, native renderer only. For 007: (1) find how the engine builds the
+    projection from cg_fov and the screen size (CoD4 engine: Hor+ like CoD4 PC, or Vert- from width/height; the zoom
+    blend sub_82198A30 isn't it) and hook it to keep the vertical FOV if needed; (2) back buffer height and HUD
+    placement hooks; (3) in-engine cutscenes render Hor+ at 21:9 (2.37:1, already wider than the bars' 80% crop of
+    16:9 = 2.2:1); **decision: with an ultrawide aspect selected, the cutscene black bars are switched off
+    automatically** (launcher forces --cutscene_letterbox=false and greys the option; the game ignores it at 21:9
+    too), since bars at 21:9 would leave a ~3:1 strip; (4) pre-rendered Bink videos stay 16:9, pillarboxed (a
+    zoom-to-fill option possible later); (5) watch every cutscene at 21:9 for off-camera actors or unfinished set
+    edges; per-scene 16:9 fallback (narrow the camera, side bars) if any look wrong.
+    **Launcher design (user, 28 Nov 22:47):** Display tab "Screen ratio": a toggle button group 16:9 (default) /
+    21:9. It switches both resolution lists: 16:9 shows the 16:9 output resolutions (720p, 1080p, 1440p, 4K) and
+    render resolutions (1280x720, 2560x1440, 3840x2160) and the "Black bars in in-game cutscenes" option; 21:9 shows
+    only ultrawide sizes: output 2560x1080 (2.37:1), 3440x1440 (2.39:1), 3840x1600 (2.4:1) (user, 22:50); the game's
+    back buffer stays 1280 wide and its height follows the chosen output's shape (about 540, 536, 533 rows; the exact
+    height may need rounding for EDRAM tiles), render resolutions = 1x/2x/3x that; and it hides the bars option, with
+    the bars off (--cutscene_letterbox=false forced).
+    **Sizes worked out (28 Nov 22:55):** 2560x1080 -> game frame 1280x540 (2x = 2560x1080, one rendered pixel per
+    screen pixel; 3x = 3840x1620). Resolves align to 8 rows (native Resolve: x0 &= ~7 ...) and EDRAM tiles are 16
+    rows, so 540 may have to become 544 (2x = 2560x1088: crop 4 rows top and bottom rather than scale). 3440x1440 ->
+    1280x536 (a multiple of 8); 3840x1600 -> 1280x533, rounded to 536.
+    **First build (28 Nov 23:00, src/widescreen.cpp, on the PC, not committed; --screen_ratio=2560x1080,
+    --screen_ratio_height=N test override):** hooks sub_8256F478 (display setup struct: +8/+12 scene 1024x608, +16/+20
+    back buffer 1280x720, +0 widescreen byte) -> back buffer 1280x540, scene 1024x456; sub_8256F110 (copies it to
+    vidConfig 0x841ED128: +0/+4 scene, +8/+12 display, +32 aspectRatioWindow = 16/9 constant 0x820AA68C or 4/3,
+    +36 scene pixel aspect, +40 display pixel aspect) -> +32 = 1280/540, +36/+40 recomputed. letterbox.cpp: bars
+    forced off while wide (BarsOn()). **Works (user screenshots 23:05):** gameplay fills 2.37:1, Hor+ (more at the
+    sides, proportions right); Scaleform menus (pause) stay 16:9 centred; native renderer presents the wide frame at
+    its own shape. **Left: HUD stretched** (stance figure, ammo, "Cover" prompt; sometimes too wide at the far left,
+    sometimes tall and thin further in). HUD layout = CoD4 ScreenPlacement, set up by sub_821C1318 (r3 scrPlace,
+    f1-f4 x y w h; +0 scaleVirtualToReal[0] = (h*4/3 / cls.vidConfig.aspectRatioDisplayPixel)/640, +4 = h/480,
+    +8 scaleVirtualToFull[0] = w/640, +12 = h/480, +16/+20 real-to-virtual, +44/+48 w/h, +68 (w - 4:3 width)/2);
+    wrappers sub_821C1418 / sub_821C1488 (safe area), called from sub_821BCB18 for the three placements at
+    0x828A1708, 0x828A1758, 0x828A17A8; cls at 0x82819878 (+324 vidConfig copy via sub_8256FF70). Next: 16:9
+    reference screenshots of the same HUD states, then find the rectangle placement (ScrPlace_ApplyRect: maybe
+    inlined) and map everything but full-width overlays into a centred 16:9 area with 16:9's scales.
+    **User (23:08):** HUD in a centred 16:9 area (confirmed); **opening splash videos are stretched** at 21:9 (Bink
+    logos: drawn full width): pre-rendered videos must be pillarboxed (16:9 in the middle, black sides). So in the HUD
+    rule, video quads are the exception to "full-width overlays stretch": find the cinematic draw (CoD4-style
+    R_Cinematic / the video's full-screen quad) and give it the centred 16:9 rectangle.
+    Switching back to 16:9 shows the bars option again with the player's saved choice.
+    **Parked (user, 28 Nov 23:49), state on the PC (src/widescreen.cpp, letterbox.cpp, CMakeLists; not committed):**
+    - **Splash/pre-rendered videos pillarboxed: works (user 23:33).** sub_82566A48 draws the full-screen video
+      (CoD4-style: top/bottom bars when vidConfig +32 < 16/9 with the white material rg+6544 = 0x841ECF78 and black
+      0x82049A90, then one stretch pic of the movie, material rg+6680); hooked: while it runs, sub_82570C08
+      (R_AddCmdDrawStretchPic: f1-f8 x y w h s0 t0 s1 t1, color pointer at caller r1+84, material r1+92) draws the
+      movie h*16/9 wide in the middle plus two black side bars.
+    - **CoD ScreenPlacement boxed (no visible change on the Scaleform HUD):** sub_821C1318 hooked for the three
+      placements: set up with x = 160, w = 960, then +68 += 160 and +44 = 1280; sub_821C1710 (ApplyRect: r4-r7 ->
+      x y w h, r8 horz, r9 vert; aligns 0 4:3-centred +68, 1 left +52, 2 centre +44/2, 3 right +60, 4 full w/640,
+      5 none, 6 to640, 7 safe centre) and sub_821C1570 (ApplyX, r5 align) move align 4 into the box unless the rect
+      spans the whole 640. Only engine-drawn bits use it (compass, crosshair, prompts).
+    - **Most UI is Scaleform (GFx 2.x):** HUD 'cm_ig_hud', objective banner 'sp_ig_obtext_ws', pause/phone
+      probably 'cm_ig', front end 'cmfrontend'. Movies table *0x83A28550 (count at +0, entries 0x284 from +4: +0
+      short name, +520/+524 stage size, +552 GFxMovieView, +556 def). Each movie is drawn by sub_82589B08 (render
+      command via 0x82589CA0 / table 0x820DAEB8; r3 entry, r4-r7 left top width height; builds a GViewport at
+      r1+80 with buffer size from 0x841ED170 +4/+8, Scale/AspectRatio 1.0; vtable +80 SetViewport, +124
+      SetBackgroundAlpha, +116 Display). Hooked to narrow full-width viewports to 160,0 960x540 and log each movie
+      name once: **the hook runs (log) but nothing on screen moved** (ammo block, hint box, banner identical; ammo
+      stays at the box's left edge with no margin vs 16:9 x 100/1280; loading bar at x 0). The loading screen
+      isn't drawn through sub_82589B08 (no movie logged; picture already 16:9-centred, "LOADING..." bar at the far
+      left, SKIP/RESUME inside). **Next:** a native trace of a HUD frame (trace-now, stderr to a file) to see the
+      Scaleform draws' viewport and transforms: whether GFx/renderer ignores Viewport.Left/Width or the movies
+      place things from somewhere else; then black sides for full-screen menus (pause, lockpick show the 3D world
+      at the sides; at 16:9 they cover the screen), maybe via SetBackgroundAlpha with a full viewport.
+  - **HUD and compass switches: PARKED (user, 29 Nov 00:37).** Taken out of CMakeLists and the launcher; src/hud.cpp
+    (second version, never run) left on the PC untracked: don't commit it (delete, or keep for later). Was
+    (29 Nov 00:35, src/hud.cpp + launcher):
+    user: keep button prompts and tutorial hints; compass its own switch (on by default); objective banner kept.
+    First version skipped displaying the Scaleform movie 'cm_ig_hud': the HUD still showed (that movie is a 631-byte
+    shell) and the render thread crashed right after (qos_294, crash-23900: sub_8257D100 reading guest 0x6 under
+    sub_82589110/sub_8257AFF8): don't skip Scaleform displays. Second version: everything is the engine's owner-draws.
+    CG_OwnerDraw sub_821887F8, jump table 0x8218889C (case = ID - 5), CoD4 IDs: 5 ammo count sub_821876C0, 6 ammo
+    backdrop sub_82187558, 20 stance sub_82187EC8, 71 hold-breath hint sub_821867B0, 72 cursor hint sub_82184F78, 77
+    cover hints sub_82186210, 81/82 weapon name sub_82187908/sub_82187A88, 97 dead quote sub_82186B90, 115 no-ammo
+    messages sub_82186EC8, 116/117 sub_82183AA8/sub_821839C8 (weapon icon / clip bar?), 149-177 compass, 178/179
+    phone, 193 balance. --hud=false: 5, 6, 20, 81, 82, 116, 117 return early. --compass=false: the ten compass
+    functions that call sub_8216BE00 (C120, C5F0, C8C0, CB70, CDF0, D060, D368, D568, D7A8, E318). In the first
+    run the log showed "compass hidden" (whether it disappeared: ask). cg_drawHUD (0x82769FEC) not used: CG_OwnerDraw
+    returns at once when it's 0 (prompts too). Launcher Display: "HUD" and "Compass" switches (translated).
+  - **Aim assist in the launcher (29 Nov 00:25, src/aim_assist.cpp + launcher, written to the PC, not built or
+    run):** the game's Options menu has Target Follow (aim_lockon_enabled, ptr 0x8263FB74, default 0), Target Stick
+    (aim_slowdown_enabled, 0x8263FB38, default 1), Target Snap (aim_autoaim_enabled, 0x8263FB6C, default 1), plus
+    Crosshair (cg_drawcrosshair); saved with the profile (onCloseSetDvar in the front end movies). User: keyboard and
+    mouse get only Target Snap, controllers all three, set in the launcher. Launcher Controls: controller section
+    "Aim assist" (Target Follow off, Target Stick on, Target Snap on: aim_follow/aim_stick/aim_snap) and keyboard
+    section "Aim assist" (Target Snap on: kbm_aim_snap); passed as --aim_target_follow/stick/snap (1/0; -1 = the
+    game's, the default without the launcher). The Com_Frame hook holds each dvar at its value, so the in-game
+    switches follow the launcher; with --mnk_mode Follow and Stick held at 0 (--kbm_aim_assist_snap_only, on). Log
+    "aim assist: ... set to N".
+  - **Skip intro (29 Nov 00:15, src/skip_intro.cpp; works, user 00:13; for 0.2.4; user: keep the legal
+    screen, skip only the logos):** intro = legal screen "splegal" (shown while com_introPlayed, ptr 0x83375324, is
+    0; first screen picked in sub_823D2098), then menus.legalScreenNextScreenOverride (front end ActionScript; dvar
+    ui_screenAfterLegalOverride 0/1/2) goes to cmpressstart running `cinematic atvi_treyarch; setdvar nextmap
+    "cinematic mgm"`. At a video's end sub_821AF7B8 stops it; atvi_treyarch played past frame 249 (sub_82566710)
+    queues `cinematic treyarch_logo; set nextmap cinematic mgm`, else it runs/clears nextmap (dvar 0x83374184). So
+    Activision -> Treyarch -> MGM -> Press Start. Video start = sub_82566580 (r3 name; state 0x841E56A0: +256 name,
+    +772 flags, +776 request, +777 ended, read by sub_82566BA8). --skip_intro (default off): for atvi_treyarch,
+    treyarch_logo and mgm the hook doesn't start the video, writes the name and sets +772 0, +776 0, +777 1, so the
+    next frame stops it as ended and the chain moves on. Log "skip intro: <name> skipped" (expect atvi_treyarch and
+    mgm). Launcher Game files "Skip intro" switch (+ note, translated). First version (com_introPlayed set, which
+    skipped the legal screen too) replaced.
   - **Decal z-fighting (28 Nov 21:24, native 0120-decal-depth-slack; for 0.2.4, not committed):** both renderers
     flicker (Xenos too). Boiler-room stickers (zfight-trace.txt): quads on the wall's plane, depth GEQUAL, no depth
     write, no polygon offset (scm 00018006: offset bits 0x1800 off), so BOTS_GFX_DEPTH_BIAS_SCALE had nothing to
@@ -745,7 +857,18 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
   - **Shader refs from the full playthrough (28 Nov 18:00; committed 166a80e, 20:48, 937 KB; `check` not run):** ff_shader_refs.py index on the PC's
     manifest (~4,400 pipelines) with --keep and --cover -> pipelines/415607FF.refs for 0.2.4 (installer ships the
     folder; existing installs rebuild only new shaders). Needs numpy on the PC.
+  - **To do: SMAA (user, 29 Nov 00:40; start when fresh), est. 1-2 sessions + 1 optional:** SMAA 1x only (T2x needs
+    motion vectors, S2x real MSAA). FXAA today is one step inside the present shader (present.cpp kPresentShader,
+    BOTS_GFX_FXAA, GLSL compiled at run time with glslang). SMAA = 3 passes (edges RG8, blend weights RGBA8,
+    neighbourhood blend) + AreaTex/SearchTex (iryoku/smaa, MIT, data headers; SMAA.hlsl has a GLSL mode). Session 1:
+    SMAA before present, BOTS_GFX_SMAA=1 + presets, A/B vs FXAA. Session 2: fixes (gamma, render scale), launcher
+    "Anti-aliasing" choice, cost (expect < 1 ms at 4K on a 4080), SDK bundle. Optional 3: run it on the 3D view before
+    the HUD (at the game's stretch draw, as plain upscale finds it) so HUD text stays sharp (FXAA softens it today).
   - **0.2.3 released (user, 28 Nov ~15:10).** Queue for 0.2.4 below.
+    **0.2.4 list (29 Nov 00:15, user):** native 0119 (see-through bars above 720p), 0120 (decal z-fighting), 0118
+    trace extras, mission 11 cutscene camera (letterbox.cpp), shader refs, README "Playing at 60 FPS", **Skip intro**
+    (src/skip_intro.cpp + launcher switch; works, user 00:13) and **DLC Remove / Add back** (dlc_folder.cpp +
+    launcher; not tested yet). Not in 0.2.4: ultrawide (parked; widescreen.cpp is inert without --screen_ratio).
   - **Mission 11 cutscene camera with the bars off (28 Nov 15:56, fixed, works, user; for 0.2.4, not committed):**
     after the reception keypad the cutscene showed the wrong camera and Bond out of place: letterbox.cpp held
     r_pipMainMode at 0, but that cutscene frames its shot through the main PIP window. Now the window stays and only
