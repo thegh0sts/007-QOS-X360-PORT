@@ -24,6 +24,7 @@ set(QOS_SOURCES
     src/skin_profile.cpp
     src/fov.cpp
     src/letterbox.cpp
+    src/widescreen.cpp
     src/dof.cpp
     src/motion_blur.cpp
     src/effects.cpp

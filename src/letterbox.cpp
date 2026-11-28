@@ -30,7 +30,15 @@ REXCVAR_DEFINE_BOOL(cutscene_letterbox, false, "Game",
 
 REX_EXTERN(__imp__sub_822C1F50);  // SV_GameSendServerCommand (r3 client, r4 text)
 
+namespace qos::widescreen {
+bool Wide();  // widescreen.cpp: an ultrawide back buffer
+}
+
 namespace qos::letterbox {
+
+// The bars as asked for; never with an ultrawide picture (it is already wider than the bars' 80% crop of 16:9, and
+// the crop would leave a ~3:1 strip).
+bool BarsOn() { return REXCVAR_GET(cutscene_letterbox) && !qos::widescreen::Wide(); }
 
 namespace {
 constexpr uint32_t kLetterboxActivePtr = 0x8264C054;
@@ -45,7 +53,7 @@ bool LetterboxActive(const uint8_t* base) {
 }  // namespace
 
 void OnFrame(uint8_t* base) {
-  if (REXCVAR_GET(cutscene_letterbox) || !LetterboxActive(base)) return;
+  if (BarsOn() || !LetterboxActive(base)) return;
   const uint32_t border = LoadBE32(base + kPipMainBorderPtr);
   if (!border) return;
   uint8_t* value = base + border + 12;
@@ -83,7 +91,7 @@ void FullHeight(uint8_t* base, uint32_t text) {
 }  // namespace qos::letterbox
 
 extern "C" REX_FUNC(sub_822C1F50) {
-  if (!REXCVAR_GET(cutscene_letterbox) && ctx.r4.u32 && qos::letterbox::LetterboxActive(base)) {
+  if (!qos::letterbox::BarsOn() && ctx.r4.u32 && qos::letterbox::LetterboxActive(base)) {
     qos::letterbox::FullHeight(base, ctx.r4.u32);
   }
   __imp__sub_822C1F50(ctx, base);
