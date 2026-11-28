@@ -691,6 +691,9 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     traversal / falling changes with origin (+32) and velocity (+44). Type names at 0x825E65D0 (none, balance,
     climb, mantle, transition, wall); sub-types (beam, ladder, ledge, pipe...) at 0x825E65EC. Not committed yet;
     the old src/traversal_log.cpp on the PC is unused (delete). Real cause inside the mantle code not found.
+  - **Release 0.2.3 prepared (28 Nov 14:10, user):** QOS_RELEASE, launcher VERSION and GAME_VERSION 0.2.3 (installs
+    rebuild), SDK bundle qos13 (native renderer to 0117, SDK own33), notes docs/releases/0.2.3.md. The user builds
+    (build_native, game, installer) and publishes with gh.
   - **Playthrough:** missions 1-10 played; the rest still to check (user keeps playing, 28 Nov).
   - **Quick kills at high FPS (28 Nov 09:10):** the press windows are in ms (qk_diff_tweak_easy +500, norm +300,
     hard -100, xprt -150; picked by difficulty in sub_823866D0 around 0x82387030), so frame rate shouldn't matter.
