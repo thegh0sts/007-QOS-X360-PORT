@@ -645,6 +645,31 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     "Bloom" switches. **Lens flares not done:** r_sunflare_* (SP ptrs 0x843E3858.., registered in sub_82589D20) have
     no readers by pointer or name, so the flares come from elsewhere (level effects?); needs a trace with a flare on
     screen.
+  - **DXVK-style work (28 Nov 10:30-11:50):** SDK own patch 0032-native-device-extensions (OWN_PATCHES own33):
+    VK_KHR_push_descriptor, VK_EXT_extended_dynamic_state 1/2/3, VK_KHR_pipeline_library and
+    VK_EXT_graphics_pipeline_library enabled when offered (all their features on); nothing else changes. Native
+    0115-push-descriptors: the pixel textures (set 3) pushed per draw (vkCmdPushDescriptorSetKHR) when they fit
+    maxPushDescriptors (32); vertex textures keep sets; a push is skipped while the last one had the same layout and
+    handles and nothing bound since; recorded at the binds. BOTS_GFX_PUSH_DESCRIPTORS=0 off. Switching it on/off
+    changes pipeline layouts, so the driver rebuilds every pipeline once (warm-up ~6 s instead of ~1 s). Tested
+    (qos_227-231): no visual problems; per-frame gain not measured A/B yet. Pipeline libraries: deprioritised
+    (qos_223: 2 pipelines built during play, 16 draws skipped in 142,000 frames; the RTX 4080 SUPER supports fast
+    linking). Extended dynamic state: next (native 0117), not started.
+  - **Mission 9 (train) 10 FPS stretches fixed (28 Nov 11:20, native 0116-hot-page-draw-limit):** qos_226 had ~70,000
+    hot-page hashes and ~16 ms of tracker a frame, 121 of 600 frames over 50 ms (the game held at ~10 FPS for seconds):
+    many draws read the same big block of hot pages. A hot page read by more than BOTS_GFX_HOT_MAX_DRAWS draws in a
+    frame (default 16, 0 = no limit) goes back to protection and isn't made hot again for 600 frames. qos_228 (train +
+    casino, 70 windows): at most 892 hashes and 1.9 ms a frame, 12 frames over 50 ms in the session. 0.2.2 shipped
+    hot pages on, so 0.2.2 players hit this on the train: 0116 goes into 0.2.3.
+  - **Train cutscene lamp flicker: intended (28 Nov 11:50).** The light pool and bottle shadow on Vesper's table
+    flash on and off: lightning from the storm outside. Same on Xenos, at 30 FPS, in 6-year-old console footage and on
+    the PC version. Not a bug. (Ruled out on the way: push descriptors, hot pages, occlusion queries - 0 in that run.)
+  - **To do: mission 9 performance (user, 28 Nov 11:52):** still feels slow in places after 0116. From qos_228: busy
+    train/casino stretches at ~15,000-17,000 draws are renderer-bound at 18-20 ms frames (low 50s FPS at a 60 cap);
+    one ~200 ms frame each time the phone opens (log: "phone true", video blood_barrel; likely the game's own phone
+    video start). Next: a profiled run at the slow spots (BOTS_DRAW_PROFILE=1, note where), then the per-draw costs
+    there (constants ~2.5-3.3 ms, descriptors ~1.6-1.9, record ~1.2-1.4 at 16k draws) or extended dynamic state.
+  - **Playthrough:** missions 1-9 played; the rest still to check (user keeps playing, 28 Nov).
   - **Quick kills at high FPS (28 Nov 09:10):** the press windows are in ms (qk_diff_tweak_easy +500, norm +300,
     hard -100, xprt -150; picked by difficulty in sub_823866D0 around 0x82387030), so frame rate shouldn't matter.
     Not traced: ButtonMash, StickSwirl/StickSlap/StickToggle, lock picking (MechLock pins). Watch for these.
