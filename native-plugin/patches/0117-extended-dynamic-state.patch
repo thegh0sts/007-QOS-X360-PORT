@@ -1,0 +1,267 @@
+# Extended dynamic state (28 Nov, DXVK-style, SDK own 0032 enables the extensions): cull mode, front face, depth
+# test / write / compare op and stencil test / ops are set per draw (vkCmdSet*EXT) instead of baked into each
+# pipeline, and primitive restart too where VK_EXT_extended_dynamic_state2 is offered. GetPipeline drops them from
+# the key (StripDynamic), so draws that differ only in them share one pipeline: fewer pipelines to build, warm up
+# and switch between. Only changed states are set (new DrawPacket::dyn_mask bits 10-18), all of them again after a
+# rebind. BOTS_GFX_DYNAMIC_STATE=0 turns it off; the log says "extended dynamic state on/off/not offered".
+# Switching it on or off rebuilds the pipelines once (the keys change).
+  src/gfx/vk/draw.cpp   | 117 +++++++++++++++++++++++++++++++++++++++++++++-----
+  src/gfx/vk/renderer.h |  11 +++++
+  src/gfx/vk/vk_api.h   |  31 +++++++++++++
+  3 files changed, 148 insertions(+), 11 deletions(-)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 27d4880..4569d72 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -258,6 +258,30 @@ bool Renderer::InitDrawing() {
+   } else {
+     REXLOG_INFO("gfx native: push descriptors not offered by the driver");
+   }
++  // qos (patch 0117): extended dynamic state, when the device has the extensions and their features (SDK own 0032
++  // enables every supported feature).
++  {
++    const auto& ifn = device_->vulkan_instance()->functions();
++    VkPhysicalDeviceExtendedDynamicState2FeaturesEXT eds2{
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT};
++    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT eds{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
++                                                        &eds2};
++    VkPhysicalDeviceFeatures2 features2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &eds};
++    if (ifn.vkGetPhysicalDeviceFeatures2) ifn.vkGetPhysicalDeviceFeatures2(device_->physical_device(), &features2);
++    eds_ = eds.extendedDynamicState && vk_.vkCmdSetCullModeEXT && vk_.vkCmdSetFrontFaceEXT &&
++           vk_.vkCmdSetDepthTestEnableEXT && vk_.vkCmdSetDepthWriteEnableEXT && vk_.vkCmdSetDepthCompareOpEXT &&
++           vk_.vkCmdSetStencilTestEnableEXT && vk_.vkCmdSetStencilOpEXT;
++    eds2_ = eds_ && eds2.extendedDynamicState2 && vk_.vkCmdSetPrimitiveRestartEnableEXT;
++    const bool offered = eds_;
++    if (const char* v = std::getenv("BOTS_GFX_DYNAMIC_STATE"); v && *v == '0') eds_ = eds2_ = false;
++    all_dyn_mask_ = 0x3FF | (eds_ ? 0xFFu << 10 : 0u) | (eds2_ ? 1u << 18 : 0u);
++    if (!offered) {
++      REXLOG_INFO("gfx native: extended dynamic state not offered by the driver");
++    } else {
++      REXLOG_INFO("gfx native: extended dynamic state {}{}", eds_ ? "on" : "off (BOTS_GFX_DYNAMIC_STATE=0)",
++                  eds_ ? (eds2_ ? " (with primitive restart)" : " (without primitive restart)") : "");
++    }
++  }
+   if (const char* v = std::getenv("BOTS_GFX_RECORD_THREAD"); v && *v == '1') {
+     recorder_ = std::make_unique<Recorder>();
+     REXLOG_INFO("gfx native: draws recorded on a worker thread (BOTS_GFX_RECORD_THREAD=1)");
+@@ -574,15 +598,27 @@ VkPipeline Renderer::CreateDrawPipeline(const PipelineKey& key) const {
+   VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+   blend.attachmentCount = 4;
+   blend.pAttachments = blends;
+-  const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
+-                                           VK_DYNAMIC_STATE_SCISSOR,
+-                                           VK_DYNAMIC_STATE_DEPTH_BIAS,
+-                                           VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+-                                           VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
+-                                           VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+-                                           VK_DYNAMIC_STATE_STENCIL_REFERENCE};
++  // qos (0117): with extended dynamic state, the states StripDynamic drops from the key too (DrawPacket::Record
++  // sets them; the static values above are then ignored).
++  VkDynamicState dynamic_states[16] = {VK_DYNAMIC_STATE_VIEWPORT,
++                                       VK_DYNAMIC_STATE_SCISSOR,
++                                       VK_DYNAMIC_STATE_DEPTH_BIAS,
++                                       VK_DYNAMIC_STATE_BLEND_CONSTANTS,
++                                       VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
++                                       VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
++                                       VK_DYNAMIC_STATE_STENCIL_REFERENCE};
++  uint32_t dynamic_count = 7;
++  if (eds_) {
++    for (VkDynamicState d : {VK_DYNAMIC_STATE_CULL_MODE_EXT, VK_DYNAMIC_STATE_FRONT_FACE_EXT,
++                             VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE_EXT, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE_EXT,
++                             VK_DYNAMIC_STATE_DEPTH_COMPARE_OP_EXT, VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE_EXT,
++                             VK_DYNAMIC_STATE_STENCIL_OP_EXT}) {
++      dynamic_states[dynamic_count++] = d;
++    }
++  }
++  if (eds2_) dynamic_states[dynamic_count++] = VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE_EXT;
+   VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+-  dynamic.dynamicStateCount = uint32_t(std::size(dynamic_states));
++  dynamic.dynamicStateCount = dynamic_count;
+   dynamic.pDynamicStates = dynamic_states;
+   VkPipelineRenderingCreateInfo rendering_info{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+   rendering_info.colorAttachmentCount = 4;
+@@ -623,7 +659,21 @@ VkPipeline Renderer::CreateDrawPipeline(const PipelineKey& key) const {
+   return pipeline;
+ }
+ 
+-VkPipeline Renderer::GetPipeline(const PipelineKey& key, bool sync, bool& pending, bool background) {
++const Renderer::PipelineKey& Renderer::StripDynamic(const PipelineKey& key, PipelineKey& scratch) const {
++  if (!eds_) return key;
++  std::memcpy(&scratch, &key, sizeof(scratch));  // with the padding, as the key is compared as bytes
++  scratch.cull = scratch.front_clockwise = 0;
++  scratch.depth_test = scratch.depth_write = scratch.depth_op = scratch.stencil = 0;
++  std::memset(scratch.front, 0, sizeof(scratch.front));
++  std::memset(scratch.back, 0, sizeof(scratch.back));
++  if (eds2_) scratch.restart = 0;
++  return scratch;
++}
++
++VkPipeline Renderer::GetPipeline(const PipelineKey& full_key, bool sync, bool& pending, bool background) {
++  // qos (0117): the states set per draw aren't part of the pipeline (manifest records too: one per pipeline).
++  PipelineKey scratch;
++  const PipelineKey& key = StripDynamic(full_key, scratch);
+   const std::string_view bytes(reinterpret_cast<const char*>(&key), sizeof(key));
+   pending = false;
+   if (last_pipeline_ && bytes == last_pipeline_key_) return last_pipeline_;
+@@ -2230,13 +2280,29 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   const auto ref_back = polygonal && depth_control.backface_enable
+                             ? regs.Get<reg::RB_STENCILREFMASK>(rg::XE_GPU_REG_RB_STENCILREFMASK_BF)
+                             : ref_front;
+-  const DynamicState state{vp,
++  DynamicState state{vp,
+                            scissor_rect,
+                            {bias_constant, bias_slope * xe::kPolygonOffsetScaleSubpixelUnit},
+                            {regs.Get<float>(rg::XE_GPU_REG_RB_BLEND_RED), regs.Get<float>(rg::XE_GPU_REG_RB_BLEND_GREEN),
+                             regs.Get<float>(rg::XE_GPU_REG_RB_BLEND_BLUE), regs.Get<float>(rg::XE_GPU_REG_RB_BLEND_ALPHA)},
+                            {ref_front.stencilref, ref_back.stencilref, ref_front.stencilmask, ref_back.stencilmask,
+                             ref_front.stencilwritemask, ref_back.stencilwritemask}};
++  if (eds_) {  // qos (0117): the pipeline states StripDynamic dropped, from the full key
++    uint32_t* e = state.eds;
++    e[0] = key.cull;
++    e[1] = key.front_clockwise ? VK_FRONT_FACE_CLOCKWISE : VK_FRONT_FACE_COUNTER_CLOCKWISE;
++    e[2] = key.depth_test, e[3] = key.depth_write;
++    e[4] = uint32_t(CompareOp(xe::CompareFunction(key.depth_op)));
++    e[5] = key.stencil;
++    for (uint32_t f = 0; f < 2; ++f) {
++      const uint32_t* ops = f ? key.back : key.front;
++      e[6 + 4 * f] = uint32_t(StencilOp(xe::StencilOp(ops[0])));
++      e[7 + 4 * f] = uint32_t(StencilOp(xe::StencilOp(ops[1])));
++      e[8 + 4 * f] = uint32_t(StencilOp(xe::StencilOp(ops[2])));
++      e[9 + 4 * f] = uint32_t(CompareOp(xe::CompareFunction(ops[3])));
++    }
++    if (eds2_) e[14] = key.restart;
++  }
+   const DynamicState* last = dynamic_valid_ ? &dynamic_ : nullptr;
+   auto changed = [&](auto member) { return !last || std::memcmp(&(last->*member), &(state.*member), sizeof(state.*member)); };
+   // qos (0093): which dynamic states changed (bits 0-3: viewport, scissor, bias, blend; 4-9: stencil words), and
+@@ -2252,6 +2318,18 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+       if (!o || state.stencil[i] != o[i]) dyn_mask |= 16u << i;
+     }
+   }
++  if (eds_) {  // bits 10-18: cull, front face, depth test, write, op, stencil test, front ops, back ops, restart
++    const uint32_t* o = last ? last->eds : nullptr;
++    auto eds_changed = [&](uint32_t first, uint32_t n) {
++      return !o || std::memcmp(o + first, state.eds + first, n * sizeof(uint32_t)) != 0;
++    };
++    for (uint32_t i = 0; i < 6; ++i) {
++      if (eds_changed(i, 1)) dyn_mask |= 1024u << i;
++    }
++    if (eds_changed(6, 4)) dyn_mask |= 1u << 16;
++    if (eds_changed(10, 4)) dyn_mask |= 1u << 17;
++    if (eds2_ && eds_changed(14, 1)) dyn_mask |= 1u << 18;
++  }
+   packet.dyn_mask = dyn_mask, packet.state = state;
+   dynamic_ = state, dynamic_valid_ = true;
+ 
+@@ -2413,7 +2491,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+   binds_only.armed = false;
+   if (!dynamic_valid_ || bound_pipeline_ != pipeline) {
+     // Something recorded since (debug captures between the state and the draw) bound its own: everything again.
+-    packet.bind_pipeline = true, packet.dyn_mask = 0x3FF;
++    packet.bind_pipeline = true, packet.dyn_mask = all_dyn_mask_;
+     packet.bind_mask = (sets[2] ? 4u : 0u) | (sets[3] ? 8u : 0u);
+     bound_pipeline_ = pipeline, dynamic_valid_ = true;
+   }
+@@ -2590,6 +2668,23 @@ void Renderer::DrawPacket::Record(const Api& vk, VkCommandBuffer cmd, bool draw)
+   if (dyn_mask & 128) vk.vkCmdSetStencilCompareMask(cmd, VK_STENCIL_FACE_BACK_BIT, s[3]);
+   if (dyn_mask & 256) vk.vkCmdSetStencilWriteMask(cmd, VK_STENCIL_FACE_FRONT_BIT, s[4]);
+   if (dyn_mask & 512) vk.vkCmdSetStencilWriteMask(cmd, VK_STENCIL_FACE_BACK_BIT, s[5]);
++  if (dyn_mask & ~0x3FFu) {  // qos (0117): extended dynamic state
++    const uint32_t* e = state.eds;
++    if (dyn_mask & (1u << 10)) vk.vkCmdSetCullModeEXT(cmd, VkCullModeFlags(e[0]));
++    if (dyn_mask & (1u << 11)) vk.vkCmdSetFrontFaceEXT(cmd, VkFrontFace(e[1]));
++    if (dyn_mask & (1u << 12)) vk.vkCmdSetDepthTestEnableEXT(cmd, e[2]);
++    if (dyn_mask & (1u << 13)) vk.vkCmdSetDepthWriteEnableEXT(cmd, e[3]);
++    if (dyn_mask & (1u << 14)) vk.vkCmdSetDepthCompareOpEXT(cmd, VkCompareOp(e[4]));
++    if (dyn_mask & (1u << 15)) vk.vkCmdSetStencilTestEnableEXT(cmd, e[5]);
++    for (uint32_t f = 0; f < 2; ++f) {
++      if (dyn_mask & (1u << (16 + f))) {
++        const uint32_t* o = e + 6 + 4 * f;
++        vk.vkCmdSetStencilOpEXT(cmd, f ? VK_STENCIL_FACE_BACK_BIT : VK_STENCIL_FACE_FRONT_BIT, VkStencilOp(o[0]),
++                                VkStencilOp(o[1]), VkStencilOp(o[2]), VkCompareOp(o[3]));
++      }
++    }
++    if (dyn_mask & (1u << 18)) vk.vkCmdSetPrimitiveRestartEnableEXT(cmd, e[14]);
++  }
+   if (indexed) {
+     vk.vkCmdBindIndexBuffer(cmd, index_buffer, index_offset, index_type);
+     vk.vkCmdDrawIndexed(cmd, count, 1, 0, 0, 0);
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index cf01a40..c47910a 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -1015,6 +1015,13 @@ class Renderer : public Pm4Sink {
+   // (a retired view's handle can come back).
+   bool push_descriptors_ = false;
+   uint32_t max_push_descriptors_ = 0;
++  // qos (patch 0117, BOTS_GFX_DYNAMIC_STATE=0 turns it off): extended dynamic state. Cull mode, front face, depth
++  // test / write / compare and stencil test / ops (eds_), and primitive restart (eds2_), are set per draw instead of
++  // baked into the pipeline, so GetPipeline drops them from the key (StripDynamic) and draws differing only in them
++  // share one pipeline. all_dyn_mask_: every DrawPacket::dyn_mask bit in use (all set again after a rebind).
++  bool eds_ = false, eds2_ = false;
++  uint32_t all_dyn_mask_ = 0x3FF;
++  const PipelineKey& StripDynamic(const PipelineKey& key, PipelineKey& scratch) const;
+   struct PushedTextures {
+     VkPipelineLayout layout = VK_NULL_HANDLE;
+     uint32_t views = 0, samplers = 0;
+@@ -1106,6 +1113,10 @@ class Renderer : public Pm4Sink {
+     float bias[2];
+     float blend[4];
+     uint32_t stencil[6];
++    // qos (0117), zero without extended dynamic state: cull mode, front face, depth test, depth write, depth compare
++    // op, stencil test, front stencil ops (fail, pass, depth fail, compare), back ones, primitive restart (Vulkan
++    // values).
++    uint32_t eds[15];
+   };
+   DynamicState dynamic_{};
+   bool dynamic_valid_ = false;
+diff --git a/src/gfx/vk/vk_api.h b/src/gfx/vk/vk_api.h
+index d173630..5523331 100644
+--- a/src/gfx/vk/vk_api.h
++++ b/src/gfx/vk/vk_api.h
+@@ -90,6 +90,15 @@ struct Api {
+   PFN_vkGetMemoryHostPointerPropertiesEXT vkGetMemoryHostPointerPropertiesEXT = nullptr;
+   // qos (patch 0115): VK_KHR_push_descriptor, when the device has it enabled (SDK own 0032; else null).
+   PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR = nullptr;
++  // qos (patch 0117): VK_EXT_extended_dynamic_state / _state2, when the device has them enabled (else null).
++  PFN_vkCmdSetCullModeEXT vkCmdSetCullModeEXT = nullptr;
++  PFN_vkCmdSetFrontFaceEXT vkCmdSetFrontFaceEXT = nullptr;
++  PFN_vkCmdSetDepthTestEnableEXT vkCmdSetDepthTestEnableEXT = nullptr;
++  PFN_vkCmdSetDepthWriteEnableEXT vkCmdSetDepthWriteEnableEXT = nullptr;
++  PFN_vkCmdSetDepthCompareOpEXT vkCmdSetDepthCompareOpEXT = nullptr;
++  PFN_vkCmdSetStencilTestEnableEXT vkCmdSetStencilTestEnableEXT = nullptr;
++  PFN_vkCmdSetStencilOpEXT vkCmdSetStencilOpEXT = nullptr;
++  PFN_vkCmdSetPrimitiveRestartEnableEXT vkCmdSetPrimitiveRestartEnableEXT = nullptr;
+ 
+   // False if any function is missing.
+   bool Load(const rex::ui::vulkan::VulkanDevice& device) {
+@@ -114,6 +123,28 @@ struct Api {
+       vkCmdPushDescriptorSetKHR = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(
+           ifn.vkGetDeviceProcAddr(device.device(), "vkCmdPushDescriptorSetKHR"));
+     }
++    // Optional: the EXT name, else the Vulkan 1.3 core one (same function).
++    auto optional = [&](auto& fn, const char* name) {
++      PFN_vkVoidFunction p = ifn.vkGetDeviceProcAddr(device.device(), name);
++      if (!p) {
++        std::string core(name);
++        core.resize(core.size() - 3);
++        p = ifn.vkGetDeviceProcAddr(device.device(), core.c_str());
++      }
++      fn = reinterpret_cast<std::remove_reference_t<decltype(fn)>>(p);
++    };
++    if (device.extensions().ext_EXT_extended_dynamic_state) {
++      optional(vkCmdSetCullModeEXT, "vkCmdSetCullModeEXT");
++      optional(vkCmdSetFrontFaceEXT, "vkCmdSetFrontFaceEXT");
++      optional(vkCmdSetDepthTestEnableEXT, "vkCmdSetDepthTestEnableEXT");
++      optional(vkCmdSetDepthWriteEnableEXT, "vkCmdSetDepthWriteEnableEXT");
++      optional(vkCmdSetDepthCompareOpEXT, "vkCmdSetDepthCompareOpEXT");
++      optional(vkCmdSetStencilTestEnableEXT, "vkCmdSetStencilTestEnableEXT");
++      optional(vkCmdSetStencilOpEXT, "vkCmdSetStencilOpEXT");
++    }
++    if (device.extensions().ext_EXT_extended_dynamic_state2) {
++      optional(vkCmdSetPrimitiveRestartEnableEXT, "vkCmdSetPrimitiveRestartEnableEXT");
++    }
+     return ok && vkGetPhysicalDeviceFormatProperties;
+   }
+ };
