@@ -10,6 +10,7 @@
 #include <rex/rex_app.h>
 
 #include <rex/cvar.h>
+#include <rex/perf/counter.h>
 #include <rex/system/gpu_plugin.h>
 #include <rex/ui/overlay/achievement_notification.h>
 
@@ -30,6 +31,11 @@ REXCVAR_DEFINE_BOOL(show_fps_detail, false, "UI",
                     "With show_fps: also frame time, GPU, CPU and memory (native renderer)");
 REXCVAR_DEFINE_DOUBLE(brightness, 1.0, "GPU", "Picture brightness, native renderer (1 = the game's)")
     .range(0.5, 2.0);
+
+// The SDK builds Tracy in (TracyClient, on demand, manual lifetime) for RelWithDebInfo but never starts it, so a
+// Tracy 0.13.1 viewer can't connect. --tracy starts it at setup (development builds; Release has no Tracy). Run as
+// administrator for sampling (the game's own functions show by their sub_ names from the build's debug info).
+REXCVAR_DEFINE_BOOL(tracy, false, "Debug", "Start the Tracy profiler so a Tracy 0.13.1 viewer can connect");
 
 namespace qos {
 // The log's first lines: the release, the build time and the launch options (version_log.cpp).
@@ -83,6 +89,7 @@ class QosApp : public rex::ReXApp {
   // with the same SPIR-V translator, so a picture that's right here and wrong there points at
   // the native renderer itself.
   void OnPreSetup(rex::RuntimeConfig& config) override {
+    if (REXCVAR_GET(tracy)) rex::perf::Profiler::Startup();
     qos::kbm_binds::SetDefaults();  // keyboard/mouse binds for 007 (src/kbm_binds.cpp)
     if (config.gpu_plugin.empty()) {
       config.gpu_plugin = "xenos";

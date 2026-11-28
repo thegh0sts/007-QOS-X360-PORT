@@ -1,0 +1,288 @@
+# Draw trace extras (28 Nov, diagnostic; how 0119's bug was found). All only in a trace-now window (0097):
+# - every plain upscale candidate is logged ("plain upscale candidate at draw N"), not only the first 12, with the
+#   source's and destination's written extents, the scissor and the viewport;
+# - indexed screen quads (up to 6 indices) get their first 4 vertices on the "area:" line, every word as a float
+#   (positions, texcoords), plus their indices; 2D batches up to 120 indices get every vertex (position, colour
+#   word, texcoords);
+# - a bound 1x1 texture gets its texel as the guest stored it, its fetch swizzle and endianness ("[texel ...]");
+# - BOTS_TRACE_PROBE=x,y (guest pixels): that pixel of colour target 0 is copied out after every draw and printed
+#   once the GPU is done ("probe draw N: R G B A"), and a bound 1-byte (k_8) texture's texel there is printed too;
+# - each present logs the swap address and the image shown ("present: ...", probed as format 999), and the first
+#   one is written to trace-present.ppm next to the game.
+# Note: switching to another window pauses the game's videos and cutscenes (a SKIP/RESUME screen), so create
+# trace-now with a delay (timeout /t 8 & type nul > trace-now) and go back to the game window.
+  src/gfx/vk/draw.cpp    | 156 ++++++++++++++++++++++++++++++++++++++++++++++++-
+  src/gfx/vk/present.cpp |  25 ++++++++
+  src/gfx/vk/renderer.h  |   7 +++
+  3 files changed, 186 insertions(+), 2 deletions(-)
+
+diff --git a/src/gfx/vk/draw.cpp b/src/gfx/vk/draw.cpp
+index 0b15526..1231844 100644
+--- a/src/gfx/vk/draw.cpp
++++ b/src/gfx/vk/draw.cpp
+@@ -1395,13 +1395,41 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+       }
+       views[n++] = view;
+       if (trace && !binding.is_signed) {
+-        char t[96];
++        char t[160];
+         std::snprintf(t, sizeof(t), " t%u=%08X/%u(%s %ux%u)", uint32_t(binding.fetch_constant), fetch.base_address << 12,
+                       uint32_t(fetch.format), source, uint32_t(fetch.size_2d.width) + 1, uint32_t(fetch.size_2d.height) + 1);
+         if (trace_signs) {
+           std::snprintf(t + std::strlen(t), sizeof(t) - std::strlen(t), "[sw%03o sg%02X x%d]", fetch.swizzle,
+                         rg::texture_util::SwizzleSigns(fetch), int(fetch.exp_adjust));
+         }
++        // qos (0118): a 1x1 texture's texel as the guest stored it (bytes in memory order), and its fetch swizzle:
++        // the video's black quads (UE3's 1x1 white texture times the vertex colour) don't darken on native.
++        if (trace_frames_left_ > 0 && fetch.size_2d.width == 0 && fetch.size_2d.height == 0 && source[0] == 't') {
++          const uint8_t* texel = memory_(uint32_t(fetch.base_address) << 12);
++          if (texel) {
++            std::snprintf(t + std::strlen(t), sizeof(t) - std::strlen(t), "[texel %02X%02X%02X%02X sw%03o end%u]",
++                          texel[0], texel[1], texel[2], texel[3], uint32_t(fetch.swizzle), uint32_t(fetch.endianness));
++          }
++        }
++        // qos (0118): with BOTS_TRACE_PROBE=x,y, a 1-byte texture's texel there as the guest stored it (the loading
++        // video's alpha plane: its bars should be 0).
++        static const std::pair<int, int> probe_at = [] {
++          int x = -1, y = -1;
++          if (const char* v = std::getenv("BOTS_TRACE_PROBE")) std::sscanf(v, "%d,%d", &x, &y);
++          return std::pair<int, int>{x, y};
++        }();
++        if (trace_frames_left_ > 0 && probe_at.first >= 0 && fetch.format == xe::TextureFormat::k_8 &&
++            uint32_t(probe_at.first) <= fetch.size_2d.width && uint32_t(probe_at.second) <= fetch.size_2d.height) {
++          const uint32_t pitch = uint32_t(fetch.pitch) << 5;
++          const uint32_t at = fetch.tiled ? uint32_t(rg::texture_util::GetTiledOffset2D(probe_at.first, probe_at.second,
++                                                                                        pitch, 0))
++                                          : uint32_t(probe_at.second) * pitch + uint32_t(probe_at.first);
++          const uint8_t* texel = memory_((uint32_t(fetch.base_address) << 12) + at);
++          if (texel) {
++            std::snprintf(t + std::strlen(t), sizeof(t) - std::strlen(t), "[at %d,%d: %02X tiled %u pitch %u]",
++                          probe_at.first, probe_at.second, texel[0], uint32_t(fetch.tiled), pitch);
++          }
++        }
+         trace_textures += t;
+       }
+     }
+@@ -2545,9 +2573,19 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+       const bool one_image = std::ranges::all_of(draw_reads_, [&](const Image* read) { return read == source; });
+       const bool ok = one_image && !attachments.color[1] && !attachments.depth && key.write_mask[0] == 0xF &&
+                       key.blend[0] == 0x00010001 && source->format == dest->format;
++      // qos (0118): every candidate is logged in a trace-now window (0097), not only the first 12, with the source's
++      // and destination's written extents, scissor and viewport, so the draw can be found in the trace.
+       static int logged = 0;
+-      if (logged < 12) {
++      if (logged < 12 || trace_frames_left_ > 0) {
+         ++logged;
++        if (trace_frames_left_ > 0) {
++          REXLOG_INFO("gfx native: plain upscale candidate at draw {}: source {}x{} (used {}x{}, area {}x{}), dest {}x{} "
++                      "(used {}x{}), scissor {},{} {}x{}, viewport to {},{}, prim {}",
++                      stats_.draws, source->width, source->height, source->used_width, source->used_height,
++                      source->area_width, source->area_height, dest->width, dest->height, dest->used_width,
++                      dest->used_height, sx, sy, scissor_rect.extent.width, scissor_rect.extent.height, viewport_x1,
++                      viewport_y1, uint32_t(prim));
++        }
+         REXLOG_INFO("gfx native: plain upscale {}: {}x{} -> {},{}-{},{} of {}x{} (count {}, reads {}{}, textures {}+{}, rt1 {}, "
+                     "depth {}, mask {:X}, blend {:08X}, formats {} -> {})",
+                     ok ? "done" : "skipped", source->width, source->height, x0, y0, x1, y1, dest->width,
+@@ -2570,6 +2608,7 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+       }
+     }
+   }
++  if (trace_frames_left_ > 0 && attachments.color[0]) ProbeDraw(attachments.color[0]);
+   if (trace) {
+     std::fprintf(stderr,
+                  "draw %llu: prim %u %s count %u mode %u rt0 %08X %ux%u%s ps %s blend %08X mask %X%s | depth %08X "
+@@ -2643,6 +2682,81 @@ void Renderer::IssueDraw(const rg::RegisterFile& regs, const ShaderLoad& vs, con
+           verts += buf;
+         }
+       }
++    } else if (trace_frames_left_ > 0 && count > 6 && count <= 120 && dma && !vshader->vertex_bindings().empty() &&
++               vshader->vertex_bindings()[0].stride_words == 8) {
++      // qos (0118): UE3's 2D batches (text, letterbox lines and bars): every vertex the indices reach, in UE3's
++      // 8-word layout (x y z w, colour, u v, -): position, colour word, texcoords.
++      const auto fetch = regs.GetVertexFetch(vshader->vertex_bindings()[0].fetch_constant);
++      const uint8_t* data = memory_(fetch.address << 2);
++      const uint8_t* isrc = memory_(draw.index_base);
++      if (data && isrc) {
++        const xe::Endian ie = IndexEndian(draw.index_endian, index32);
++        uint32_t top = 0;
++        for (uint32_t i = 0; i < count; ++i) {
++          uint32_t v;
++          if (index32) {
++            std::memcpy(&v, isrc + 4 * i, 4);
++            v = xe::GpuSwap(v, ie);
++          } else {
++            uint16_t h;
++            std::memcpy(&h, isrc + 2 * i, 2);
++            v = xe::GpuSwap(h, ie);
++          }
++          top = std::max(top, v);
++        }
++        for (uint32_t i = 0; i <= top && i < 96 && (i + 1) * 8 <= fetch.size; ++i) {
++          uint32_t w[8];
++          std::memcpy(w, data + 32 * size_t(i), 32);
++          for (uint32_t& x : w) x = xe::GpuSwap(x, fetch.endian);
++          float f[8];
++          std::memcpy(f, w, 32);
++          verts += fmt::format(" [{} {:g},{:g} c{:08X} uv{:g},{:g}]", i, f[0], f[1], w[4], f[5], f[6]);
++        }
++      }
++    } else if (trace_frames_left_ > 0 && count <= 6) {
++      // qos (0118): in a trace-now window, other small draws (indexed quads: UE3's screen copies, the PIP view, the
++      // letterbox bars) too: the first binding's first 4 vertices, every word as a float (position and texcoords).
++      const auto& bindings = vshader->vertex_bindings();
++      if (!bindings.empty()) {
++        const auto fetch = regs.GetVertexFetch(bindings[0].fetch_constant);
++        const uint32_t stride = bindings[0].stride_words;
++        const uint8_t* data = memory_(fetch.address << 2);
++        for (uint32_t i = 0; data && stride && i < 4 && (i + 1) * stride <= fetch.size; ++i) {
++          verts += " (";
++          for (uint32_t w = 0; w < stride && w < 8; ++w) {
++            uint32_t u;
++            std::memcpy(&u, data + 4 * size_t(i * stride + w), 4);
++            u = xe::GpuSwap(u, fetch.endian);
++            float f;
++            std::memcpy(&f, &u, 4);
++            char buf[24];
++            std::snprintf(buf, sizeof(buf), w ? " %g" : "%g", double(f));
++            verts += buf;
++          }
++          verts += ")";
++        }
++      }
++      // The indices too (UE3's quads are indexed): 16/32-bit, the endian swap as for the draw itself.
++      const uint8_t* isrc = dma ? memory_(draw.index_base) : nullptr;
++      if (isrc) {
++        const xe::Endian ie = IndexEndian(draw.index_endian, index32);
++        verts += fmt::format(" indices{} {:08X} endian {}/{}:", index32 ? "32" : "16", draw.index_base,
++                             uint32_t(draw.index_endian), uint32_t(ie));
++        for (uint32_t i = 0; i < count; ++i) {
++          uint32_t v;
++          if (index32) {
++            std::memcpy(&v, isrc + 4 * i, 4);
++            v = xe::GpuSwap(v, ie);
++          } else {
++            uint16_t h;
++            std::memcpy(&h, isrc + 2 * i, 2);
++            v = xe::GpuSwap(h, ie);
++          }
++          verts += fmt::format(" {}", v);
++        }
++        verts += fmt::format(" (min {} max {} offset {})", regs.values[rg::XE_GPU_REG_VGT_MIN_VTX_INDX],
++                             regs.values[rg::XE_GPU_REG_VGT_MAX_VTX_INDX], regs.values[rg::XE_GPU_REG_VGT_INDX_OFFSET]);
++      }
+     }
+     std::fprintf(stderr, "  area: scissor %d,%d %ux%u bound %u,%u%s samples %ux%u viewport %g,%g %gx%g verts%s\n",
+                  scissor_rect.offset.x, scissor_rect.offset.y, scissor_rect.extent.width, scissor_rect.extent.height,
+@@ -2695,6 +2809,43 @@ void Renderer::DrawPacket::Record(const Api& vk, VkCommandBuffer cmd, bool draw)
+   }
+ }
+ 
++// qos (0118): see renderer.h (probe_).
++void Renderer::ProbeDraw(Image* target, int tag) {
++  static const std::pair<int, int> at = [] {
++    int x = -1, y = -1;
++    if (const char* v = std::getenv("BOTS_TRACE_PROBE")) std::sscanf(v, "%d,%d", &x, &y);
++    return std::pair<int, int>{x, y};
++  }();
++  if (at.first < 0 || target->aspect != VK_IMAGE_ASPECT_COLOR_BIT) return;
++  const uint32_t x = Host(uint32_t(at.first)), y = Host(uint32_t(at.second));
++  if (x >= target->width || y >= target->height) return;
++  constexpr uint32_t kSlots = 4096, kSlotBytes = 16;
++  if (!probe_.buffer && !CreateBuffer(probe_, kSlots * kSlotBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT)) return;
++  if (probe_draws_.size() >= kSlots) return;
++  EndRendering("probe");
++  Access({&target, 1}, {});
++  VkBufferImageCopy region{};
++  region.bufferOffset = VkDeviceSize(probe_draws_.size()) * kSlotBytes;
++  region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
++  region.imageOffset = {int32_t(x), int32_t(y), 0};
++  region.imageExtent = {1, 1, 1};
++  vk_.vkCmdCopyImageToBuffer(Cmd(), target->image, VK_IMAGE_LAYOUT_GENERAL, probe_.buffer, 1, &region);
++  probe_draws_.push_back({stats_.draws, tag ? tag : int(target->format)});
++}
++
++void Renderer::PrintProbes() {
++  if (probe_draws_.empty() || !probe_.mapping) return;
++  if (vk_.vkDeviceWaitIdle) vk_.vkDeviceWaitIdle(device_->device());
++  vmaInvalidateAllocation(allocator_, probe_.allocation, 0, VK_WHOLE_SIZE);
++  for (size_t i = 0; i < probe_draws_.size(); ++i) {
++    const uint8_t* p = probe_.mapping + i * 16;
++    std::fprintf(stderr, "probe draw %llu: %02X %02X %02X %02X (format %d)\n",
++                 (unsigned long long)probe_draws_[i].first, p[0], p[1], p[2], p[3], int(probe_draws_[i].second));
++  }
++  std::fflush(stderr);
++  probe_draws_.clear();
++}
++
+ }  // namespace bots::gfx::vk
+ 
+ // Scene-feed draw dump (draw_dump.h).
+@@ -2801,3 +2952,4 @@ void OnPresent() {
+   }
+ }
+ }  // namespace bots::gfx::drawdump
++
+diff --git a/src/gfx/vk/present.cpp b/src/gfx/vk/present.cpp
+index 2f44e69..aba93f6 100644
+--- a/src/gfx/vk/present.cpp
++++ b/src/gfx/vk/present.cpp
+@@ -470,8 +470,11 @@ bool Renderer::InitPresent() {
+ }
+ 
+ void Renderer::PollTraceTrigger() {
++  // qos (0118): the probes once their frames have surely been submitted.
++  if (probe_print_in_ && --probe_print_in_ == 0) PrintProbes();
+   if (trace_frames_left_ > 0) {
+     if (--trace_frames_left_ == 0) {
++      probe_print_in_ = 3;
+       std::fprintf(stderr, "=== draw trace end (after draw %llu) ===\n", (unsigned long long)stats_.draws);
+       std::fflush(stderr);
+       REXLOG_INFO("gfx native: draw trace (trace-now) done");
+@@ -517,6 +520,28 @@ bool Renderer::Present(uint32_t address, VkImage target, VkImageView target_view
+     return false;
+   }
+   const Image& source = *it->second;
++  // qos (0118): in a trace-now window, which image is shown (and, with BOTS_TRACE_PROBE, its pixel there:
++  // "probe draw N" with format 999).
++  if (trace_frames_left_ > 0) {
++    std::fprintf(stderr, "present: swap address %08X -> image %08X %ux%u (last resolve %08X)\n", address, it->first,
++                 source.width, source.height, last_resolve_address_);
++    BeginCommands(kGpuPresent);
++    ProbeDraw(it->second, 999);
++    // The first shown image of the window as trace-present.ppm (next to the game), to compare with a screenshot.
++    static uint64_t dumped_for = ~0ull;
++    if (dumped_for != trace_poll_) {
++      dumped_for = trace_poll_;
++      std::vector<uint8_t> rgb;
++      uint32_t w = 0, h = 0;
++      if (ReadImage(source, rgb, w, h)) {
++        if (std::FILE* f = std::fopen("trace-present.ppm", "wb")) {
++          std::fprintf(f, "P6\n%u %u\n255\n", w, h);
++          std::fwrite(rgb.data(), 1, rgb.size(), f);
++          std::fclose(f);
++        }
++      }
++    }
++  }
+ 
+   BeginCommands(kGpuPresent);
+   EndRendering("present");
+diff --git a/src/gfx/vk/renderer.h b/src/gfx/vk/renderer.h
+index 7fb8b32..12077e3 100644
+--- a/src/gfx/vk/renderer.h
++++ b/src/gfx/vk/renderer.h
+@@ -1186,6 +1186,13 @@ class Renderer : public Pm4Sink {
+   uint32_t trace_frames_left_ = 0;
+   uint64_t trace_poll_ = 0;
+   std::unordered_set<uint64_t> trace_dumped_;
++  // qos (0118): BOTS_TRACE_PROBE=x,y (guest pixels): in a trace-now window, after every draw into a colour target,
++  // that pixel of colour target 0 is copied out (probe_), and printed once the GPU is done ("probe draw N: ...").
++  Buffer probe_{};
++  std::vector<std::pair<uint64_t, int>> probe_draws_;
++  uint32_t probe_print_in_ = 0;
++  void ProbeDraw(Image* target, int tag = 0);
++  void PrintProbes();
+   void PollTraceTrigger();
+   // False on GPUs without BC (DXT) texture formats, such as Apple's before A16 (the A15 Apple TV 4K): those textures
+   // are decoded on the CPU instead. BOTS_GFX_DECODE_BC=1 forces the decoding anywhere.

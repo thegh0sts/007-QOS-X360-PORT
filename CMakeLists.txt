@@ -21,6 +21,7 @@ set(QOS_SOURCES
     src/fps_unlock.cpp
     src/balance_fix.cpp
     src/traversal_fix.cpp
+    src/skin_profile.cpp
     src/fov.cpp
     src/letterbox.cpp
     src/dof.cpp
