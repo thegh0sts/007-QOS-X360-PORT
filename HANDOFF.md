@@ -691,6 +691,12 @@ user 0 (as the keyboard/mouse device already was); off = pad N is player N. Not 
     traversal / falling changes with origin (+32) and velocity (+44). Type names at 0x825E65D0 (none, balance,
     climb, mantle, transition, wall); sub-types (beam, ladder, ledge, pipe...) at 0x825E65EC. Not committed yet;
     the old src/traversal_log.cpp on the PC is unused (delete). Real cause inside the mantle code not found.
+  - **Pistol LOD switching at wide FOV (28 Nov 15:05, fixed, works at 90, user):** the P99 view model switched
+    between its detailed and simpler model frame to frame at --fov 90 (not at 65): the game scales LOD distances by
+    the field of view and the gun sits at its first threshold. src/lod.cpp now multiplies r_lodScale by
+    tan(32.5 deg) / tan(fov/2) (0.637 at 90), so every model keeps its FOV-65 detail. First blamed on 0117 (a dev
+    run without --fov looked fine with BOTS_GFX_DYNAMIC_STATE=0): **0117 is innocent but went into 0.2.3 off by
+    default (BOTS_GFX_DYNAMIC_STATE=1 on)**; to re-enable after an A/B at 60 FPS.
   - **Release 0.2.3 prepared (28 Nov 14:10, user):** QOS_RELEASE, launcher VERSION and GAME_VERSION 0.2.3 (installs
     rebuild), SDK bundle qos13 (native renderer to 0117, SDK own33), notes docs/releases/0.2.3.md. The user builds
     (build_native, game, installer) and publishes with gh.
